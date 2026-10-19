@@ -1435,6 +1435,7 @@ model DealerListing {
   title                  String    @db.VarChar(200)
   description            String?
   price                  Decimal   @default(0) @db.Decimal(12, 2)
+  discount_percent       Int       @default(0) // скидка на карточку, 0–90 %; price хранит цену без скидки
   currency               String    @default("USD") @db.VarChar(10)
   category               String    @default("other") @db.VarChar(50) // art | fursuit | badge | print | music | craft | merch | other
   type                   String    @default("physical") @db.VarChar(20) // digital | physical | both

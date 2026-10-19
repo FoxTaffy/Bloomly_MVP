@@ -168,6 +168,7 @@ export interface DealerListing {
   title: string
   description: string | null
   price: string
+  discount_percent?: number
   currency: string
   category: ListingCategory
   type: ListingType
@@ -220,6 +221,7 @@ export interface CreateListingInput {
   title: string
   description?: string
   price: number
+  discountPercent?: number
   currency?: string
   category?: ListingCategory
   type?: ListingType

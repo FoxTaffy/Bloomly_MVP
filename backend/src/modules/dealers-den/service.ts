@@ -21,6 +21,7 @@ const LISTING_SELECT = {
   title: true,
   description: true,
   price: true,
+  discount_percent: true,
   currency: true,
   category: true,
   type: true,
@@ -225,6 +226,7 @@ export const dealersDenService = {
         title:        input.title,
         description:  input.description,
         price:        input.price,
+        discount_percent: input.discountPercent ?? 0,
         currency:     input.currency        ?? 'USD',
         category:     input.category        ?? 'other',
         type:         input.type            ?? 'physical',
@@ -261,6 +263,7 @@ export const dealersDenService = {
     if (input.title       !== undefined) data.title       = input.title;
     if (input.description !== undefined) data.description = input.description;
     if (input.price       !== undefined) data.price       = input.price;
+    if (input.discountPercent !== undefined) data.discount_percent = input.discountPercent;
     if (input.currency    !== undefined) data.currency    = input.currency;
     if (input.category    !== undefined) data.category    = input.category;
     if (input.type        !== undefined) data.type        = input.type;

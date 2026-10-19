@@ -20,6 +20,7 @@ export interface CreateListingInput {
   title: string;
   description?: string;
   price: number;
+  discountPercent?: number; // 0–90, только для fixed / raffle / commission_queue
   currency?: string;
   category?: ListingCategory;
   type?: ListingType;

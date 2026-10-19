@@ -39,6 +39,9 @@ export function validateListingInput(input: Record<string, any>, mode: 'create' 
   if (isCreate || has('price')) {
     if (!inRange(input.price, 0, MAX_MONEY)) return 'Цена: неотрицательное число';
   }
+  if (has('discountPercent') && !(isInt(input.discountPercent) && input.discountPercent >= 0 && input.discountPercent <= 90)) {
+    return 'Скидка: целое число от 0 до 90 %';
+  }
   if (has('currency') && !(LISTING_CURRENCIES as readonly string[]).includes(input.currency)) {
     return 'Неизвестная валюта';
   }

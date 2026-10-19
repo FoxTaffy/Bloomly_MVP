@@ -20,6 +20,9 @@ import CommissionReviews   from '@/components/CommissionReviews.vue'
 import ListingPanelHead    from '@/components/ListingPanelHead.vue'
 import ListingApplicationModal from '@/components/ListingApplicationModal.vue'
 import ListingSpecs        from '@/components/ListingSpecs.vue'
+import DenDiscountPrice from '@/components/DenDiscountPrice.vue'
+import DenDiscountField from '@/components/DenDiscountField.vue'
+import { supportsDiscount, clampDiscount } from '@/lib/listingDiscount'
 import ListingDetailsEditor from '@/components/ListingDetailsEditor.vue'
 import { emptyDraft, draftFrom, cleanDraft } from '@/lib/listingDetails'
 import DenReviewCard      from '@/components/DenReviewCard.vue'
@@ -330,8 +333,8 @@ const showApplyModal = ref(false)
 const editDetails   = ref(emptyDraft())
 const isUpdating    = ref(false)
 const editForm = ref({
-  title: '', description: '', price: 0, currency: 'USD',
-  quantity: 1, status: 'active' as 'active'|'draft'|'archived'|'sold',
+  title: '', description: '', price: 0, discountPercent: 0, currency: 'USD',
+  quantity: 1, commissionSlotsTotal: 1, status: 'active' as 'active'|'draft'|'archived'|'sold',
   images: [] as string[], tags: '', isNsfw: false,
 })
 
@@ -341,8 +344,10 @@ function openEdit() {
     title:       listing.value.title,
     description: listing.value.description ?? '',
     price:       parseFloat(String(listing.value.price)),
+    discountPercent: listing.value.discount_percent ?? 0,
     currency:    listing.value.currency,
     quantity:    listing.value.quantity,
+    commissionSlotsTotal: listing.value.commission_slots_total ?? 1,
     status:      listing.value.status as any,
     images:      [...listing.value.images],
     tags:        listing.value.tags.join(', '),
@@ -360,8 +365,10 @@ async function submitEdit() {
       title:       editForm.value.title,
       description: editForm.value.description || undefined,
       price:       editForm.value.price,
+      discountPercent: supportsDiscount(listing.value.listing_kind) ? clampDiscount(editForm.value.discountPercent) : 0,
       currency:    editForm.value.currency,
-      quantity:    editForm.value.quantity,
+      quantity:    isCommission.value ? undefined : editForm.value.quantity,
+      commissionSlotsTotal: isCommission.value ? Number(editForm.value.commissionSlotsTotal) : undefined,
       status:      editForm.value.status as any,
       images:      editForm.value.images,
       tags:        editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -982,9 +989,8 @@ async function submitReport() {
                     <div class="flex items-end justify-between">
                       <div>
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingTicketPriceLabel }}</p>
-                        <p class="text-3xl font-black text-brand-success leading-none tabular-nums">
-                          {{ parseFloat(String(listing.price)) === 0 ? langStore.t.dealerListingFreeCaps : formatPrice(listing.price, listing.currency) }}
-                        </p>
+                        <p v-if="parseFloat(String(listing.price)) === 0" class="text-3xl font-black text-brand-success leading-none tabular-nums">{{ langStore.t.dealerListingFreeCaps }}</p>
+                        <DenDiscountPrice v-else :listing="listing" size="lg" price-class="text-brand-success" />
                       </div>
                       <div v-if="listing.raffle_max_tickets" class="text-right">
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingTimeLeft }}</p>
@@ -1070,10 +1076,11 @@ async function submitReport() {
                     <div class="flex items-end justify-between">
                       <div>
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingPriceLabel }}</p>
-                        <p class="text-4xl font-black leading-none tabular-nums"
+                        <p v-if="parseFloat(String(listing.price)) === 0 || isSoldOut(listing)" class="text-4xl font-black leading-none tabular-nums"
                           :class="isSoldOut(listing) ? 'text-white/30 line-through' : 'text-brand-yellow'">
                           {{ parseFloat(String(listing.price)) === 0 ? langStore.t.dealerListingFreePrice : formatPrice(listing.price, listing.currency) }}
                         </p>
+                        <DenDiscountPrice v-else :listing="listing" size="lg" />
                         <p v-if="!isSoldOut(listing) && listing.type !== 'digital'" class="text-xs font-bold text-brand-yellow mt-1.5">
                           {{ listing.quantity === 1 ? 'Единственный экземпляр' : `В наличии: ${listing.quantity - (listing.quantity_sold ?? 0)}` }}
                         </p>
@@ -1372,9 +1379,16 @@ async function submitReport() {
                 </div>
               </div>
 
+              <DenDiscountField v-if="listing && supportsDiscount(listing.listing_kind)" v-model="editForm.discountPercent" :price="Number(editForm.price)" :currency="editForm.currency" />
+
               <!-- Quantity + Status -->
               <div class="grid grid-cols-2 gap-3">
-                <div class="stack-y-1.5">
+                <div v-if="isCommission" class="stack-y-1.5">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealersDenCommissionSlotsLabel }}</label>
+                  <input v-model.number="editForm.commissionSlotsTotal" type="number" min="1" max="1000"
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all" />
+                </div>
+                <div v-else class="stack-y-1.5">
                   <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingQuantityLabel }}</label>
                   <input v-model.number="editForm.quantity" type="number" min="1"
                     class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all" />

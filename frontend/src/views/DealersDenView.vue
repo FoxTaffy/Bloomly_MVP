@@ -18,6 +18,9 @@ import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
 import DenCountdown from '@/components/DenCountdown.vue'
+import DenDiscountPrice from '@/components/DenDiscountPrice.vue'
+import DenDiscountField from '@/components/DenDiscountField.vue'
+import { supportsDiscount, clampDiscount } from '@/lib/listingDiscount'
 import api from '@/api'
 import { canSellInDen } from '@/lib/verificationPolicy'
 
@@ -223,7 +226,7 @@ const isCreating      = ref(false)
 const createError     = ref('')
 const createDetails = ref<DetailsDraft>(emptyDraft())
 const form = ref({
-  title: '', description: '', price: 0, currency: 'USD',
+  title: '', description: '', price: 0, discountPercent: 0, currency: 'USD',
   category: 'art' as any, type: 'digital' as any, listingKind: 'fixed' as ListingKind,
   images: [] as string[], quantity: 1, isNsfw: false, tags: '', status: 'active' as any,
   auctionEndsAt: '', bidIncrement: 5, autoBuyPrice: 0, raffleMaxTickets: 0,
@@ -234,7 +237,7 @@ const form = ref({
 function resetForm() {
   createDetails.value = emptyDraft()
   form.value = {
-    title: '', description: '', price: 0, currency: 'USD',
+    title: '', description: '', price: 0, discountPercent: 0, currency: 'USD',
     category: 'art', type: 'digital', listingKind: 'fixed',
     images: [], quantity: 1, isNsfw: false, tags: '', status: 'active',
     auctionEndsAt: '', bidIncrement: 5, autoBuyPrice: 0, raffleMaxTickets: 0,
@@ -279,9 +282,10 @@ async function submitCreate() {
       groupId: form.value.groupId,
       title: form.value.title, description: form.value.description || undefined,
       price: Number(form.value.price), currency: form.value.currency,
+      discountPercent:  supportsDiscount(form.value.listingKind) ? clampDiscount(form.value.discountPercent) : 0,
       category: form.value.category, type: form.value.type,
       listingKind: form.value.listingKind, images: form.value.images,
-      quantity: form.value.quantity, isNsfw: form.value.isNsfw,
+      quantity: form.value.listingKind === 'commission_queue' ? 1 : form.value.quantity, isNsfw: form.value.isNsfw,
       tags: form.value.tags.split(',').map(t => t.trim()).filter(Boolean),
       status: form.value.status,
       auctionEndsAt:    form.value.auctionEndsAt   || undefined,
@@ -308,7 +312,7 @@ const editError     = ref('')
 const editingId     = ref('')
 const editKind      = ref<ListingKind>('fixed')
 const editDetails   = ref<DetailsDraft>(emptyDraft())
-const editForm      = ref({ title: '', description: '', price: 0, currency: 'USD', quantity: 1, status: 'active' as any, tags: '', isNsfw: false })
+const editForm      = ref({ title: '', description: '', price: 0, discountPercent: 0, currency: 'USD', quantity: 1, commissionSlotsTotal: 1, status: 'active' as any, tags: '', isNsfw: false })
 // Photos: already-saved ones (removable) plus anything uploaded in this session.
 const editKeptImages = ref<string[]>([])
 const editNewImages  = ref<string[]>([])
@@ -319,8 +323,8 @@ function openEdit(listing: DealerListing) {
   editDetails.value = draftFrom(listing.commission_details)
   editForm.value  = {
     title: listing.title, description: listing.description ?? '',
-    price: parseFloat(String(listing.price)), currency: listing.currency,
-    quantity: listing.quantity, status: listing.status,
+    price: parseFloat(String(listing.price)), discountPercent: listing.discount_percent ?? 0, currency: listing.currency,
+    quantity: listing.quantity, commissionSlotsTotal: listing.commission_slots_total ?? 1, status: listing.status,
     tags: listing.tags.join(', '), isNsfw: listing.is_nsfw,
   }
   editKeptImages.value = [...listing.images]
@@ -338,7 +342,9 @@ async function submitEdit() {
     await store.updateListing(editingId.value, {
       title: editForm.value.title, description: editForm.value.description,
       price: editForm.value.price, currency: editForm.value.currency,
-      quantity: editForm.value.quantity,
+      discountPercent: supportsDiscount(editKind.value) ? clampDiscount(editForm.value.discountPercent) : 0,
+      quantity: editKind.value === 'commission_queue' ? undefined : editForm.value.quantity,
+      commissionSlotsTotal: editKind.value === 'commission_queue' ? Number(editForm.value.commissionSlotsTotal) : undefined,
       tags: editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
       isNsfw: editForm.value.isNsfw,
       commissionDetails: cleanDraft(editDetails.value, editKind.value === 'commission_queue'),
@@ -878,7 +884,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                         : 'background: rgba(255,255,255,0.08)'" />
                   </div>
                   <div class="flex items-center justify-between gap-1">
-                    <p class="text-xs font-black text-brand-success tabular-nums">{{ formatPrice(listing.price, listing.currency) }}<span class="text-[8px] text-white/30 font-normal">/{{ langStore.t.dealersDenPiecesAbbr }}</span></p>
+                    <div class="flex items-center gap-1"><DenDiscountPrice :listing="listing" size="xs" price-class="text-brand-success" /><span class="text-[8px] text-white/30 font-normal">/{{ langStore.t.dealersDenPiecesAbbr }}</span></div>
                     <button v-if="!isSoldOut(listing)" @click.stop="submitRaffleTicket(listing, $event)" :disabled="buyingTicketId === listing.id"
                       class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-xs transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #66C770, #059669)">
@@ -909,7 +915,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   </p>
                 </div>
                 <div class="text-right">
-                  <p class="text-xs font-black text-violet-300 tabular-nums leading-none">{{ formatPrice(listing.price, listing.currency) }}</p>
+                  <DenDiscountPrice :listing="listing" size="xs" price-class="text-violet-300" align="end" />
                   <p v-if="listing.commission_eta_days != null" class="text-[8px] text-white/30 mt-0.5">{{ langStore.t.dealersDenCommissionEtaLabel }}: {{ listing.commission_eta_days }}</p>
                 </div>
               </div>
@@ -936,7 +942,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     <span class="text-[9px] font-bold text-brand-error/60">{{ langStore.t.dealersDenOutOfStock }}</span>
                   </template>
                   <template v-else>
-                    <span class="text-sm font-black text-brand-yellow tabular-nums">{{ formatPrice(listing.price, listing.currency) }}</span>
+                    <DenDiscountPrice :listing="listing" align="end" />
                     <span v-if="listing.quantity > 1" class="text-[9px] text-brand-success/80 font-medium tabular-nums">
                       <BIcon name="Package" class="w-2.5 h-2.5 inline" /> {{ listing.quantity - (listing.quantity_sold ?? 0) }} {{ langStore.t.dealersDenPiecesAbbr }}
                     </span>
@@ -1167,6 +1173,8 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
             </div>
 
+            <DenDiscountField v-if="supportsDiscount(form.listingKind)" v-model="form.discountPercent" :price="Number(form.price)" :currency="form.currency" />
+
             <!-- Auction fields -->
             <div v-if="form.listingKind === 'auction' || form.listingKind === 'ych'"
               class="bg-brand-yellow/5 border border-brand-yellow/15 rounded-2xl p-4 stack-y-4">
@@ -1269,8 +1277,8 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             </div>
 
             <!-- Quantity + Status -->
-            <div class="grid grid-cols-2 gap-3">
-              <div>
+            <div class="grid gap-3" :class="form.listingKind === 'commission_queue' ? 'grid-cols-1' : 'grid-cols-2'">
+              <div v-if="form.listingKind !== 'commission_queue'">
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenQuantityLabel }}</label>
                 <input v-model.number="form.quantity" type="number" min="1"
                   class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
@@ -1386,8 +1394,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 </select>
               </div>
             </div>
+            <DenDiscountField v-if="supportsDiscount(editKind)" v-model="editForm.discountPercent" :price="Number(editForm.price)" :currency="editForm.currency" />
             <div class="grid grid-cols-2 gap-3">
-              <div>
+              <div v-if="editKind === 'commission_queue'">
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCommissionSlotsLabel }}</label>
+                <input v-model.number="editForm.commissionSlotsTotal" type="number" min="1" max="1000" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
+              </div>
+              <div v-else>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenQuantityLabel }}</label>
                 <input v-model.number="editForm.quantity" type="number" min="1" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
               </div>
