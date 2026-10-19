@@ -857,6 +857,7 @@ export const ru = {
   payModalUseNewCard: 'Использовать другую карту',
   payModalUseSavedCard: 'Оплатить сохранённой картой',
   secLangRegionLabel: 'Регион для оплаты',
+  secRegionOther: 'Другое (весь мир)',
   secLangRegionHint: 'Определяет альтернативные способы оплаты, если у вас нет карты',
   payModalAltMethodsTitle: 'Другие способы оплаты',
   payModalAltComingSoon: 'Скоро будет доступно',

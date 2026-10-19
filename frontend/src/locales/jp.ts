@@ -858,6 +858,7 @@ export const jp: Translation = {
   payModalUseNewCard: '別のカードを使う',
   payModalUseSavedCard: '保存したカードで支払う',
   secLangRegionLabel: '支払い地域',
+  secRegionOther: 'その他 / グローバル',
   secLangRegionHint: 'カードをお持ちでない場合の代替支払い方法を決定します',
   payModalAltMethodsTitle: 'その他の支払い方法',
   payModalAltComingSoon: '近日公開',

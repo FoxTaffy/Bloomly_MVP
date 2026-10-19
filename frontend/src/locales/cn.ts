@@ -858,6 +858,7 @@ export const cn: Translation = {
   payModalUseNewCard: '使用其他卡',
   payModalUseSavedCard: '使用已保存的卡支付',
   secLangRegionLabel: '支付地区',
+  secRegionOther: '其他 / 全球',
   secLangRegionHint: '决定在没有卡的情况下可用的其他支付方式',
   payModalAltMethodsTitle: '其他支付方式',
   payModalAltComingSoon: '即将推出',

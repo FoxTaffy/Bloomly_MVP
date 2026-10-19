@@ -3,6 +3,16 @@ export interface PaymentRegion {
   label: string
 }
 
+/** Лейбл региона на языке интерфейса: страны — через Intl.DisplayNames, «Другое» — из словаря. */
+export function regionLabel(id: string, locale: string, otherLabel: string): string {
+  if (id === 'GLOBAL') return otherLabel
+  try {
+    return new Intl.DisplayNames([locale], { type: 'region' }).of(id) ?? id
+  } catch {
+    return id
+  }
+}
+
 export const PAYMENT_REGIONS: PaymentRegion[] = [
   { id: 'RU',     label: 'Россия / Russia' },
   { id: 'US',     label: 'США / United States' },

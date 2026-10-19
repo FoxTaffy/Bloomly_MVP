@@ -854,6 +854,7 @@ export const fr: Translation = {
   payModalUseNewCard: 'Utiliser une autre carte',
   payModalUseSavedCard: 'Payer avec une carte enregistrée',
   secLangRegionLabel: 'Région de paiement',
+  secRegionOther: 'Autre / Monde',
   secLangRegionHint: 'Détermine les moyens de paiement alternatifs si vous n’avez pas de carte',
   payModalAltMethodsTitle: 'Autres moyens de paiement',
   payModalAltComingSoon: 'Bientôt disponible',

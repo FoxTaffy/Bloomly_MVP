@@ -1439,7 +1439,7 @@
                       @change="setPaymentRegion(($event.target as HTMLSelectElement).value)"
                       class="field-input"
                     >
-                      <option v-for="r in PAYMENT_REGIONS" :key="r.id" :value="r.id">{{ r.label }}</option>
+                      <option v-for="r in PAYMENT_REGIONS" :key="r.id" :value="r.id">{{ regionLabel(r.id, LANG_TO_LOCALE[langStore.currentLang], langStore.t.secRegionOther) }}</option>
                     </select>
                   </div>
                 </div>
@@ -1559,7 +1559,7 @@ import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES, rainbowShadow, readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
-import { PAYMENT_REGIONS } from '@/lib/paymentRegions'
+import { PAYMENT_REGIONS, regionLabel } from '@/lib/paymentRegions'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import AvatarFrameOverlay from '@/components/AvatarFrameOverlay.vue'

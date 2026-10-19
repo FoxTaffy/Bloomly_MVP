@@ -854,6 +854,7 @@ export const de: Translation = {
   payModalUseNewCard: 'Andere Karte verwenden',
   payModalUseSavedCard: 'Mit gespeicherter Karte zahlen',
   secLangRegionLabel: 'Zahlungsregion',
+  secRegionOther: 'Sonstige / Global',
   secLangRegionHint: 'Bestimmt alternative Zahlungsmethoden, falls du keine Karte hast',
   payModalAltMethodsTitle: 'Andere Zahlungsmethoden',
   payModalAltComingSoon: 'Demnächst verfügbar',
