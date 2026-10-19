@@ -61,14 +61,11 @@ onMounted(async () => {
   try {
     await store.loadListing(route.params.id as string)
     activeImage.value = 0
-    await Promise.all([loadBids(), loadComments(), loadReviews()])
+    await Promise.all([loadBids(), loadComments(), loadReviews(), loadMyApplication()])
     if (listing.value) {
       isWishlisted.value  = listing.value.is_wishlisted ?? false
       wishlistCount.value = listing.value.wishlist_count ?? 0
       if (listing.value.category === 'avatar_frame') await loadOwnedFrames()
-      if (auth.user && auth.user.id !== listing.value.seller_id) {
-        try { myApplication.value = await applicationsStore.getMine(listing.value.id) } catch { /* не критично */ }
-      }
     }
   } catch (err) {
     console.error('[DealerListingView] load error:', errorMessage(err))
@@ -336,6 +333,18 @@ const showEditModal = ref(false)
 const showApplyModal = ref(false)
 const applicationsStore = useListingApplicationsStore()
 const myApplication = ref<{ status: string; orderStage?: string | null; deadlineAt?: string | null } | null>(null)
+// Пока статус заявки не загружен, кнопку «Отправить заявку» не показываем — иначе после F5 успеваешь открыть окно повторно
+const applicationReady = ref(false)
+
+async function loadMyApplication() {
+  if (!listing.value || !auth.user || auth.user.id === listing.value.seller_id) { applicationReady.value = true; return }
+  try {
+    myApplication.value = await applicationsStore.getMine(listing.value.id)
+    applicationReady.value = true
+  } catch {
+    applicationReady.value = false // не знаем статус — лучше не давать подать заявку вслепую
+  }
+}
 const STAGE_LABEL: Record<string, string> = { WAITING: 'в очереди', SKETCH: 'скетч', LINEART: 'лайнарт', COLORING: 'раскраска', FINISHED: 'готово' }
 const editDetails   = ref(emptyDraft())
 const isUpdating    = ref(false)
@@ -1154,6 +1163,8 @@ async function submitReport() {
                           </p>
                         </div>
                       </div>
+                      <div v-else-if="auth.user && auth.user.id !== listing.seller_id && !applicationReady"
+                        class="w-full h-[50px] rounded-2xl bg-white/5 border border-brand-border animate-pulse" />
                       <button v-else-if="auth.user && auth.user.id !== listing.seller_id && listing.group"
                         @click="showApplyModal = true"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
@@ -1358,7 +1369,8 @@ async function submitReport() {
       </main>
     </div>
 
-    <ListingApplicationModal v-if="showApplyModal && listing" :listing="listing" @sent="myApplication = { status: 'pending' }" @close="showApplyModal = false" />
+    <ListingApplicationModal v-if="showApplyModal && listing && !myApplication" :listing="listing" @sent="myApplication = { status: 'pending' }"
+      @close="showApplyModal = false; loadMyApplication()" />
 
     <!-- ═══════════════════════════════════════════════════════════
          EDIT MODAL
