@@ -22,6 +22,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/TermsView.vue'),
   },
   {
+    path: '/dealers-den-terms',
+    name: 'dealers-den-terms',
+    component: () => import('@/views/DealersDenGroupTermsView.vue'),
+  },
+  {
     path: '/privacy',
     name: 'privacy',
     component: () => import('@/views/PrivacyView.vue'),

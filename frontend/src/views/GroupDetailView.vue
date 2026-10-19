@@ -1697,7 +1697,9 @@ const vClickOutside = {
                       <p class="text-xs text-white/50">{{ langStore.t.groupDenConnectHint }}</p>
                       <label class="flex items-start gap-2.5 cursor-pointer">
                         <input v-model="denConfirm" type="checkbox" class="mt-0.5 w-4 h-4 accent-brand-accent" />
-                        <span class="text-xs text-white/70">{{ langStore.t.groupDenScamConfirm }}</span>
+                        <span class="text-xs text-white/70">{{ langStore.t.groupDenScamConfirm }}
+                          <router-link to="/dealers-den-terms" target="_blank" class="text-brand-accent font-semibold hover:underline" @click.stop>Соглашение Dealers' Den</router-link>
+                        </span>
                       </label>
                       <p v-if="denError" class="text-xs text-brand-error">{{ denError }}</p>
                       <button @click="connectDen" :disabled="!denConfirm || denConnecting"
