@@ -167,7 +167,7 @@ const notifHref = (n: any): string | null => {
   if (n.sender?.username && ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted'].includes(n.type)) {
     return `/profile/${n.sender.username}`
   }
-  if (n.type === 'LIKE' && n._likeCount > 1) return identityHref(n)
+  if (n.type === 'LIKE' && n._likeCount > 1 && n.sender_id) return `/notifications/likes/${n.sender_id}`
   if (n.post_id) return `/post/${n.post_id}`
   if (n.sender?.username) return `/profile/${n.sender.username}`
   return null

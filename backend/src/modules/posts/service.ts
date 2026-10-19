@@ -1213,6 +1213,31 @@ export const postService = {
     return favs.map((f) => maskGroupAuthor({ ...f.post, favourited_at: f.created_at }));
   },
 
+  /** The viewer's own posts that `likerId` has upvoted — backs the grouped "liked N of your posts" notification. */
+  async getMyPostsLikedBy(ownerId: string, likerId: string) {
+    const votes = await prisma.vote.findMany({
+      where: { user_id: likerId, value: 1, deleted_at: null, post: { author_id: ownerId, deleted_at: null, groupPosts: { none: {} } } },
+      orderBy: { updated_at: 'desc' },
+      take: 100,
+      include: {
+        post: {
+          include: {
+            author: { select: AUTHOR_SELECT },
+            rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+            tags: { include: { tag: true } },
+            _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
+            groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+          },
+        },
+      },
+    });
+    const liker = await prisma.user.findUnique({
+      where: { id: likerId },
+      select: { id: true, username: true, display_name: true, avatar_url: true },
+    });
+    return { liker, posts: votes.map((v) => maskGroupAuthor({ ...v.post, liked_at: v.updated_at })) };
+  },
+
   async getMyBookmarks(
     userId: string,
     opts: { skip?: number; take?: number; sort?: 'newest' | 'oldest' | 'top'; hasMedia?: boolean; labelId?: string | null },

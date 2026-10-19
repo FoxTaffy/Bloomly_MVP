@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
-import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, searchTagsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler, setNotInterestedHandler } from './controller.js';
+import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, searchTagsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, getMyPostsLikedByHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler, setNotInterestedHandler } from './controller.js';
 import { createScheduledPostHandler, listScheduledPostsHandler, updateScheduledPostHandler, cancelScheduledPostHandler, publishNowScheduledPostHandler } from './scheduledController.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
@@ -94,6 +94,7 @@ export async function postsRoutes(fastify: FastifyInstance) {
 
   // ── Private "me" routes (must come before /user/:userId) ────────────────
   fastify.get<RouteGenericOf<typeof getMyBookmarksHandler>>('/me/bookmarks', auth, getMyBookmarksHandler);
+  fastify.get<RouteGenericOf<typeof getMyPostsLikedByHandler>>('/me/liked-by/:userId', { ...auth, schema: { params: { type: 'object', required: ['userId'], properties: { userId: { type: 'string', format: 'uuid' } } } } }, getMyPostsLikedByHandler);
   fastify.get<RouteGenericOf<typeof getTagInsightsHandler>>('/me/tag-insights', auth, getTagInsightsHandler);
 
   // ── Scheduled posts / drafts ────────────────────────────────────────────

@@ -418,7 +418,7 @@ const onNotifClick = async (n: any) => {
   // Several liked posts → no single post to open, go to the person instead
   if (n.type === 'LIKE' && n._likeCount > 1) {
     showNotifications.value = false
-    router.push(identityHref(n))
+    router.push(`/notifications/likes/${n.sender_id}`)
     return
   }
   // Open post modal

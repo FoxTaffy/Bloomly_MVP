@@ -503,3 +503,17 @@ export const getMyBookmarksHandler = async (
     return reply.code(500).send({ success: false, data: null, error: { code: 'BOOKMARKS_ERROR', message } });
   }
 };
+
+export const getMyPostsLikedByHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: ownerId } = request.user as JwtUser;
+    const result = await postService.getMyPostsLikedBy(ownerId, request.params.userId);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch liked posts';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'LIKED_BY_ERROR', message } });
+  }
+};

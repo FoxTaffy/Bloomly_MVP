@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { vStickyBottom } from '@/lib/stickyBottom'
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFriendsStore } from '@/stores/friends'
@@ -11,6 +11,7 @@ import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import { useGroupAdminTools } from '@/composables/useGroupAdminTools'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import api from '@/api'
 
 // kept for backward compat (MainLayout still passes it for home sub-views)
 const props = withDefaults(defineProps<{
@@ -50,6 +51,19 @@ watch([() => auth.user?.id, () => auth.isAuthenticated], ([userId, authenticated
   }
 }, { immediate: true })
 
+// Unread notifications badge — refreshed on mount and whenever the route changes
+// (opening /notifications marks everything read, so the badge clears on the way out).
+const notifUnread = ref(0)
+const refreshNotifUnread = async () => {
+  if (!auth.isAuthenticated) return
+  try {
+    const res = await api.get('/notifications/count')
+    if (res.data.success) notifUnread.value = res.data.data.count ?? 0
+  } catch {}
+}
+onMounted(refreshNotifUnread)
+watch(() => route.fullPath, refreshNotifUnread)
+
 // Sum of pending "Обращения" across every group the user owns/admins/moderates.
 const groupInboxTotal = computed(() =>
   Object.values(messagesStore.groupInboxCounts).reduce((sum, n) => sum + n, 0))
@@ -69,6 +83,7 @@ const isActive = (key: string): boolean => {
     'shop':         'shop',
     explore:      'explore',
     'scheduled-posts': 'scheduled-posts',
+    notifications: 'notifications',
   }
   if (routeMap[key]) return route.name === routeMap[key]
   return props.activeNav === key
@@ -89,6 +104,14 @@ const navItems = computed(() => [
     label: langStore.t.explore,
     disabled: false,
     to: { name: 'explore' },
+  },
+  {
+    key: 'notifications',
+    icon: 'Bell',
+    label: 'Уведомления',
+    disabled: false,
+    to: { name: 'notifications' },
+    badge: notifUnread.value > 0 ? (notifUnread.value > 99 ? '99+' : String(notifUnread.value)) : undefined,
   },
   {
     key: 'messages',
