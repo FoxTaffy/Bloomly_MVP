@@ -1358,8 +1358,11 @@ async function submitReport() {
 
               <!-- Description -->
               <div class="stack-y-1.5">
-                <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.fursuitDescLabel }}</label>
-                <textarea v-model="editForm.description" rows="3" :placeholder="langStore.t.dealerListingDescPlaceholder"
+                <div class="flex items-center justify-between">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.fursuitDescLabel }}</label>
+                  <span class="text-[11px] tabular-nums" :class="(editForm.description?.length ?? 0) > 440 ? 'text-brand-error/80' : 'text-white/35'">{{ editForm.description?.length ?? 0 }}<span class="opacity-50">/500</span></span>
+                </div>
+                <textarea v-model="editForm.description" rows="3" maxlength="500" :placeholder="langStore.t.dealerListingDescPlaceholder"
                   class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all resize-none" />
               </div>
 

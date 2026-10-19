@@ -379,7 +379,7 @@ export async function removeFromWishlistHandler(req: FastifyRequest, reply: Fast
 export async function getMyWishlistHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   try {
-    const listings = await dealersDenService.getMyWishlist(user.id);
+    const listings = await dealersDenService.getMyWishlist(user.id, requestIsAdult(user));
     return reply.send({ success: true, data: { listings } });
   } catch (err) {
     req.log.error(err);

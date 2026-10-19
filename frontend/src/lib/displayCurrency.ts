@@ -15,7 +15,7 @@ export const displayCurrency = ref<string | null>(null)
 export const displayRates = ref<Record<string, number>>({})
 
 let loading: Promise<void> | null = null
-async function loadRates() {
+export async function loadRates() {
   if (Object.keys(displayRates.value).length > 1) return
   // api подгружаем лениво: он тянет stores/auth, а форматтеры нужны почти везде
   loading ??= import('@/api').then(m => m.default.get('/payments/display-rates'))

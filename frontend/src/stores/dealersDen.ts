@@ -249,6 +249,7 @@ export const LISTINGS_PAGE_SIZE = 20
 export interface ListingsParams {
   category?: string; type?: string; search?: string; sellerId?: string; groupId?: string
   minPrice?: number; maxPrice?: number; currency?: string
+  onlyDiscount?: string; priceRanges?: string
   listingKind?: string; sort?: string; excludeNsfw?: string
 }
 

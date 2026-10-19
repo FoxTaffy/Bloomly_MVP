@@ -99,6 +99,12 @@ export function formatPrice(price: string | number, currency: string, fractionDi
   return formatMoney(n0, currency, opts)
 }
 
+/** Цена в её собственной валюте, без пересчёта в валюту региона (для форм, где продавец вводит сумму). */
+export function formatPriceNative(price: string | number, currency: string): string {
+  const n = parseFloat(String(price))
+  return formatMoney(Number.isFinite(n) ? n : 0, currency, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
 function formatMoney(n: number, currency: string, opts: Intl.NumberFormatOptions): string {
   if (currency === 'RUB') return `${n.toLocaleString('ru-RU', opts)} ₽`
   if (currency === 'USD') return `$${n.toLocaleString('en-US', opts)}`

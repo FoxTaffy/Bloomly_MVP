@@ -18,10 +18,15 @@ import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
 import DenCountdown from '@/components/DenCountdown.vue'
+import DenSmartPickModal from '@/components/DenSmartPickModal.vue'
+import DenExitConfirmModal from '@/components/DenExitConfirmModal.vue'
+import DenPublishedModal from '@/components/DenPublishedModal.vue'
 import DenDiscountPrice from '@/components/DenDiscountPrice.vue'
 import DenDiscountField from '@/components/DenDiscountField.vue'
 import { supportsDiscount, clampDiscount } from '@/lib/listingDiscount'
 import api from '@/api'
+import { displayCurrency, loadRates } from '@/lib/displayCurrency'
+import { emptySmartPick, smartPickCount, matchesSmartPick, budgetRanges, hasBudget, BUDGET_CURRENCIES, type SmartPick } from '@/lib/smartPick'
 import { canSellInDen } from '@/lib/verificationPolicy'
 
 const router = useRouter()
@@ -65,7 +70,7 @@ watch(() => [auth.user?.id, auth.user?.is_verified, auth.user?.verification_type
 
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
-type MainTab = 'browse' | 'my'
+type MainTab = 'browse' | 'my' | 'wishlist' | 'drafts'
 const activeTab = ref<MainTab>('browse')
 
 // ── Categories ─────────────────────────────────────────────────────────────────
@@ -116,16 +121,54 @@ function onSearchInput() {
 function matchesFilters(l: DealerListing) {
   if (selectedKind.value && l.listing_kind !== selectedKind.value) return false
   if (selectedCategory.value !== 'all' && l.category !== selectedCategory.value) return false
-  if (selectedType.value && l.type !== selectedType.value) return false
+  if (selectedType.value && l.type !== selectedType.value && l.type !== 'both') return false
+  if (!matchesSmartPick(l, smart.value)) return false
   const q = searchQuery.value.trim().toLowerCase()
   if (q && !l.title.toLowerCase().includes(q) && !(l.description ?? '').toLowerCase().includes(q) && !l.tags.includes(q)) return false
   return true
 }
 
+// Черновики автора: кнопка в шапке появляется, только когда они есть
+const draftListings = computed(() => store.myListings.filter(l => l.status === 'draft'))
+watch(() => draftListings.value.length, n => { if (n === 0 && activeTab.value === 'drafts') activeTab.value = 'browse' })
+
 const displayListings = computed<DealerListing[]>(() => {
   if (activeTab.value === 'my') return store.myListings.filter(matchesFilters)
+  if (activeTab.value === 'wishlist') return store.wishlist.filter(matchesFilters)
+  if (activeTab.value === 'drafts') return draftListings.value.filter(matchesFilters)
   return store.listings
 })
+
+// ── Умный подбор ───────────────────────────────────────────────────────────────
+const smartCurrency = computed(() => displayCurrency.value && BUDGET_CURRENCIES.includes(displayCurrency.value) ? displayCurrency.value : 'USD')
+const smart = ref<SmartPick>(emptySmartPick())
+const showSmart = ref(false)
+const smartActive = computed(() => smartPickCount({ ...smart.value, category: selectedCategory.value, type: selectedType.value as any, kind: selectedKind.value, sort: selectedSort.value }))
+const smartCats = computed(() => CATS.value)
+const smartKinds = computed(() => [
+  { key: '', label: '', icon: 'LayoutGrid', hint: langStore.t.dealersDenSmartAnyKindHint },
+  { key: 'fixed', label: langStore.t.dealersDenKindFixed, icon: 'Tag', hint: langStore.t.dealersDenSmartFixedHint },
+  { key: 'auction', label: langStore.t.dealersDenKindAuction, icon: 'Hammer', hint: langStore.t.dealersDenPromoAuctionsSub },
+  { key: 'ych', label: 'YCH', icon: 'Paintbrush', hint: langStore.t.dealersDenPromoYchSub },
+  { key: 'raffle', label: langStore.t.dealersDenKindRaffle, icon: 'Gift', hint: langStore.t.dealersDenPromoRaffleSub },
+  { key: 'commission_queue', label: langStore.t.dealersDenKindCommissions, icon: 'ListOrdered', hint: langStore.t.dealersDenPromoCommissionSub },
+])
+function openSmart() {
+  void loadRates()
+  smart.value = { ...smart.value, category: selectedCategory.value, type: selectedType.value as any, kind: selectedKind.value, sort: selectedSort.value,
+    budgetCurrency: hasBudget(smart.value) ? smart.value.budgetCurrency : smartCurrency.value }
+  showSmart.value = true
+}
+function applySmart(p: SmartPick) {
+  smart.value = p
+  selectedCategory.value = p.category
+  selectedType.value = p.type
+  selectedKind.value = p.kind as any
+  selectedSort.value = p.sort   // watch(selectedSort) сам перезагрузит каталог
+  showSmart.value = false
+  loadData()
+}
+function resetSmart() { applySmart(emptySmartPick(smartCurrency.value)) }
 
 function listingsFilters() {
   return {
@@ -134,6 +177,8 @@ function listingsFilters() {
     listingKind: selectedKind.value  || undefined,
     search:      searchQuery.value || undefined,
     sort:        selectedSort.value !== 'newest' ? selectedSort.value : undefined,
+    onlyDiscount: smart.value.onlyDiscount ? '1' : undefined,
+    priceRanges: hasBudget(smart.value) ? JSON.stringify(budgetRanges(smart.value)) : undefined,
   }
 }
 
@@ -141,7 +186,31 @@ async function loadData() {
   await Promise.all([
     store.loadListings(listingsFilters()),
     auth.user ? store.loadMyListings() : Promise.resolve(),
+    auth.user ? store.loadMyWishlist().catch(() => {}) : Promise.resolve(),
   ])
+}
+
+// ── Wishlist (сердечко на карточке) ────────────────────────────────────────────
+const wishlistBusy = ref<string | null>(null)
+async function toggleWishlist(listing: DealerListing) {
+  if (!auth.user) { router.push({ name: 'login' }); return }
+  if (wishlistBusy.value) return
+  wishlistBusy.value = listing.id
+  const was = !!listing.is_wishlisted
+  listing.is_wishlisted = !was
+  listing.wishlist_count = Math.max(0, (listing.wishlist_count ?? 0) + (was ? -1 : 1))
+  try {
+    if (was) await store.removeFromWishlist(listing.id)
+    else {
+      await store.addToWishlist(listing.id)
+      if (!store.wishlist.some(l => l.id === listing.id)) store.wishlist.unshift(listing)
+    }
+    // карточка может жить в двух списках — держим флаг в обоих
+    for (const l of store.listings) if (l.id === listing.id) { l.is_wishlisted = !was; l.wishlist_count = listing.wishlist_count }
+  } catch {
+    listing.is_wishlisted = was
+    listing.wishlist_count = Math.max(0, (listing.wishlist_count ?? 0) + (was ? 1 : -1))
+  } finally { wishlistBusy.value = null }
 }
 
 function loadMore() { store.loadMoreListings(listingsFilters()) }
@@ -202,6 +271,16 @@ const KIND_META = computed<Record<string, { label: string; icon: string; color: 
   raffle:           { label: langStore.t.dealersDenKindRaffle,   icon: 'Gift',        color: 'text-brand-success',  border: 'border-brand-success/40',  bg: 'bg-brand-success/15'  },
   commission_queue: { label: langStore.t.dealersDenKindCommissions, icon: 'ListOrdered', color: 'text-violet-400', border: 'border-violet-400/40',     bg: 'bg-violet-400/15'     },
 }))
+
+// В общем списке лоты раскладываются по видам продажи отдельными рядами (как в Shop); с выбранным видом — один ряд
+const KIND_ORDER: ListingKind[] = ['fixed', 'auction', 'ych', 'raffle', 'commission_queue']
+const listingSections = computed(() => {
+  const items = displayListings.value
+  if (selectedKind.value) return [{ kind: '' as '' | ListingKind, items }]
+  return KIND_ORDER
+    .map(kind => ({ kind: kind as '' | ListingKind, items: items.filter(l => (l.listing_kind ?? 'fixed') === kind) }))
+    .filter(sec => sec.items.length > 0)
+})
 
 function isSoldOut(l: DealerListing) {
   return l.status === 'sold' || (l.quantity > 0 && l.quantity_sold >= l.quantity)
@@ -269,16 +348,46 @@ watch([sellerAccess, () => route.query.create], ([acc, c]) => {
   router.replace({ query: { ...route.query, create: undefined } })
   openCreateModal()
 })
-async function tryCloseCreate() {
-  if (isFormDirty() && !(await confirmDialog(langStore.t.dealersDenUnsavedCloseConfirm))) return
+// Крестик/«Отмена»: если форма заполнена — спрашиваем, закинуть ли в черновики
+const showExitConfirm = ref(false)
+function tryCloseCreate() {
+  if (!isFormDirty()) { showCreateModal.value = false; return }
+  showExitConfirm.value = true
+}
+async function exitSaveDraft() {
+  showExitConfirm.value = false
+  await submitCreate(true)
+}
+function exitDiscard() {
+  showExitConfirm.value = false
   showCreateModal.value = false
 }
-async function submitCreate() {
+
+// Мисклик по затемнению окно не закрывает: красная подсветка рамки и «подёргивание»
+const shaking = ref<'create' | 'edit' | null>(null)
+let shakeTimer: ReturnType<typeof setTimeout> | undefined
+function shakeModal(which: 'create' | 'edit') {
+  clearTimeout(shakeTimer)
+  shaking.value = null
+  requestAnimationFrame(() => {
+    shaking.value = which
+    shakeTimer = setTimeout(() => { shaking.value = null }, 600)
+  })
+}
+// Окно «Опубликовано» после успешного создания: перейти к лоту или остаться в Dealers' Den
+const published = ref<{ id: string; title: string; image: string | null; isDraft: boolean } | null>(null)
+function openPublished() {
+  const id = published.value?.id
+  published.value = null
+  if (id) router.push({ name: 'dealer-listing', params: { id } })
+}
+
+async function submitCreate(asDraft = false) {
   if (!form.value.title.trim() || !form.value.groupId) return
   isCreating.value = true
   createError.value = ''
   try {
-    await store.createListing({
+    const created = await store.createListing({
       groupId: form.value.groupId,
       title: form.value.title, description: form.value.description || undefined,
       price: Number(form.value.price), currency: form.value.currency,
@@ -287,7 +396,7 @@ async function submitCreate() {
       listingKind: form.value.listingKind, images: form.value.images,
       quantity: form.value.listingKind === 'commission_queue' ? 1 : form.value.quantity, isNsfw: form.value.isNsfw,
       tags: form.value.tags.split(',').map(t => t.trim()).filter(Boolean),
-      status: form.value.status,
+      status: asDraft ? 'draft' : form.value.status,
       auctionEndsAt:    form.value.auctionEndsAt   || undefined,
       bidIncrement:     form.value.bidIncrement     || 1,
       autoBuyPrice:     form.value.autoBuyPrice     || undefined,
@@ -300,6 +409,7 @@ async function submitCreate() {
       } : {}),
     })
     showCreateModal.value = false
+    published.value = { id: created.id, title: created.title, image: created.images?.[0] ?? null, isDraft: created.status === 'draft' }
   } catch (err: any) {
     createError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? langStore.t.dealersDenCreateFailed
   } finally { isCreating.value = false }
@@ -480,7 +590,21 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     @keyup.enter="applyFilter()"
                     class="bg-transparent text-sm text-white placeholder-white/35 outline-hidden w-full" />
                 </div>
-                <button v-if="auth.user" @click="activeTab = auth.user ? (activeTab === 'my' ? 'browse' : 'my') : 'browse'"
+                <button v-if="auth.user" @click="activeTab = activeTab === 'wishlist' ? 'browse' : 'wishlist'"
+                  class="flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-2xl transition-all"
+                  :style="activeTab === 'wishlist' ? 'background: linear-gradient(135deg, #f43f5e, #fb7185)' : 'background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12)'">
+                  <BIcon name="Heart" class="w-4 h-4" :style="activeTab === 'wishlist' ? 'fill: currentColor' : ''" />
+                  {{ activeTab === 'wishlist' ? langStore.t.dealersDenMarketplaceLabel : langStore.t.dealersDenWishlistTab }}
+                  <span v-if="store.wishlist.length && activeTab !== 'wishlist'" class="text-[11px] text-white/60 tabular-nums">{{ store.wishlist.length }}</span>
+                </button>
+                <button v-if="auth.user && draftListings.length" @click="activeTab = activeTab === 'drafts' ? 'browse' : 'drafts'"
+                  class="flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-2xl transition-all"
+                  :style="activeTab === 'drafts' ? 'background: linear-gradient(135deg, #64748b, #94a3b8)' : 'background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12)'">
+                  <BIcon name="Pencil" class="w-4 h-4" />
+                  {{ activeTab === 'drafts' ? langStore.t.dealersDenMarketplaceLabel : langStore.t.dealersDenDraftsTab }}
+                  <span v-if="activeTab !== 'drafts'" class="text-[11px] text-white/60 tabular-nums">{{ draftListings.length }}</span>
+                </button>
+                <button v-if="auth.user" @click="activeTab = activeTab === 'my' ? 'browse' : 'my'"
                   class="flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-2xl transition-all"
                   :style="activeTab === 'my' ? 'background: linear-gradient(135deg, #3148FF, #4C67CF)' : 'background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12)'">
                   <BIcon :name="activeTab === 'my' ? 'ShoppingBag' : 'ClipboardList'" class="w-4 h-4" />
@@ -507,31 +631,6 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         </div>
 
         <!-- ═══════════════════════════════════════════
-             PROMO TILES (только на browse)
-        ════════════════════════════════════════════ -->
-        <div v-if="activeTab === 'browse'" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div v-for="tile in [
-            { icon: 'Hammer',      label: langStore.t.dealersDenLabelAuctions,  sub: langStore.t.dealersDenPromoAuctionsSub, kind: 'auction',          from: '#FFC01F', to: '#E76F51' },
-            { icon: 'Paintbrush',  label: 'YCH',        sub: langStore.t.dealersDenPromoYchSub,     kind: 'ych',              from: '#CD83F5', to: '#7C3AED' },
-            { icon: 'Gift',        label: langStore.t.dealersDenLabelRaffles,  sub: langStore.t.dealersDenPromoRaffleSub, kind: 'raffle',           from: '#66C770', to: '#059669' },
-            { icon: 'ListOrdered', label: langStore.t.dealersDenKindCommissions,   sub: langStore.t.dealersDenPromoCommissionSub,    kind: 'commission_queue', from: '#a78bfa', to: '#7c3aed' },
-          ]" :key="tile.kind"
-            @click="selectKind(tile.kind)"
-            class="relative overflow-hidden rounded-2xl cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
-            :class="selectedKind === tile.kind ? 'ring-2 ring-white/30' : ''"
-            style="height:72px">
-            <div class="absolute inset-0" :style="`background: linear-gradient(135deg, ${tile.from}cc, ${tile.to}cc)`" />
-            <div class="relative z-10 h-full flex items-center gap-2.5 px-3">
-              <BIcon :name="tile.icon" class="w-5 h-5 text-white/90 shrink-0" />
-              <div>
-                <p class="text-white font-bold text-xs leading-tight">{{ tile.label }}</p>
-                <p class="text-white/55 text-[10px]">{{ tile.sub }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════
              KIND + CATEGORY FILTER PILLS
         ════════════════════════════════════════════ -->
         <div class="flex flex-col gap-2.5">
@@ -550,7 +649,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <div class="flex gap-1.5 ml-auto shrink-0">
               <button v-if="auth.user && canSell" @click="openCreateModal"
-                class="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-bold rounded-full transition-all shadow-md"
+                class="xl:hidden flex items-center gap-1.5 px-4 py-2 text-white text-sm font-bold rounded-full transition-all shadow-md"
                 style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
                 <BIcon name="Plus" class="w-3.5 h-3.5" /> {{ langStore.t.dealersDenPostBtn }}
               </button>
@@ -578,6 +677,17 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 :placeholder="langStore.t.dealersDenSearchPlaceholder"
                 class="w-full bg-brand-card border border-brand-border rounded-full pl-10 pr-4 py-2 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
             </div>
+            <button type="button" @click="openSmart"
+              class="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold text-white shadow-md transition-all hover:opacity-90"
+              style="background: linear-gradient(135deg, #8b5cf6, #3148FF)">
+              <BIcon name="Sparkles" class="w-3.5 h-3.5" />
+              <span class="max-sm:hidden">{{ langStore.t.dealersDenSmartTitle }}</span>
+              <span v-if="smartActive" class="min-w-4 h-4 px-1 rounded-full bg-white/25 text-[10px] font-extrabold flex items-center justify-center tabular-nums">{{ smartActive }}</span>
+            </button>
+            <button v-if="smartActive" type="button" @click="resetSmart" :title="langStore.t.dealersDenSmartReset"
+              class="shrink-0 w-8 h-8 rounded-full bg-brand-card border border-brand-border text-white/50 hover:text-white flex items-center justify-center transition-all">
+              <BIcon name="X" class="w-3.5 h-3.5" />
+            </button>
             <select v-model="selectedSort"
               class="bg-brand-card border border-brand-border rounded-full px-3.5 py-2 text-sm text-white/60 outline-hidden transition-all appearance-none cursor-pointer shrink-0">
               <option v-for="s in SORTS" :key="s.key" :value="s.key">{{ s.label }}</option>
@@ -642,9 +752,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
             <BIcon name="LayoutGrid" class="w-4 h-4 text-brand-accent" />
-            {{ activeTab === 'my' ? langStore.t.dealersDenMyListingsLabel : selectedKind ? (KINDS.find(k => k.key === selectedKind)?.label ?? langStore.t.dealersDenCatalogFallback) : langStore.t.dealersDenAllListingsLabel }}
+            {{ activeTab === 'drafts' ? langStore.t.dealersDenDraftsTab : activeTab === 'wishlist' ? langStore.t.dealersDenWishlistTab : activeTab === 'my' ? langStore.t.dealersDenMyListingsLabel : selectedKind ? (KINDS.find(k => k.key === selectedKind)?.label ?? langStore.t.dealersDenCatalogFallback) : langStore.t.dealersDenAllListingsLabel }}
           </h2>
-          <span class="text-xs text-white/35 font-medium">{{ activeTab === 'my' ? displayListings.length : store.total }} {{ langStore.t.dealersDenPiecesAbbr }}</span>
+          <span class="text-xs text-white/35 font-medium">{{ activeTab !== 'browse' ? displayListings.length : store.total }} {{ langStore.t.dealersDenPiecesAbbr }}</span>
         </div>
 
         <!-- ═══════════════════════════════════════════
@@ -669,10 +779,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <BIcon name="ShoppingBag" class="w-10 h-10 text-white/20" />
           </div>
           <h3 class="text-lg font-bold text-white mb-2">
-            {{ activeTab === 'my' ? langStore.t.dealersDenNoListings : langStore.t.dealersDenNothingFound }}
+            {{ activeTab === 'wishlist' ? langStore.t.dealersDenWishlistEmpty : activeTab === 'my' ? langStore.t.dealersDenNoListings : langStore.t.dealersDenNothingFound }}
           </h3>
           <p class="text-white/35 text-sm mb-6">
-            {{ activeTab === 'my' ? langStore.t.dealersDenPostFirstHint : langStore.t.dealersDenTryOtherFilterHint }}
+            {{ activeTab === 'wishlist' ? langStore.t.dealersDenWishlistEmptyHint : activeTab === 'my' ? langStore.t.dealersDenPostFirstHint : langStore.t.dealersDenTryOtherFilterHint }}
           </p>
           <button v-if="activeTab === 'my' && canSell"
             @click="openCreateModal"
@@ -683,8 +793,15 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         </div>
 
         <!-- Grid -->
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          <div v-for="listing in displayListings" :key="listing.id"
+        <div v-else class="stack-y-7">
+         <section v-for="sec in listingSections" :key="sec.kind" class="stack-y-3">
+          <h3 v-if="sec.kind" class="text-sm font-bold uppercase tracking-widest flex items-center gap-2" :class="KIND_META[sec.kind]?.color">
+            <BIcon :name="KIND_META[sec.kind]?.icon" class="w-4 h-4" />
+            {{ KIND_META[sec.kind]?.label }}
+            <span class="text-xs text-white/30 font-medium tabular-nums normal-case tracking-normal">{{ sec.items.length }}</span>
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div v-for="listing in sec.items" :key="listing.id"
             class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/50 hover:-translate-y-0.5 transition-all cursor-pointer group shadow-lg hover:shadow-brand-accent/10"
             @click="openListing(listing)">
 
@@ -721,8 +838,17 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 </span>
               </div>
 
-              <!-- Type badge top-right -->
-              <div class="absolute top-2 right-2">
+              <!-- Wishlist heart top-right -->
+              <button v-if="auth.user?.id !== listing.seller_id" @click.stop="toggleWishlist(listing)"
+                :title="listing.is_wishlisted ? langStore.t.dealersDenWishlistRemove : langStore.t.dealersDenWishlistAdd"
+                class="absolute top-2 right-2 z-20 h-7 min-w-7 px-1.5 rounded-full backdrop-blur-xs flex items-center justify-center gap-1 text-[10px] font-extrabold transition-all active:scale-90"
+                :class="listing.is_wishlisted ? 'bg-rose-500/90 text-white' : 'bg-black/55 text-white/80 hover:bg-rose-500/80'">
+                <BIcon name="Heart" class="w-3.5 h-3.5" :style="listing.is_wishlisted ? 'fill: currentColor' : ''" />
+                <span v-if="(listing.wishlist_count ?? 0) > 0" class="tabular-nums">{{ listing.wishlist_count }}</span>
+              </button>
+
+              <!-- Type badge (left of the heart) -->
+              <div class="absolute top-2" :class="auth.user?.id !== listing.seller_id ? 'right-11' : 'right-2'">
                 <span v-if="listing.type !== 'physical'"
                   class="text-[9px] font-extrabold px-2 py-0.5 rounded-full backdrop-blur-xs"
                   :class="listing.type === 'digital' ? 'bg-brand-accent/90 text-white' : 'bg-brand-yellow/90 text-black'">
@@ -746,7 +872,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
 
               <!-- My controls -->
-              <div v-if="activeTab === 'my'" class="absolute bottom-2 right-2 flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" @click.stop>
+              <div v-if="activeTab === 'my' || activeTab === 'drafts'" class="absolute bottom-2 right-2 flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" @click.stop>
                 <button @click="openEdit(listing)"
                   class="w-7 h-7 bg-black/60 backdrop-blur-xs rounded-full flex items-center justify-center hover:bg-brand-accent transition-all">
                   <BIcon name="Pencil" class="w-3.5 h-3.5 text-white" />
@@ -960,6 +1086,8 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </button>
             </div>
           </div>
+          </div>
+         </section>
         </div>
 
         <!-- Next page of the catalogue (browse only; "my listings" is loaded in full) -->
@@ -1034,29 +1162,6 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           </div>
         </div>
 
-        <!-- Quick filter mini-cards (like Stickers) -->
-        <div class="stack-y-2">
-          <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider px-1">{{ langStore.t.dealersDenSaleTypesLabel }}</h4>
-          <div v-for="k in [
-            { key: '',        icon: 'LayoutGrid', label: langStore.t.tabAll,             from: '#3148FF', to: '#4C67CF' },
-            { key: 'auction', icon: 'Hammer',     label: langStore.t.dealersDenLabelAuctions, from: '#FFC01F', to: '#E76F51' },
-            { key: 'ych',              icon: 'Paintbrush',  label: 'YCH',        from: '#CD83F5', to: '#7C3AED' },
-            { key: 'raffle',           icon: 'Gift',        label: langStore.t.dealersDenLabelRaffles, from: '#66C770', to: '#059669' },
-            { key: 'fixed',            icon: 'Tag',         label: langStore.t.dealersDenKindFixed, from: '#3148FF', to: '#2D3F9E' },
-            { key: 'commission_queue', icon: 'ListOrdered', label: langStore.t.dealersDenKindCommissions, from: '#a78bfa', to: '#7c3aed' },
-          ]" :key="k.key"
-            @click="selectKind(k.key)"
-            class="relative overflow-hidden rounded-2xl cursor-pointer hover:scale-[1.02] transition-transform"
-            :class="selectedKind === k.key ? 'ring-2 ring-white/20' : ''"
-            style="height:50px">
-            <div class="absolute inset-0" :style="`background: linear-gradient(135deg, ${k.from}bb, ${k.to}bb)`" />
-            <div class="relative z-10 h-full flex items-center gap-2.5 px-3">
-              <BIcon :name="k.icon" class="w-4 h-4 text-white/90" />
-              <span class="text-white font-bold text-xs">{{ k.label }}</span>
-            </div>
-          </div>
-        </div>
-
         <!-- Stats card -->
         <div class="bg-brand-card border border-brand-border rounded-2xl p-4 stack-y-2">
           <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider mb-3">{{ langStore.t.dealersDenStatsTitle }}</h4>
@@ -1080,13 +1185,23 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
       </aside>
     </div>
 
+    <DenSmartPickModal v-if="showSmart" :model-value="smart" :cats="smartCats" :kinds="smartKinds" :sorts="SORTS" :default-currency="smartCurrency"
+      @apply="applySmart" @close="showSmart = false" />
+
+    <DenExitConfirmModal v-if="showExitConfirm" :can-save-draft="!!form.title.trim() && !!form.groupId" :busy="isCreating"
+      @draft="exitSaveDraft" @discard="exitDiscard" @stay="showExitConfirm = false" />
+
+    <!-- ═══ PUBLISHED MODAL ═══════════════════════════════════════════════════ -->
+    <DenPublishedModal v-if="published" :title="published.title" :image="published.image" :is-draft="published.isDraft"
+      @open="openPublished" @stay="published = null" />
+
     <!-- ═══ CREATE MODAL ══════════════════════════════════════════════════════ -->
     <Teleport to="body">
       <transition name="modal-fade">
       <div v-if="showCreateModal"
         class="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
-        @click.self="tryCloseCreate()">
-        <div class="modal-form relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-2xl max-h-[94vh] flex flex-col overflow-hidden">
+        @click.self="shakeModal('create')">
+        <div :class="{ 'modal-shake': shaking === 'create' }" class="modal-form relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-2xl max-h-[94vh] flex flex-col overflow-hidden">
 
           <div class="relative px-6 pt-6 pb-4 shrink-0">
             <button @click="tryCloseCreate()" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
@@ -1144,8 +1259,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <!-- Description -->
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.fursuitDescLabel }}</label>
-              <textarea v-model="form.description" rows="3"
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-xs font-bold text-white/35 uppercase tracking-wider block">{{ langStore.t.fursuitDescLabel }}</label>
+                <span class="text-[11px] tabular-nums" :class="(form.description?.length ?? 0) > 440 ? 'text-brand-error/80' : 'text-white/35'">{{ form.description?.length ?? 0 }}<span class="opacity-50">/500</span></span>
+              </div>
+              <textarea v-model="form.description" rows="3" maxlength="500"
                 :placeholder="langStore.t.dealersDenDescPlaceholderCreate"
                 class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden transition-all resize-none" />
             </div>
@@ -1329,7 +1447,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">
                 {{ langStore.t.cancel }}
               </button>
-              <button @click="submitCreate" :disabled="isCreating || !form.title.trim() || String(form.price) === ''"
+              <button @click="submitCreate()" :disabled="isCreating || !form.title.trim() || String(form.price) === ''"
                 class="flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-35 disabled:cursor-not-allowed text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90"
                 :style="form.title.trim() ? 'background: linear-gradient(135deg, #3148FF, #4C67CF)' : 'background: rgba(255,255,255,0.06)'">
                 <span v-if="isCreating" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1349,8 +1467,8 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
       <transition name="modal-fade">
       <div v-if="showEditModal"
         class="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
-        @click.self="tryCloseEdit()">
-        <div class="modal-form relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
+        @click.self="shakeModal('edit')">
+        <div :class="{ 'modal-shake': shaking === 'edit' }" class="modal-form relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
 
           <div class="relative px-6 pt-6 pb-4 shrink-0">
             <button @click="tryCloseEdit()" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
@@ -1366,8 +1484,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <input v-model="editForm.title" maxlength="200" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
             </div>
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.fursuitDescLabel }}</label>
-              <textarea v-model="editForm.description" rows="3" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all resize-none" />
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-xs font-bold text-white/35 uppercase tracking-wider block">{{ langStore.t.fursuitDescLabel }}</label>
+                <span class="text-[11px] tabular-nums" :class="(editForm.description?.length ?? 0) > 440 ? 'text-brand-error/80' : 'text-white/35'">{{ editForm.description?.length ?? 0 }}<span class="opacity-50">/500</span></span>
+              </div>
+              <textarea v-model="editForm.description" rows="3" maxlength="500" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all resize-none" />
             </div>
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenPhotosLabel }}</label>
@@ -1573,6 +1694,18 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 </template>
 
 <style scoped>
+.modal-shake { animation: modal-shake .5s cubic-bezier(.36,.07,.19,.97) both, modal-redborder .6s ease-out both; }
+@keyframes modal-shake {
+  10%, 90% { transform: translateX(-2px) }
+  20%, 80% { transform: translateX(5px) }
+  30%, 50%, 70% { transform: translateX(-9px) }
+  40%, 60% { transform: translateX(9px) }
+}
+@keyframes modal-redborder {
+  0%, 70% { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,.55), 0 0 36px rgba(239,68,68,.45) }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0) }
+}
+@media (prefers-reduced-motion: reduce) { .modal-shake { animation: modal-redborder .6s ease-out both } }
 .modal-form input,
 .modal-form textarea,
 .modal-form select {

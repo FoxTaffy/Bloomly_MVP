@@ -81,6 +81,18 @@ function shouldCountView(key: string): boolean {
   return true;
 }
 
+function parsePriceRanges(raw?: string): { currency: string; min: number | null; max: number | null }[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+    return Object.entries(parsed)
+      .filter(([cur, v]) => /^[A-Z]{3,10}$/.test(cur) && Array.isArray(v))
+      .map(([currency, v]) => ({ currency, min: num((v as unknown[])[0]), max: num((v as unknown[])[1]) }))
+      .slice(0, 12);
+  } catch { return []; }
+}
+
 export const dealersDenService = {
   // ── list listings ─────────────────────────────────────────────────────────
   async list(query: GetListingsQuery, viewerId?: string) {
@@ -102,16 +114,36 @@ export const dealersDenService = {
 
     // Рамки аватара — только в магазине
     where.category = query.category && query.category !== 'avatar_frame' ? query.category : { not: 'avatar_frame' };
-    if (query.type)        where.type        = query.type;
+    // «Цифровой»/«Физический» включают и лоты формата «оба»
+    if (query.type)        where.type        = query.type === 'both' ? 'both' : { in: [query.type, 'both'] };
     if (query.listingKind) where.listing_kind = query.listingKind;
     if (query.sellerId)    where.seller_id   = query.sellerId;
     if (query.groupId)     where.group_id    = query.groupId;
     if (query.excludeNsfw === '1') where.is_nsfw = false;
 
-    if (query.minPrice !== undefined || query.maxPrice !== undefined) {
-      where.price = {};
-      if (query.minPrice !== undefined) where.price.gte = parseFloat(query.minPrice);
-      if (query.maxPrice !== undefined) where.price.lte = parseFloat(query.maxPrice);
+    if (query.currency) where.currency = query.currency;
+    if (query.onlyDiscount === '1') where.discount_percent = { gt: 0 };
+
+    // Бюджет считается по цене со скидкой. priceRanges = { USD: [min, max], RUB: [...] } — клиент сам
+    // пересчитывает бюджет в валюты лотов, так что лоты в разных валютах попадают в один диапазон.
+    const ranges = parsePriceRanges(query.priceRanges);
+    if (ranges.length || query.minPrice !== undefined || query.maxPrice !== undefined) {
+      const effective = Prisma.sql`("price" * (100 - CASE WHEN "listing_kind" IN ('fixed','raffle','commission_queue') THEN "discount_percent" ELSE 0 END) / 100.0)`;
+      const bounds = (min: number | null, max: number | null) => {
+        const c: Prisma.Sql[] = [];
+        if (min !== null) c.push(Prisma.sql`${effective} >= ${min}`);
+        if (max !== null) c.push(Prisma.sql`${effective} <= ${max}`);
+        return c.length ? Prisma.join(c, ' AND ') : Prisma.sql`TRUE`;
+      };
+      const branches = ranges.length
+        ? ranges.map(r => Prisma.sql`("currency" = ${r.currency} AND ${bounds(r.min, r.max)})`)
+        : [bounds(
+            query.minPrice !== undefined ? parseFloat(query.minPrice) : null,
+            query.maxPrice !== undefined ? parseFloat(query.maxPrice) : null,
+          )];
+      const rows = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT "id" FROM "DealerListing" WHERE "deleted_at" IS NULL AND (${Prisma.join(branches, ' OR ')})`;
+      where.id = { in: rows.map(r => r.id) };
     }
 
     if (query.search) {
@@ -133,7 +165,22 @@ export const dealersDenService = {
       prisma.dealerListing.count({ where }),
     ]);
 
-    return { listings, total, page, limit };
+    return { listings: await this.withWishlistInfo(listings, viewerId), total, page, limit };
+  },
+
+  // Adds wishlist_count / is_wishlisted to catalogue rows so cards can render the heart without per-card requests.
+  async withWishlistInfo<T extends { id: string }>(listings: T[], viewerId?: string) {
+    if (listings.length === 0) return listings.map(l => ({ ...l, wishlist_count: 0, is_wishlisted: false }));
+    const ids = listings.map(l => l.id);
+    const [counts, mine] = await Promise.all([
+      prisma.denWishlist.groupBy({ by: ['listing_id'], where: { listing_id: { in: ids } }, _count: { _all: true } }),
+      viewerId
+        ? prisma.denWishlist.findMany({ where: { user_id: viewerId, listing_id: { in: ids } }, select: { listing_id: true } })
+        : Promise.resolve([] as { listing_id: string }[]),
+    ]);
+    const countById = new Map(counts.map(c => [c.listing_id, c._count._all]));
+    const mineIds = new Set(mine.map(m => m.listing_id));
+    return listings.map(l => ({ ...l, wishlist_count: countById.get(l.id) ?? 0, is_wishlisted: mineIds.has(l.id) }));
   },
 
   // ── trending tags ──────────────────────────────────────────────────────────
@@ -717,13 +764,13 @@ export const dealersDenService = {
     await prisma.denWishlist.deleteMany({ where: { user_id: userId, listing_id: listingId } });
   },
 
-  async getMyWishlist(userId: string) {
+  async getMyWishlist(userId: string, viewerIsAdult = false) {
     const items = await prisma.denWishlist.findMany({
-      where: { user_id: userId },
+      where: { user_id: userId, listing: { deleted_at: null, status: { in: ['active', 'sold'] }, category: { not: 'avatar_frame' }, ...(viewerIsAdult ? {} : { is_nsfw: false }) } },
       include: { listing: { select: LISTING_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return items.map(i => i.listing);
+    return this.withWishlistInfo(items.map(i => i.listing), userId);
   },
 
   // ── commission bookings ────────────────────────────────────────────────────

@@ -33,8 +33,8 @@ export function validateListingInput(input: Record<string, any>, mode: 'create' 
     }
   }
   if (has('description') && input.description !== null &&
-      (typeof input.description !== 'string' || input.description.length > 5000)) {
-    return 'Описание: не длиннее 5000 символов';
+      (typeof input.description !== 'string' || input.description.length > 500)) {
+    return 'Описание: не длиннее 500 символов';
   }
   if (isCreate || has('price')) {
     if (!inRange(input.price, 0, MAX_MONEY)) return 'Цена: неотрицательное число';

@@ -58,6 +58,8 @@ export interface GetListingsQuery {
   minPrice?: string;
   maxPrice?: string;
   currency?: string;
+  onlyDiscount?: string; // '1' — только со скидкой
+  priceRanges?: string;  // JSON { USD: [min, max], ... } — бюджет по цене со скидкой
   sort?: string;        // 'newest' | 'price_asc' | 'price_desc' | 'popular'
   isNsfw?: string;     // 'true' | 'false'
   excludeNsfw?: string; // '1' — скрыть NSFW
