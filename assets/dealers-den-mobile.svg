@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="650" viewBox="0 0 600 650" role="img" aria-labelledby="title desc">
+  <title id="title">Маленькая ярмарка больших идей</title>
+  <desc id="desc">Четыре авторские иллюстрации: палитра, лисий персонаж, клубок ниток и принт. Арт, фурсьюты, хендмейд и мерч в Dealers’ Den.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="390" gradientUnits="userSpaceOnUse"><stop stop-color="#16192F" /><stop offset="1" stop-color="#1F223C" /></linearGradient>
+    <linearGradient id="art" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFE0B5" /><stop offset="1" stop-color="#F5BAA6" /></linearGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#DAC9FF" /><stop offset="1" stop-color="#B8A2EB" /></linearGradient>
+    <linearGradient id="craft" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#C2E8DB" /><stop offset="1" stop-color="#93C7B3" /></linearGradient>
+    <linearGradient id="merch" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F4D1E2" /><stop offset="1" stop-color="#DCA4C4" /></linearGradient>
+  </defs>
+  <rect width="600" height="650" rx="28" fill="url(#bg)" />
+  <rect x=".5" y=".5" width="599" height="649" rx="27.5" fill="none" stroke="#3A4060" stroke-opacity=".22" />
+  <text x="30" y="51" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="600" letter-spacing="4" fill="#A1B4FF">DEALERS’ DEN</text>
+  <text x="30" y="97" font-family="Segoe UI,Arial,sans-serif" font-size="32" font-weight="700" fill="#FCF8FF">Маленькая ярмарка</text>
+  <text x="30" y="136" font-family="Segoe UI,Arial,sans-serif" font-size="32" font-weight="700" fill="#FCF8FF">больших идей.</text><g transform="translate(30 170)">
+    <rect width="258" height="210" rx="20" fill="url(#art)" />
+    <circle cx="208" cy="39" r="19" fill="#FFF4DB" opacity=".45" />
+    <g transform="translate(129 86) rotate(-14)">
+      <path d="M-63 7c-9-37 11-64 48-68 42-5 80 15 81 47 1 24-25 16-35 29-10 14 6 24-10 34C-8 67-52 43-63 7Z" fill="#FFF5E3" stroke="#95654F" stroke-width="3" />
+      <ellipse cx="24" cy="-16" rx="11" ry="9" fill="#D8B58E" />
+      <circle cx="-33" cy="-23" r="10" fill="#CD89A3" />
+      <circle cx="-5" cy="-40" r="10" fill="#A28BC8" />
+      <circle cx="-42" cy="7" r="10" fill="#8FBBA4" />
+      <circle cx="-18" cy="31" r="10" fill="#E4AA69" />
+      <path d="m35 43 34-71" stroke="#8F6554" stroke-width="9" stroke-linecap="round" />
+      <path d="m69-28 9-26-19 21Z" fill="#5E4559" />
+    </g>
+    <text x="129" y="186" text-anchor="middle" fill="#634238" font-family="Segoe UI,Arial,sans-serif" font-size="24" font-weight="700">Арт</text>
+  </g>
+  <g transform="translate(312 170)">
+    <rect width="258" height="210" rx="20" fill="url(#fur)" />
+    <g transform="translate(129 82)">
+      <path d="m-60 8-9-65 43 28c17-5 35-5 52 0l43-28-9 65c-3 33-26 55-60 55S-57 41-60 8Z" fill="#F8B98D" stroke="#6E4E72" stroke-width="3" stroke-linejoin="round" />
+      <path d="m-56-38 6 29 16-13Zm112 0-6 29-16-13Z" fill="#D98C9C" />
+      <path d="M-59 10c6 31 26 51 59 53C33 61 53 41 59 10L24 32 0 18-24 32Z" fill="#FFF1DD" />
+      <path d="m-27 6 12 5m42-5-12 5" stroke="#6E4E72" stroke-width="5" stroke-linecap="round" />
+      <path d="m-8 29 8 7 8-7Z" fill="#6E4E72" stroke="#6E4E72" stroke-width="4" stroke-linejoin="round" />
+      <path d="M0 36v8m-10-3q10 12 20 0" fill="none" stroke="#6E4E72" stroke-width="3" stroke-linecap="round" />
+    </g>
+    <text x="129" y="186" text-anchor="middle" fill="#4A3566" font-family="Segoe UI,Arial,sans-serif" font-size="24" font-weight="700">Фурсьюты</text>
+  </g>
+  <g transform="translate(30 410)">
+    <rect width="258" height="210" rx="20" fill="url(#craft)" />
+    <g transform="translate(129 86)" fill="none" stroke="#4D7D6B" stroke-width="3" stroke-linecap="round">
+      <path d="M41 24c21 4 28 21 12 31-13 8-18-1-7-7 12-6 25 7 36-3" />
+      <circle r="51" fill="#E6F3DD" />
+      <path d="M-35-37c42-1 65 22 72 72M-47-18C-3-14 18 7 22 46M-50 3C-18 9-2 26-1 50M-32 39c17-49 40-69 65-77M-44 23c16-44 35-65 61-71M-15 49C1 11 22-9 48-16" />
+      <path d="m-25-35-21-34m60 30 11-29" stroke="#8B6D64" stroke-width="5" />
+    </g>
+    <text x="129" y="186" text-anchor="middle" fill="#305D4E" font-family="Segoe UI,Arial,sans-serif" font-size="24" font-weight="700">Хендмейд</text>
+  </g>
+  <g transform="translate(312 410)">
+    <rect width="258" height="210" rx="20" fill="url(#merch)" />
+    <g transform="translate(129 86) rotate(10)">
+      <rect x="-47" y="-60" width="94" height="120" rx="7" fill="#FFF1E8" stroke="#8F5F7C" stroke-width="3" />
+      <rect x="-34" y="-46" width="68" height="78" rx="4" fill="#D9C0EA" />
+      <circle cx="15" cy="-25" r="10" fill="#FFE6AF" />
+      <path d="m-34 22 21-33L5 11 18-4 34 22v10h-68Z" fill="#A18DBA" />
+      <path d="m-21 44 42 0" stroke="#C79AB3" stroke-width="4" stroke-linecap="round" />
+      <path d="m60-39 3 10 10 3-10 3-3 10-3-10-10-3 10-3Z" fill="#FFF1E8" />
+    </g>
+    <text x="129" y="186" text-anchor="middle" fill="#70445F" font-family="Segoe UI,Arial,sans-serif" font-size="24" font-weight="700">Мерч</text>
+  </g>
+</svg>

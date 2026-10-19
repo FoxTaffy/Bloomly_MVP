@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">Расцветай среди своих</title>
+  <desc id="desc">Фирменный цветок, мягкая лапка и звёзды в синих и сиреневых цветах Bloomly</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse"><stop stop-color="#16192F"/><stop offset="1" stop-color="#1F223C"/></linearGradient>
+    <linearGradient id="petal" x1="-90" y1="-90" x2="90" y2="90" gradientUnits="userSpaceOnUse"><stop stop-color="#D5DDFF"/><stop offset="1" stop-color="#BFA2EF"/></linearGradient>
+  </defs>
+  <rect width="1200" height="300" rx="28" fill="url(#sky)"/>
+  <rect x="1" y="1" width="1198" height="298" rx="27" fill="none" stroke="#2A2D45" stroke-width="2"/>
+  <circle cx="169" cy="149" r="116" fill="#4C67CF" opacity=".09"/>
+  <circle cx="1025" cy="160" r="113" fill="#CD83F5" opacity=".06"/>
+  <g transform="translate(169 147) rotate(-10)" fill="url(#petal)" stroke="#E4DAFF" stroke-width="2">
+    <ellipse cy="-51" rx="34" ry="47"/>
+    <ellipse cy="-51" rx="34" ry="47" transform="rotate(72)"/>
+    <ellipse cy="-51" rx="34" ry="47" transform="rotate(144)"/>
+    <ellipse cy="-51" rx="34" ry="47" transform="rotate(216)"/>
+    <ellipse cy="-51" rx="34" ry="47" transform="rotate(288)"/>
+    <circle r="32" fill="#4C67CF" stroke="#D5DDFF" stroke-width="4"/>
+  </g>
+  <text x="600" y="134" text-anchor="middle" font-family="Nunito,Segoe UI,Arial,sans-serif" font-size="64" font-weight="800" letter-spacing="-1.5" fill="#F9FAFD">Расцветай</text>
+  <text x="600" y="211" text-anchor="middle" font-family="Nunito,Segoe UI,Arial,sans-serif" font-size="64" font-weight="800" letter-spacing="-1.5" fill="#A1B4FF">среди своих.</text>
+  <g transform="translate(1025 156) rotate(14)" fill="#D5DDFF" stroke="#F9FAFD" stroke-width="3">
+    <ellipse cx="-51" cy="-28" rx="16" ry="23" transform="rotate(-24 -51 -28)"/>
+    <ellipse cx="-18" cy="-53" rx="16" ry="24" transform="rotate(-8 -18 -53)"/>
+    <ellipse cx="20" cy="-52" rx="16" ry="24" transform="rotate(8 20 -52)"/>
+    <ellipse cx="52" cy="-25" rx="16" ry="23" transform="rotate(24 52 -25)"/>
+    <path d="M-47 28c0-17 11-19 20-36 12-24 43-24 56 1 8 17 20 19 20 36 0 21-17 32-34 27-10-3-19-3-29 0-18 5-33-7-33-28Z" fill="#BFA2EF"/>
+  </g>
+  <g fill="#F7A9E2">
+    <path d="m331 47 4 13 13 4-13 4-4 13-4-13-13-4 13-4Z"/>
+    <path d="m906 218 4 13 13 4-13 4-4 13-4-13-13-4 13-4Z"/>
+  </g>
+  <g fill="#A1B4FF"><circle cx="306" cy="226" r="4"/><circle cx="898" cy="71" r="4"/><circle cx="1115" cy="81" r="4"/></g>
+</svg>

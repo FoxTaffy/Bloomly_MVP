@@ -1,397 +1,165 @@
+<p align="center">
+  <picture>
+    <source media="(max-width: 640px)" srcset="assets/hub-header-mobile.svg" />
+    <img src="assets/hub-header.svg" alt="Bloomly — твоё творчество, твои люди" width="100%" />
+  </picture>
+</p>
+
+<h1 align="center">Твоё творчество. Твои люди.</h1>
+
+<p align="center"><strong>Социальная сеть для тех, кто создаёт. И тех, кто ценит.</strong><br />
+Показывай работы, находи друзей и развивай своё дело в творческом сообществе.</p>
+
+<p align="center">Арт · Фурри · Косплей · Музыка · Хендмейд · Фестивали</p>
+
+<p align="center"><a href="https://bloomly.fun/"><img src="assets/join.svg" alt="Открыть Bloomly" width="264" height="60" /></a></p>
+
+<p align="center">
+  <a href="https://t.me/Bloomly_news"><img src="assets/nav-telegram.svg" alt="Канал Bloomly в Telegram" width="156" height="59" /></a>
+  <a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Anews"><img src="assets/nav-news.svg" alt="Новости Bloomly" width="156" height="59" /></a>
+  <a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Aupdates"><img src="assets/nav-updates.svg" alt="Обновления Bloomly" width="156" height="59" /></a>
+  <a href="https://github.com/FoxTaffy/Bloomly_MVP/issues/new?template=bug_report.yml"><img src="assets/nav-bugs.svg" alt="Сообщить об ошибке" width="156" height="59" /></a>
+</p>
+
+<p align="center">
+  <a href="#возможности"><img src="assets/nav-features.svg" alt="Возможности Bloomly" width="156" height="59" /></a>
+  <a href="#dealers-den"><img src="assets/nav-market.svg" alt="О Dealers’ Den" width="156" height="59" /></a>
+  <a href="#найди-своих"><img src="assets/nav-community.svg" alt="О сообществе" width="156" height="59" /></a>
+</p>
+
+<br />
+
+## Возможности
+
+Твой новый персонаж, первый костюм, любимая история или работа, над которой ты трудился месяцами, — у всего этого есть место в Bloomly.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Показывай работы</h3>
+      <p>Арты, фотографии, видео, музыка и тексты. Делись результатом и процессом, собирай отклики и сохраняй вдохновение.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Собирай сообщество</h3>
+      <p>Вступай в группы по интересам или создай свою. Обсуждай идеи, знакомься с авторами и придумывай совместные проекты.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Будь на связи</h3>
+      <p>Личные сообщения, комментарии и стикеры помогают продолжить знакомство за пределами ленты.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Расскажи о себе</h3>
+      <p>Оформи профиль, покажи своих персонажей и фурсьюты. Пусть тебя узнают по тому, что тебе близко.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Найди своего мастера</h3>
+      <p>Открывай авторские вещи, выбирай работы и заказывай у творцов через Dealers’ Den.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Встречайся вживую</h3>
+      <p>Следи за событиями и фестивалями, узнавай об активностях и планируй встречи с сообществом.</p>
+    </td>
+  </tr>
+</table>
+
+Понравилась работа? **«Перелапь» её** — так в Bloomly делятся находками.
+
+<br />
+
+## Dealers’ Den
+
+<a href="https://bloomly.fun/dealers-den">
+  <picture>
+    <source media="(max-width: 640px)" srcset="assets/dealers-den-mobile.svg" />
+    <img src="assets/dealers-den.svg" alt="Dealers’ Den: арты, фурсьюты, хендмейд и мерч — творческая ярмарка внутри Bloomly" width="100%" />
+  </picture>
+</a>
+
+**Увидел работу. Нашёл автора. Создал что-то своё.**
+
+Dealers’ Den — творческая ярмарка внутри Bloomly. Здесь встречаются художники, мастера и люди, которые ищут особенные вещи.
+
+- **Готовые работы и заказы** — иллюстрации, фурсьюты, крафт, принты и мерч.
+- **Разные форматы** — обычные продажи, аукционы и очередь заказов у автора.
+- **Знакомство до заказа** — профиль мастера, отзывы и репутация помогают сделать выбор.
+
+<p align="center"><a href="https://bloomly.fun/dealers-den"><img src="assets/cta-market.svg" alt="Открыть ярмарку авторов" width="274" height="66" /></a></p>
+
+<br />
+
+## Найди своих
+
+<p align="center"><img src="assets/bloomly-banner.png" alt="Bloomly объединяет творческих людей" width="100%" /></p>
+
+Необязательно быть профессиональным художником. Можно шить первый костюм, придумывать персонажей, писать музыку, собирать любимые арты или просто искать людей с похожими увлечениями.
+
+**В Bloomly есть место и авторам, и их аудитории.**
+
+1. **Расскажи о себе** — оформи профиль и поделись интересами.
+2. **Найди то, что нравится** — посмотри работы и сообщества.
+3. **Начни общение** — оставь комментарий, подпишись или покажи своё творчество.
+
+<br />
+
+<p align="center">
+  <a href="https://bloomly.fun/explore"><img src="assets/cta-explore.svg" alt="Открыть для себя новое" width="246" height="59" /></a>
+  <a href="https://bloomly.fun/groups"><img src="assets/cta-groups.svg" alt="Найти сообщество" width="246" height="59" /></a>
+</p>
+
+<br />
+
+## Новости и обновления
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Жизнь сообщества</h3>
+      <p>Важные объявления, события и всё, чем хочется поделиться с людьми Bloomly.</p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues/21">Остаёмся на связи</a></p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Anews"><img src="assets/nav-news.svg" alt="Все новости →" width="156" height="59" /></a></p>
+    </td>
+    <td width="50%" valign="top">
+      <h3>Что стало лучше</h3>
+      <p>Новые возможности, изменения и исправления — с объяснением, что это даёт тебе.</p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues/22">Знакомься с новым хабом</a></p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Aupdates"><img src="assets/nav-updates.svg" alt="Все обновления →" width="156" height="59" /></a></p>
+    </td>
+  </tr>
+</table>
+
+Короткие анонсы можно читать в Telegram, а обсуждать новости и обновления — здесь.
+
+<p align="center"><a href="https://t.me/Bloomly_news"><img src="assets/nav-telegram.svg" alt="Читать Bloomly в Telegram" width="156" height="59" /></a></p>
+
+<br />
+
+## Помоги Bloomly стать лучше
+
+Что-то не загрузилось, кнопка не сработала или страница выглядит странно? Расскажи об этом: твои наблюдения помогают сделать Bloomly удобнее.
+
+<p align="center"><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues/new?template=bug_report.yml"><img src="assets/cta-report.svg" alt="Сообщить об ошибке" width="274" height="66" /></a></p>
+
+В форме достаточно описать, **что случилось**, **как это повторить** и **на каком устройстве**. Если можешь, добавь скриншот. После отправки в теме можно следить за статусом и отвечать на уточнения команды.
+
+<p align="center"><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Abug"><img src="assets/cta-known.svg" alt="Посмотреть известные ошибки" width="246" height="59" /></a> <a href="CONTRIBUTING.md"><img src="assets/cta-help.svg" alt="Как помочь Bloomly" width="246" height="59" /></a></p>
+
+<br />
+
 <div align="center">
-
-<img src="frontend/public/banner.png" alt="Bloomly" width="100%" />
-
-<br />
-
-# 🌸 Bloomly
-
-### Социальная сеть и маркетплейс для творческих сообществ
-
-**Арт · Косплей · Музыка · Фурсьюты · Фестивали**
-Место, где творцы публикуют работы, находят своих людей и продают свой труд — безопасно, в одном месте.
-
-<br />
-
-[![Vue](https://img.shields.io/badge/Vue_3-42b883?style=for-the-badge&logo=vuedotjs&logoColor=white)](https://vuejs.org)
-[![Fastify](https://img.shields.io/badge/Fastify-000000?style=for-the-badge&logo=fastify&logoColor=white)](https://fastify.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://www.prisma.io)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org)
-[![Expo](https://img.shields.io/badge/Expo_·_React_Native-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev)
-[![Docker](https://img.shields.io/badge/Docker-2496ed?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
-
-[**🌐 bloomly.fun**](https://bloomly.fun) · [Возможности](#-возможности) · [Dealers' Den](#-dealers-den--маркетплейс-со-встроенным-доверием) · [Архитектура](#-архитектура) · [Быстрый старт](#-быстрый-старт)
-
+  <img src="assets/bloomly-signature.svg" alt="Расцветай среди своих — Bloomly" width="100%" />
+  <p>Творчество начинается с идеи. Сообщество — с тебя.</p>
+  <a href="https://bloomly.fun/"><img src="assets/join.svg" alt="Открыть Bloomly" width="264" height="60" /></a>
+  <p><sub>Новости, обновления и обратная связь — на GitHub Bloomly.</sub></p>
 </div>
 
----
-
-## ✨ Что такое Bloomly
-
-Bloomly — это не очередная копия большой соцсети. Это платформа, **заточенная под творческие субкультуры**: у неё свой язык (перелапить вместо репоста), свои сущности (фурсоны, фурсьюты, фестивали, комиссии) и своя экономика.
-
-Главная идея: **весь путь от «понравилась работа» до «сделка закрыта» происходит внутри платформы**, и обе стороны защищены. Не нужно искать художника на одной площадке, договариваться в мессенджере и платить через третью.
-
-<table>
-<tr>
-<td width="25%" align="center"><h3>🎨</h3><b>Контент</b><br/>посты, сторис, закладки, отложенные публикации</td>
-<td width="25%" align="center"><h3>👥</h3><b>Сообщества</b><br/>группы, фестивали, билеты, мероприятия</td>
-<td width="25%" align="center"><h3>🛒</h3><b>Экономика</b><br/>Dealers' Den, кошелёк, магазин, подписки</td>
-<td width="25%" align="center"><h3>🛡️</h3><b>Безопасность</b><br/>2FA, E2E-чаты, AutoMod, верификация</td>
-</tr>
-</table>
-
-## 📊 Проект в цифрах
-
-| | |
-|---|---|
-| 🧩 **26** backend-модулей | модульный монолит, каждый домен изолирован |
-| 🗄️ **87** моделей Prisma | **133** миграции — история эволюции схемы |
-| 🔌 **400+** API-эндпоинтов | REST + WebSocket |
-| 🖥️ **34** страницы и **70+** компонентов | Vue 3 + TypeScript |
-| 🌍 **8** языков интерфейса | RU · EN · JP · CN · DE · FR · ES · PT |
-| 📱 **Мобильное приложение** | Expo + React Native, 5 основных вкладок |
-| ⏱️ **8** фоновых cron-задач | автомодерация, очистка медиа, отложенные посты |
-
----
-
-## 🚀 Возможности
-
-### 🖼️ Контент и лента
-
-- **Посты** с медиа, тегами, категориями (Digital Art, фотография, 3D, анимация, тексты) и NSFW-разметкой с возрастным ограничением
-- **Перелапить (Repaw)** — собственная механика репостов, **избранное** и закладки с **пользовательскими метками**
-- **Сторис** с просмотрами и голосованием, собственный просмотрщик
-- **Отложенные публикации** — запланируйте пост заранее, cron опубликует его вовремя
-- **Персональная лента** на основе аффинити к тегам (`UserTagAffinity`), без чёрного ящика
-- **Комментарии** с ответами и голосами, упоминания (`@`) и редактор с форматированием
-- **Богатые медиа:** кастомный видеоплеер, мини-плеер, лайтбокс, автоочистка осиротевших файлов
-
-### 👤 Профили
-
-- **Фурсоны** с референс-картинками и **фурсьюты** — отдельные сущности профиля
-- **Рамки аватара** с редактором и системой отправки на модерацию
-- **Бейджи верификации**, заявки на статус, индикатор заполненности профиля
-- Приватность профиля, блокировки, друзья, подписки и запросы отношений
-
-### 💬 Общение
-
-- **Личные сообщения** с ключами беседы AES-256, зашифрованными публичным RSA-OAEP-ключом каждого участника
-- **WebSocket**-доставка в реальном времени и SSE-уведомления
-- **Стикеры:** паки, коллекции, избранное, статистика использования, **анимированные (Lottie)** и **импорт паков из Telegram** в один клик
-
-### 🏕️ Группы, события и фестивали
-
-Три типа сообществ: `event`, `creative` и `static`.
-
-- Собственные **роли**, рейтинги, транзакции и заказы внутри группы
-- **Todo-списки группы** со статусами и назначением задач
-- **События** с картой (координаты), подсобытиями, **тирами билетов** (цена, лимит, окно продаж, перки), бейджами «скоро» и списком участников
-- **Активности** с заявками участников, чёрным списком и очередью одобрения
-- **Группы-бизнесы** и страница инструментов администратора группы
-
-### 💎 Экономика
-
-- **Кошелёк** с пополнением, **магазин** предметов, **подписки** с планами и способами оплаты
-- **Dealers' Den** — полноценный маркетплейс (см. ниже)
-
----
-
-## 🏪 Dealers' Den — маркетплейс со встроенным доверием
-
-> **Главное конкурентное преимущество Bloomly:** вся жизнь сделки — от лота до отзыва — проходит в одной защищённой цепочке, а не размазана по трём площадкам.
-
-| Формат лота | Что это |
-|---|---|
-| 🏷️ **fixed** | обычная продажа по фиксированной цене |
-| 🔨 **auction** | аукцион со ставками (`DealerBid`) |
-| 🎟️ **ych** | «Your Character Here» — слоты под персонажа покупателя |
-| 🎲 **raffle** | розыгрыши |
-| 📋 **commission_queue** | очередь комиссий с позицией, формой заявки и статусами |
-
-**Что делает Den особенным:**
-
-- 🏅 **Den Trust Score** — рейтинг продавца считается из закрытых сделок, средней оценки и проигранных споров. Пять уровней статуса:
-
-  ```
-  new  →  reliable  →  verified  →  master  →  elite
-  ```
-
-  Для `elite` нужно 200+ сделок и скор от 95. Репутацию нельзя купить — только заработать.
-- ⭐ **Отзывы и теги** — структурированные оценки сделок
-- ⚖️ **Споры** — открытие, ответ продавца, решение модератора; споры без ответа продавца закрываются автоматически
-- 🧡 **Вишлисты** и уведомления об интересующих лотах
-- 🏆 **Недельный топ** продавцов
-- 🎪 **Ярмарки (Den Fair)** — тематические сезонные мероприятия с участниками
-- 🔞 Корректная работа с NSFW-лотами и возрастными ограничениями
-
----
-
-## 🛡️ Безопасность и модерация
-
-<table>
-<tr>
-<td valign="top" width="50%">
-
-**Аккаунт**
-
-- Access + refresh токены с **ротацией**, refresh хранится в БД
-- **2FA:** TOTP (QR-код) и код на email; секреты шифруются
-- **OAuth:** Google, Yandex, X (Twitter), Twitch
-- Email-OTP для регистрации, сброса пароля и смены почты
-- Заморозка аккаунта с возможностью разморозки
-- Rate-limiting на всех маршрутах
-
-</td>
-<td valign="top" width="50%">
-
-**Модерация**
-
-- **AutoMod** с рейтингом нарушений: `spam · toxic · duplicate · fraud · suspicious`
-- Эскалация `warn → freeze` — **автоматический бан намеренно отключён**, финальное решение за человеком
-- **Апелляции** предупреждений
-- Жалобы, админ-панель, рассылки, глобальные настройки сайта и режим техработ
-- **Support-система:** письма из IMAP превращаются в тикеты, ответы уходят по SMTP
-
-</td>
-</tr>
-</table>
-
----
-
-## 🏗️ Архитектура
-
-Bloomly — **модульный монолит**: один деплой, но каждый домен живёт в своей папке со своими routes → controller → service → types. Никаких микросервисов и лишней сложности.
-
-```mermaid
-flowchart LR
-    U([👤 Пользователь]) --> CF[Cloudflare]
-    CF --> NG[Nginx]
-
-    NG --> FE["🖥️ Frontend<br/>Vue 3 · Vite · Pinia · Tailwind"]
-    NG --> API["⚡ API<br/>Fastify · TypeScript"]
-    NG --> S3["📦 MinIO<br/>S3-хранилище медиа"]
-
-    M["📱 Mobile<br/>Expo · React Native"] --> API
-
-    API --> PG[("🐘 PostgreSQL 16<br/>Prisma ORM")]
-    API --> S3
-    API <--> WS{{"WebSocket · SSE"}}
-    API --> MAIL["✉️ Brevo / Resend / SMTP"]
-    API --> CRON["⏱️ node-cron<br/>AutoMod · cleanup · scheduled posts"]
-    API <--> IMAP["📨 IMAP<br/>входящие в поддержку"]
-
-    classDef accent fill:#f9a8d4,stroke:#9d174d,color:#111
-    class API,FE accent
-```
-
-### Структура репозитория
-
-```
-bloomly_mvp/
-├── backend/                 ⚡ Fastify + Prisma + TypeScript
-│   ├── prisma/              87 моделей, 133 миграции
-│   └── src/
-│       ├── modules/         26 доменных модулей
-│       │   ├── auth/  users/  posts/  stories/  comments…
-│       │   ├── groups/  activities/  events…
-│       │   ├── dealers-den/ (service · trust · fair)
-│       │   ├── stickers/  avatar-frames/  shop/  wallet/
-│       │   ├── messages/  notifications/  friends/  follows/
-│       │   └── automod/  verification/  support/  admin/
-│       ├── lib/             privacy, блокировки, роли, санитайзинг, TOTP
-│       ├── scripts/         бэкфиллы и очистка медиа
-│       └── cron.ts          фоновые задачи
-│
-├── frontend/                🖥️ Vue 3 SPA
-│   └── src/  views · components · stores · composables · locales
-│
-├── mobile/                  📱 Expo Router + NativeWind + Zustand
-│   └── app/  (tabs) feed · discover · groups · messages · profile
-│
-└── docker-compose.yml       🐳 db · api · frontend · minio
-```
-
-### Принципы, на которых всё держится
-
-| Принцип | Как это выглядит |
-|---|---|
-| 🧱 **Модульность** | изменения затрагивают только свой модуль, без «скрытых» связей |
-| 🗑️ **Soft delete** | `deleted_at` на таблицах, физическое удаление только в ночной очистке |
-| 🆔 **UUID везде** | никаких автоинкрементов и угадываемых ID |
-| 🔐 **Ротация токенов** | refresh-токены хранятся в БД и обновляются при каждом использовании |
-| 🧪 **Типы от БД до UI** | Prisma → TypeScript → Vue с `vue-tsc` |
-
----
-
-## 🧰 Стек
-
-| Слой | Технологии |
-|---|---|
-| **Frontend** | Vue 3 · TypeScript · Vite · Pinia · Vue Router · Tailwind CSS · Lottie · Heroicons / Lucide |
-| **Backend** | Node.js 20 · Fastify 4 · Prisma 5 · `@fastify/jwt` · `@fastify/websocket` · `@fastify/rate-limit` |
-| **База данных** | PostgreSQL 16 (с data-checksums и тюнингом под нагрузку) |
-| **Хранилище** | MinIO (S3-совместимое) · Sharp · FFmpeg |
-| **Mobile** | Expo · React Native · Expo Router · NativeWind · TanStack Query · Zustand · Reanimated |
-| **Почта** | Brevo / Resend / Nodemailer · IMAP-поллер для поддержки |
-| **Инфраструктура** | Docker Compose · Nginx · Cloudflare · self-hosted VPS |
-
----
-
-## ⚡ Быстрый старт
-
-### Требования
-
-- Docker и Docker Compose
-- Node.js 20+ (если запускаете без Docker)
-
-### 1. Клонирование
-
-```bash
-git clone https://github.com/FoxTaffy/Bloomly_MVP.git
-cd Bloomly_MVP
-```
-
-### 2. Конфигурация
-
-Создайте файл `.env` в корне проекта:
-
-```env
-# База данных
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=<сильный-пароль>
-POSTGRES_DB=bloomly
-DATABASE_URL=postgresql://postgres:<сильный-пароль>@db:5432/bloomly
-
-# Безопасность
-JWT_SECRET=<случайная-строка>
-COOKIE_SECRET=<случайная-строка>
-TWO_FACTOR_ENCRYPTION_KEY=<ключ-для-шифрования-2FA>
-ALLOWED_ORIGINS=https://your-domain.com
-
-# Хранилище
-MINIO_ROOT_USER=<логин>
-MINIO_ROOT_PASSWORD=<пароль>
-MINIO_PUBLIC_URL=https://your-domain.com/s3
-
-# Приложение
-FRONTEND_URL=https://your-domain.com
-OAUTH_REDIRECT_BASE=https://your-domain.com/api
-```
 
 <details>
-<summary><b>Необязательные интеграции</b></summary>
+<summary>Для разработчиков</summary>
 
-```env
-# Почта
-BREVO_API_KEY=
-EMAIL_FROM="Bloomly <noreply@your-domain.com>"
-
-# OAuth
-GOOGLE_CLIENT_ID=      GOOGLE_CLIENT_SECRET=
-YANDEX_CLIENT_ID=      YANDEX_CLIENT_SECRET=
-TWITTER_CLIENT_ID=     TWITTER_CLIENT_SECRET=
-TWITCH_CLIENT_ID=      TWITCH_CLIENT_SECRET=
-
-# Telegram (импорт стикерпаков)
-TELEGRAM_BOT_TOKEN=
-
-# Почта поддержки (тикеты из входящих писем)
-SUPPORT_EMAIL_ADDRESS=
-SUPPORT_IMAP_HOST=  SUPPORT_IMAP_PORT=  SUPPORT_IMAP_USER=  SUPPORT_IMAP_PASS=
-SUPPORT_SMTP_HOST=  SUPPORT_SMTP_PORT=  SUPPORT_SMTP_USER=  SUPPORT_SMTP_PASS=
-```
+[Техническая документация проекта](README_DEVELOPMENT.md)
 
 </details>
-
-> ⚠️ Перед выходом в продакшн обязательно замените все значения по умолчанию из `docker-compose.yml` на собственные секреты.
-
-### 3. Запуск
-
-```bash
-docker compose up -d --build
-```
-
-API при старте сам применит миграции (`prisma migrate deploy`). После запуска:
-
-| Сервис | Адрес (только localhost) |
-|---|---|
-| Frontend | `127.0.0.1:5173` |
-| API | `127.0.0.1:8080` |
-| MinIO Console | `127.0.0.1:9001` |
-
-Наружу сервисы публикуются через Nginx с Cloudflare: порты привязаны к `127.0.0.1` намеренно.
-
-### Локальная разработка
-
-```bash
-# Backend
-cd backend
-npm install
-npx prisma generate
-npx prisma migrate dev
-npm run db:seed          # тестовые данные
-npm run dev
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-
-# Mobile
-cd mobile
-npm install
-npm start                # затем: npm run android / npm run ios
-```
-
-### Полезные команды
-
-```bash
-npm run db:backfill-tag-affinity       # пересчёт аффинити тегов для ленты
-npm run db:cleanup-orphaned-media      # удалить файлы без владельца
-npm run db:cleanup-deleted-media       # удалить медиа удалённых записей
-npm run typecheck                      # проверка типов (frontend / mobile)
-```
-
----
-
-## ⏱️ Фоновые задачи
-
-| Частота | Что делает |
-|---|---|
-| каждую минуту | публикация отложенных постов, опрос почтового ящика поддержки |
-| каждые 5 мин | keepalive соединения с БД |
-| каждые 15 мин | патруль подозрительной активности (AutoMod) |
-| ежечасно | автоурегулирование споров Dealers' Den, на которые продавец не ответил |
-| ежедневно, 03:00 | очистка мягко удалённого контента старше 30 дней вместе с файлами в S3 |
-| ежедневно, 04:00 | обработка просроченных участников активностей |
-
----
-
-## 🗺️ Дорожная карта
-
-- [x] Социальное ядро: посты, сторис, комментарии, подписки
-- [x] Группы, события, билеты, активности
-- [x] Dealers' Den: лоты, аукционы, комиссии, Trust Score, споры, ярмарки
-- [x] Стикеры, рамки аватара, магазин, кошелёк
-- [x] 2FA, E2E-чаты, AutoMod, верификация
-- [x] 8 языков интерфейса
-- [ ] Мобильное приложение: паритет с веб-версией
-- [ ] Расширение Dealers' Den: пакеты лотов, сезонные бейджи продавцов
-
----
-
-## 🕰️ История
-
-Первая версия — [**Bloomly v1**](https://github.com/FoxTaffy/Bloomly) — работала на Vue 3 + Express + PostgreSQL с универсальным CRUD-слоем. Этот репозиторий — полная переработка: типизированный бэкенд на Fastify и Prisma, модульная архитектура, мобильное приложение и экономика с защитой сделок.
-
----
-
-<div align="center">
-
-**Сделано с 🧡 для творцов**
-
-[bloomly.fun](https://bloomly.fun)
-
-</div>
