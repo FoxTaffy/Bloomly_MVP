@@ -5,7 +5,6 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import LotApplicationsPanel from '@/components/groups/panels/LotApplicationsPanel.vue'
-import ApplicationsPanel from '@/components/groups/panels/ApplicationsPanel.vue'
 import TicketsPanel from '@/components/groups/panels/TicketsPanel.vue'
 import TodolistPanel from '@/components/groups/panels/TodolistPanel.vue'
 import OrdersPanel from '@/components/groups/panels/OrdersPanel.vue'
@@ -40,9 +39,7 @@ interface ToolTab {
   key: string
   label: string
   icon: string
-  kind: 'overview' | 'lot-applications' | 'applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'scheduled' | 'settings'
-  settingsSection?: string
-  settingsDesc?: string
+  kind: 'overview' | 'lot-applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'scheduled'
 }
 
 const OVERVIEW_TAB: ToolTab = { key: 'overview', label: 'Обзор', icon: 'BarChart3', kind: 'overview' }
@@ -50,6 +47,7 @@ const BALANCE_TAB: ToolTab = { key: 'balance', label: 'Баланс', icon: 'Wal
 const INBOX_TAB: ToolTab = { key: 'inbox', label: 'Обращения', icon: 'Inbox', kind: 'inbox' }
 const LOT_APPLICATIONS_TAB: ToolTab = { key: 'lot-applications', label: 'Заявки на лоты', icon: 'Send', kind: 'lot-applications' }
 const SCHEDULED_TAB: ToolTab = { key: 'scheduled', label: 'Отложенные', icon: 'CalendarClock', kind: 'scheduled' }
+// Участники, состав, прайс, каталог и параметры события живут в настройках группы — здесь только уникальные инструменты.
 
 const toolTabs = computed<ToolTab[]>(() => {
   const base = baseToolTabs.value
@@ -63,10 +61,7 @@ const baseToolTabs = computed<ToolTab[]>(() => {
 
   if (t === 'event') return [
     OVERVIEW_TAB,
-    { key: 'applications', label: 'Заявки участников', icon: 'ClipboardList', kind: 'applications' },
-    { key: 'tickets',      label: 'Билеты',             icon: 'Ticket',        kind: 'tickets' },
-    { key: 'status',       label: 'Статус события',     icon: 'CalendarCheck', kind: 'settings', settingsSection: 'sec-event', settingsDesc: 'Дата, статус и детали мероприятия' },
-    { key: 'schedule',     label: 'Программа',          icon: 'Clock',         kind: 'settings', settingsSection: 'sec-event', settingsDesc: 'Расписание мероприятия' },
+    { key: 'tickets', label: 'Билеты', icon: 'Ticket', kind: 'tickets' },
     INBOX_TAB,
     SCHEDULED_TAB,
     BALANCE_TAB,
@@ -74,10 +69,8 @@ const baseToolTabs = computed<ToolTab[]>(() => {
 
   if (t === 'artist') return [
     OVERVIEW_TAB,
-    { key: 'orders',   label: 'Заказы',    icon: 'Palette',     kind: 'orders' },
-    { key: 'members',  label: 'Участники', icon: 'Users',       kind: 'applications' },
-    { key: 'todo',     label: 'Todolist',  icon: 'CheckSquare', kind: 'todolist' },
-    { key: 'price',    label: 'Прайс',     icon: 'Tag',         kind: 'settings', settingsDesc: 'Цены и услуги — настраиваются в общих настройках' },
+    { key: 'orders', label: 'Заказы',   icon: 'Palette',     kind: 'orders' },
+    { key: 'todo',   label: 'Todolist', icon: 'CheckSquare', kind: 'todolist' },
     INBOX_TAB,
     SCHEDULED_TAB,
     BALANCE_TAB,
@@ -85,10 +78,8 @@ const baseToolTabs = computed<ToolTab[]>(() => {
 
   if (t === 'creative') return [
     OVERVIEW_TAB,
-    { key: 'orders',  label: 'Заказы',    icon: 'Scissors',    kind: 'orders' },
-    { key: 'members', label: 'Участники', icon: 'Users',       kind: 'applications' },
-    { key: 'todo',    label: 'Todolist',  icon: 'CheckSquare', kind: 'todolist' },
-    { key: 'price',   label: 'Прайс',     icon: 'Tag',         kind: 'settings', settingsSection: 'sec-prices', settingsDesc: 'Цены и услуги' },
+    { key: 'orders', label: 'Заказы',   icon: 'Scissors',    kind: 'orders' },
+    { key: 'todo',   label: 'Todolist', icon: 'CheckSquare', kind: 'todolist' },
     INBOX_TAB,
     SCHEDULED_TAB,
     BALANCE_TAB,
@@ -96,7 +87,6 @@ const baseToolTabs = computed<ToolTab[]>(() => {
 
   if (t === 'news') return [
     OVERVIEW_TAB,
-    { key: 'team', label: 'Редакция', icon: 'Users', kind: 'settings', settingsSection: 'sec-members', settingsDesc: 'Состав редакции и роли' },
     INBOX_TAB,
     SCHEDULED_TAB,
     BALANCE_TAB,
@@ -104,9 +94,7 @@ const baseToolTabs = computed<ToolTab[]>(() => {
 
   if (t === 'shop') return [
     OVERVIEW_TAB,
-    { key: 'orders',   label: 'Заказы',      icon: 'Package',     kind: 'orders' },
-    { key: 'members',  label: 'Покупатели',  icon: 'Users',       kind: 'applications' },
-    { key: 'goods',    label: 'Каталог',     icon: 'ShoppingBag', kind: 'settings', settingsSection: 'sec-prices', settingsDesc: 'Товары магазина' },
+    { key: 'orders', label: 'Заказы', icon: 'Package', kind: 'orders' },
     INBOX_TAB,
     SCHEDULED_TAB,
     BALANCE_TAB,
@@ -115,7 +103,6 @@ const baseToolTabs = computed<ToolTab[]>(() => {
   // community / static / brand
   return [
     OVERVIEW_TAB,
-    { key: 'members', label: 'Участники', icon: 'Users', kind: 'applications' },
     INBOX_TAB,
     SCHEDULED_TAB,
     BALANCE_TAB,
@@ -139,14 +126,6 @@ const activeTab = computed<string>({
 const activeToolTab = computed(() => toolTabs.value.find(t => t.key === activeTab.value) ?? null)
 const lotPendingCount = computed(() => (group.value ? lotApplications.pendingByGroup[group.value.id] ?? 0 : 0))
 const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
-
-function openSettingsSection(tab: ToolTab) {
-  router.push({
-    name: 'group-settings',
-    params: { slugOrId: group.value?.slug ?? route.params.slugOrId },
-    ...(tab.settingsSection ? { query: { section: tab.settingsSection } } : {}),
-  })
-}
 
 async function load() {
   loading.value = true
@@ -226,9 +205,6 @@ watch(() => route.params.slugOrId, load)
               <LotApplicationsPanel v-else-if="activeToolTab.kind === 'lot-applications'"
                 :group-id="group.id" />
 
-              <ApplicationsPanel v-else-if="activeToolTab.kind === 'applications'"
-                :group-id="group.id" :group-type="group.type" />
-
               <TicketsPanel v-else-if="activeToolTab.kind === 'tickets'"
                 :group-id="group.id" />
 
@@ -246,21 +222,6 @@ watch(() => route.params.slugOrId, load)
 
               <ScheduledPanel v-else-if="activeToolTab.kind === 'scheduled'"
                 :group-id="group.id" />
-
-              <div v-else-if="activeToolTab.kind === 'settings'"
-                class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center stack-y-4">
-                <div class="w-14 h-14 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center mx-auto">
-                  <BIcon :name="activeToolTab.icon" class="w-7 h-7 text-brand-accent" />
-                </div>
-                <div>
-                  <p class="text-white font-bold">{{ activeToolTab.label }}</p>
-                  <p class="text-white/40 text-sm mt-1">{{ activeToolTab.settingsDesc }}</p>
-                </div>
-                <button @click="openSettingsSection(activeToolTab)"
-                  class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all shadow-lg shadow-brand-accent/25">
-                  <BIcon name="Settings" class="w-4 h-4" /> Открыть в настройках
-                </button>
-              </div>
             </div>
           </Transition>
         </template>

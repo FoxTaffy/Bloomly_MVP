@@ -70,37 +70,30 @@ export function useGroupAdminTools() {
     if (t === 'event') return [
       { key: 'applications', icon: 'ClipboardList',  label: 'Заявки участников', pageTab: 'applications', action: go('my-applications', 'applications', { group: gid }) },
       { key: 'tickets',      icon: 'Ticket',          label: 'Билеты',           pageTab: 'tickets',      action: go('my-tickets',      'tickets',      { group: gid }) },
-      { key: 'status',       icon: 'CalendarCheck',   label: 'Статус события',   pageTab: 'status',       action: go('group-settings',  'status') },
-      { key: 'schedule',     icon: 'Clock',           label: 'Программа',        pageTab: 'schedule',     action: go('group-settings',  'schedule') },
     ]
 
     if (t === 'artist') return [
       { key: 'orders',  icon: 'Palette',       label: 'Мои заказы',  pageTab: 'orders', action: go('my-applications', 'orders', { group: gid }) },
       { key: 'queue',   icon: 'List',          label: 'Очередь',     pageTab: 'orders', action: go('my-applications', 'orders', { group: gid }) },
       { key: 'todo',    icon: 'CheckSquare',   label: 'Todolist',    pageTab: 'todo',   action: go('my-todolist',     'todo',   { group: gid }) },
-      { key: 'price',   icon: 'Tag',           label: 'Прайс',       pageTab: 'price',  action: go('group-settings',  'price') },
     ]
 
     if (t === 'creative') return [
       { key: 'orders', icon: 'Scissors',     label: 'Заказы',   pageTab: 'orders', action: go('my-applications', 'orders', { group: gid }) },
       { key: 'todo',   icon: 'CheckSquare',  label: 'Todolist', pageTab: 'todo',   action: go('my-todolist',     'todo',   { group: gid }) },
-      { key: 'price',  icon: 'Tag',          label: 'Прайс',    pageTab: 'price',  action: go('group-settings',  'price') },
     ]
 
     if (t === 'news') return [
       { key: 'posts', icon: 'Newspaper', label: 'Публикации', action: go('group-detail', undefined, { slugOrId: slug } as any) },
-      { key: 'team',  icon: 'Users',     label: 'Редакция',   pageTab: 'team', action: go('group-settings', 'team') },
     ]
 
     if (t === 'shop') return [
-      { key: 'goods',  icon: 'ShoppingBag', label: 'Товары',  pageTab: 'goods',  action: go('group-settings',  'goods') },
-      { key: 'orders', icon: 'Package',     label: 'Заказы',  pageTab: 'orders', action: go('my-applications', 'orders', { group: gid }) },
+      { key: 'orders', icon: 'Package', label: 'Заказы', pageTab: 'orders', action: go('my-applications', 'orders', { group: gid }) },
     ]
 
     // community / static / brand
     return [
-      { key: 'members', icon: 'Users',     label: 'Участники', pageTab: 'members', action: go('group-detail', 'members') },
-      { key: 'posts',   icon: 'Megaphone', label: 'Посты',     action: go('group-detail', undefined) },
+      { key: 'posts', icon: 'Megaphone', label: 'Посты', action: go('group-detail', undefined) },
     ]
   })
 
