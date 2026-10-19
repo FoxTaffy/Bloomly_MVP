@@ -10,6 +10,7 @@ import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { notificationService } from '../notifications/service.js';
 import { resolveCharacters } from '../../lib/orderCharacters.js';
+import { ensureGroupThread } from '../../lib/groupThread.js';
 import { requireSafeLink, sanitizeLinkRecord } from '../../lib/safeLink.js';
 import { normalizeTag } from '../../lib/tagRules.js';
 import type {
@@ -2122,17 +2123,8 @@ export const groupService = {
         orderBy: { position: 'desc' },
         select: { position: true },
       });
-      const conversation = await tx.conversation.create({
-        data: {
-          type: 'direct',
-          participants: {
-            create: [
-              { user_id: customerId, label: 'customer' },
-              { user_id: group.owner_id },
-            ],
-          },
-        },
-      });
+      // Чат по заказу — переписка заказчика с группой (вкладка «Группы»), а не личка с владельцем
+      const conversationId = await ensureGroupThread(groupId, customerId, tx);
       return tx.order.create({
         data: {
           group_id: groupId,
@@ -2142,7 +2134,7 @@ export const groupService = {
           form_data: (input.formData ?? undefined) as Prisma.InputJsonValue | undefined,
           deadline_at: input.deadlineAt ? new Date(input.deadlineAt) : null,
           position: (last?.position ?? -1) + 1,
-          conversation_id: conversation.id,
+          conversation_id: conversationId,
         },
         include: { customer: { select: ORDER_CUSTOMER_SELECT } },
       });

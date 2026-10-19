@@ -576,6 +576,12 @@ const activeCategory = ref<'all' | 'personal' | 'groups' | 'community' | 'custom
 const showArchived = ref(false)
 const unreadOnly = ref(false)
 
+// Открыли чат группы (например, по заявке на лот) — переключаемся на вкладку «Группы», чтобы он был виден в списке
+watch(() => store.activeId, (id) => {
+  const c = id ? store.conversations.find(x => x.id === id) : null
+  if (c?.type === 'community' && activeCategory.value !== 'community') activeCategory.value = 'community'
+})
+
 // Auto-load groups when community tab is activated
 // Context menu for labeling
 const menuConvId = ref<string | null>(null)

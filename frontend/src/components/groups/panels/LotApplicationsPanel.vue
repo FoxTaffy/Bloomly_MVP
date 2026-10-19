@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
 import { useListingApplicationsStore, type ListingApplication, type ApplicationStatus } from '@/stores/listingApplications'
+import { useMessagesStore } from '@/stores/messages'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { errorMessage } from '@/lib/apiError'
 import { formatPrice } from '@/lib/format'
@@ -13,6 +14,7 @@ const props = defineProps<{ groupId: string }>()
 const router = useRouter()
 const route = useRoute()
 const store = useListingApplicationsStore()
+const messages = useMessagesStore()
 const nsfw = useNsfwMode().nsfwEnabled
 
 type Filter = 'pending' | 'contacted' | 'accepted' | 'declined' | 'all'
@@ -71,8 +73,18 @@ function openOrders() {
 
 // Группа пишет заявителю первой: открываем чат и помечаем заявку «в работе».
 async function writeToApplicant(app: ListingApplication) {
+  busyId.value = app.id
+  try {
+    // Чат создаётся во вкладке «Группы» и пишет от имени группы, а не личным сообщением
+    await messages.openGroupThread(props.groupId, app.applicant.id)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
+    return
+  } finally {
+    busyId.value = null
+  }
   if (app.status === 'pending') await setStatus(app, 'contacted')
-  router.push({ name: 'messages', query: { userId: app.applicant.id } })
+  router.push({ name: 'messages' })
 }
 
 function countOf(f: Filter) {
@@ -100,7 +112,7 @@ onMounted(load)
       </div>
       <div class="flex-1 min-w-0">
         <h1 class="text-lg font-extrabold text-white">Заявки на лоты</h1>
-        <p class="text-xs text-white/40">Покупатели пишут сюда, а не в личные сообщения — вы отвечаете первыми</p>
+        <p class="text-xs text-white/40">Покупатели пишут сюда, а не в личные сообщения — вы отвечаете первыми, от лица группы</p>
       </div>
       <span v-if="pendingCount > 0"
         class="px-2.5 py-1 rounded-xl bg-brand-error/15 border border-brand-error/30 text-xs font-extrabold text-brand-error">
@@ -218,7 +230,7 @@ onMounted(load)
           </button>
           <button @click="writeToApplicant(app)" :disabled="busyId === app.id || app.status === 'declined'"
             class="px-4 py-2.5 rounded-xl border border-brand-border text-white/70 text-xs font-bold hover:text-white hover:border-white/30 disabled:opacity-40 transition-all flex items-center gap-1.5">
-            <BIcon name="MessageCircle" class="w-4 h-4" /> {{ app.status === 'contacted' ? 'Чат' : 'Написать' }}
+            <BIcon name="MessageCircle" class="w-4 h-4" /> {{ app.status === 'contacted' ? 'Чат группы' : 'Написать от группы' }}
           </button>
           <button v-if="app.status !== 'declined'" @click="setStatus(app, 'declined')" :disabled="busyId === app.id"
             class="px-4 py-2.5 rounded-xl border border-brand-border text-white/50 text-xs font-bold hover:text-red-400 hover:border-red-400/40 disabled:opacity-40 transition-all">

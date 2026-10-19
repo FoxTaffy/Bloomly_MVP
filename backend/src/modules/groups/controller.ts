@@ -850,6 +850,21 @@ export const startGroupDmHandler = async (
   }
 };
 
+export const openGroupThreadHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { userId?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const target = request.body?.userId;
+    if (typeof target !== 'string' || !target) return fail(reply, 400, 'OPEN_THREAD_ERROR', 'userId is required');
+    const conversationId = await messageService.openGroupThread(request.params.id, userId, target);
+    return ok(reply, { conversationId });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 500, 'OPEN_THREAD_ERROR', errMessage(e));
+  }
+};
+
 export const getGroupInboxHandler = async (
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,

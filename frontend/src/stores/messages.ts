@@ -768,6 +768,14 @@ export const useMessagesStore = defineStore('messages', () => {
     return upsertAndActivate(toConversation(raw))
   }
 
+  /** Персонал группы: открыть (или создать) чат с пользователем от лица группы — например, с заявителем на лот. */
+  async function openGroupThread(groupId: string, userId: string): Promise<string> {
+    const res = await api.post(`/groups/${groupId}/inbox/open`, { userId })
+    const convId = res.data.data.conversationId as string
+    await openConversationById(convId)
+    return convId
+  }
+
   async function getGroupInbox(groupId: string): Promise<GroupInboxThread[]> {
     const res = await api.get(`/groups/${groupId}/inbox`)
     return (res.data.data?.threads ?? []) as GroupInboxThread[]
@@ -927,6 +935,7 @@ export const useMessagesStore = defineStore('messages', () => {
     removeGroupMember,
     setGroupMemberRole,
     startGroupDm,
+    openGroupThread,
     getGroupInbox,
     groupInboxCounts,
     fetchGroupInboxCount,

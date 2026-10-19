@@ -8,6 +8,8 @@ import { logError } from '../../lib/logger.js';
 import { pushService } from '../push/service.js';
 
 // Group roles that answer the group's inbox (group DMs) on its behalf.
+import { ensureGroupThread } from '../../lib/groupThread.js';
+
 const CHAT_STAFF_ROLES: readonly string[] = ['owner', 'admin', 'moderator'];
 
 // ── In-process real-time delivery ─────────────────────────────────────────────
@@ -1005,6 +1007,20 @@ export const messageService = {
       include: { participants: { include: { user: { select: senderSelect } } } },
     });
     return { conversation, alreadyExists: false };
+  },
+
+  /**
+   * Персонал группы открывает (или создаёт) переписку с пользователем — например, с заявителем на лот.
+   * Пользователь видит чат во вкладке «Группы» от имени группы, а не личное сообщение от сотрудника.
+   */
+  async openGroupThread(groupId: string, staffId: string, targetUserId: string): Promise<string> {
+    const role = await this._getGroupRole(groupId, staffId);
+    if (!role || !CHAT_STAFF_ROLES.includes(role)) {
+      throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+    }
+    const target = await prisma.user.findFirst({ where: { id: targetUserId, deleted_at: null }, select: { id: true } });
+    if (!target) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+    return ensureGroupThread(groupId, targetUserId);
   },
 
   /**

@@ -42,6 +42,7 @@ import {
   sendGroupMessageHandler,
   startGroupDmHandler,
   getGroupInboxHandler,
+  openGroupThreadHandler,
   getGroupTodoColumnsHandler,
   updateGroupTodoColumnsHandler,
   getGroupTodoHandler,
@@ -193,6 +194,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof sendGroupMessageHandler>>('/:id/chat', auth, sendGroupMessageHandler);
   // ── Community Conversation ────────────────────────────────────────────────────
   fastify.post<RouteGenericOf<typeof startGroupDmHandler>>('/:id/dm', auth, startGroupDmHandler);        // any member: find-or-create my personal thread with the group
+  fastify.post<RouteGenericOf<typeof openGroupThreadHandler>>('/:id/inbox/open', auth, openGroupThreadHandler); // staff: open/create a thread with any user as the group (e.g. a lot applicant)
   fastify.get<RouteGenericOf<typeof getGroupInboxHandler>>('/:id/inbox', auth, getGroupInboxHandler);     // owner/admin/moderator only: shared inbox of all members' threads
 
   // ── Artist Queue (Todo) ────────────────────────────────────────────────

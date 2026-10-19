@@ -62,8 +62,8 @@ function onOrderRemoved(id: string) {
 }
 
 async function openChat(order: Order) {
-  if (!order.conversation_id) return
-  await messagesStore.selectConversation(order.conversation_id)
+  // Чат с заказчиком — от лица группы (вкладка «Группы» у заказчика)
+  await messagesStore.openGroupThread(props.groupId, order.customer_id)
   router.push({ name: 'messages' })
 }
 

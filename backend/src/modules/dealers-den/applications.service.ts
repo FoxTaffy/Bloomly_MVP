@@ -1,6 +1,8 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { sanitizeDisplayText } from '../../lib/sanitizeText.js';
+import { ensureGroupThread } from '../../lib/groupThread.js';
+import { messageService } from '../messages/service.js';
 import { sanitizeCharacters, resolveCharacters, type CharacterRef } from '../../lib/orderCharacters.js';
 
 // Заявка на лот подаётся только в группу-продавца: в личные сообщения ничего не уходит,
@@ -145,6 +147,17 @@ export const listingApplicationService = {
         select: { id: true, status: true, resolved_at: true, order_id: true },
       });
       await notify('den_application_accepted');
+      // Первое сообщение от лица группы: чат появляется у заявителя во вкладке «Группы»
+      try {
+        const order = await prisma.order.findUnique({ where: { id: orderId }, select: { conversation_id: true } });
+        if (order?.conversation_id) {
+          await messageService.sendMessage({
+            conversationId: order.conversation_id,
+            senderId: application.group.owner_id,
+            content: `Заявка на «${application.listing.title}» принята — заказ в очереди. Здесь мы будем обсуждать детали и сообщать о ходе работы.`,
+          });
+        }
+      } catch { /* не критично: заявка уже принята */ }
       return updated;
     }
 
@@ -173,9 +186,7 @@ async function createOrderFromApplication(app: {
     const last = await tx.order.findFirst({
       where: { group_id: app.group_id, deleted_at: null }, orderBy: { position: 'desc' }, select: { position: true },
     });
-    const conversation = await tx.conversation.create({
-      data: { type: 'direct', participants: { create: [{ user_id: app.applicant_id, label: 'customer' }, { user_id: app.group.owner_id }] } },
-    });
+    const conversationId = await ensureGroupThread(app.group_id, app.applicant_id, tx);
     const order = await tx.order.create({
       data: {
         group_id: app.group_id,
@@ -184,7 +195,7 @@ async function createOrderFromApplication(app: {
         description: app.message,
         form_data: { source: 'listing_application', applicationId: app.id, listingId: app.listing.id, characters: app.characters as CharacterRef[], references: [] } as any,
         position: (last?.position ?? -1) + 1,
-        conversation_id: conversation.id,
+        conversation_id: conversationId,
       },
       select: { id: true },
     });
