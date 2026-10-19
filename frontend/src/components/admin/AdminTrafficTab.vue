@@ -47,11 +47,20 @@ async function load() {
 onMounted(load)
 
 // ── Создание ссылки ──────────────────────────────────────────────────────────
-const SOURCES = ['telegram', 'vk', 'instagram', 'tiktok', 'youtube', 'google', 'yandex', 'twitter', 'blogger']
-const MEDIUMS = ['cpc', 'social', 'banner', 'influencer', 'email', 'post', 'story']
+const OTHER = '__other'
+const SOURCES = [
+  { value: 'telegram', label: 'Telegram' }, { value: 'vk', label: 'ВКонтакте' }, { value: 'instagram', label: 'Instagram' },
+  { value: 'tiktok', label: 'TikTok' }, { value: 'youtube', label: 'YouTube' }, { value: 'google', label: 'Google' },
+  { value: 'yandex', label: 'Яндекс' }, { value: 'twitter', label: 'X (Twitter)' }, { value: 'blogger', label: 'Блогер' },
+]
+const MEDIUMS = [
+  { value: 'cpc', label: 'Платная реклама' }, { value: 'post', label: 'Пост или публикация' }, { value: 'story', label: 'Сторис' },
+  { value: 'influencer', label: 'Интеграция у блогера' }, { value: 'banner', label: 'Баннер' }, { value: 'email', label: 'Рассылка' },
+  { value: 'social', label: 'Соцсети (без оплаты)' },
+]
 const PAGES = [
-  { path: '/', label: 'Главная' },
-  { path: '/login', label: 'Вход и регистрация' },
+  { path: '/login', label: 'Регистрация и вход' },
+  { path: '/', label: 'Главная страница' },
 ]
 
 const showForm = ref(false)
@@ -60,14 +69,29 @@ const saving = ref(false)
 const formError = ref('')
 
 function emptyForm() {
-  return { name: '', target_path: '/login', utm_source: '', utm_medium: '', utm_campaign: '', utm_content: '', utm_term: '', code: '' }
+  return {
+    name: '', target_path: '/login', source: 'telegram', sourceCustom: '', medium: 'cpc', mediumCustom: '',
+    utm_campaign: '', utm_content: '', utm_term: '', code: '',
+  }
 }
+
+// Метки только латиницей: пробелы заменяем на «_», остальное проверит сервер
+const slug = (v: string) => v.trim().toLowerCase().replace(/\s+/g, '_')
+const utmSource = computed(() => slug(form.value.source === OTHER ? form.value.sourceCustom : form.value.source))
+const utmMedium = computed(() => slug(form.value.medium === OTHER ? form.value.mediumCustom : form.value.medium))
+const preview = computed(() =>
+  [utmSource.value, utmMedium.value, slug(form.value.utm_campaign), slug(form.value.utm_content)].filter(Boolean).join(' / '))
 
 async function create() {
   saving.value = true
   formError.value = ''
+  const f = form.value
   try {
-    await api.post('/admin/tracking/links', form.value)
+    await api.post('/admin/tracking/links', {
+      name: f.name, target_path: f.target_path, code: f.code,
+      utm_source: utmSource.value, utm_medium: utmMedium.value,
+      utm_campaign: slug(f.utm_campaign), utm_content: slug(f.utm_content), utm_term: slug(f.utm_term),
+    })
     form.value = emptyForm()
     showForm.value = false
     await load()
@@ -145,12 +169,12 @@ const seriesMax = computed(() => Math.max(1, ...series.value.flatMap((p) => [p.c
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—')
 const dateShort = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
 const funnel = (s: LinkStats) => [
-  { label: 'Клики', value: s.unique_clicks, base: s.unique_clicks },
+  { label: 'Переходы', value: s.unique_clicks, base: s.unique_clicks },
   { label: 'Открыли сайт', value: s.visitors, base: s.unique_clicks },
   { label: 'Регистрации', value: s.signups, base: s.visitors },
-  { label: 'Почта подтв.', value: s.verified, base: s.signups },
-  { label: 'Онбординг', value: s.onboarded, base: s.verified },
-  { label: 'Платные', value: s.paid, base: s.signups },
+  { label: 'Подтвердили почту', value: s.verified, base: s.signups },
+  { label: 'Прошли онбординг', value: s.onboarded, base: s.verified },
+  { label: 'Оплатили', value: s.paid, base: s.signups },
 ]
 </script>
 
@@ -178,10 +202,10 @@ const funnel = (s: LinkStats) => [
     <!-- Сводка -->
     <div v-if="totals" class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div v-for="c in [
-        { label: 'Уникальные клики', value: totals.unique_clicks, hint: `ботов отсеяно: ${totals.bots}` },
-        { label: 'Открыли сайт', value: totals.visitors, hint: `конверсия клика ${pct(totals.visitors, totals.unique_clicks)}` },
-        { label: 'Регистрации', value: totals.signups, hint: `из визитов ${pct(totals.signups, totals.visitors)}` },
-        { label: 'Платные', value: totals.paid, hint: `из регистраций ${pct(totals.paid, totals.signups)}` },
+        { label: 'Переходы по ссылкам', value: totals.unique_clicks, hint: `ботов не считаем: ${totals.bots}` },
+        { label: 'Открыли сайт', value: totals.visitors, hint: `${pct(totals.visitors, totals.unique_clicks)} от кликов` },
+        { label: 'Регистрации', value: totals.signups, hint: `${pct(totals.signups, totals.visitors)} от открывших сайт` },
+        { label: 'Оплатили', value: totals.paid, hint: `${pct(totals.paid, totals.signups)} от регистраций` },
       ]" :key="c.label" class="rounded-2xl border border-brand-border p-4" style="background:#1F223C">
         <p class="text-[11px] font-bold text-white/40 uppercase tracking-wide">{{ c.label }}</p>
         <p class="text-2xl font-black text-white mt-1">{{ c.value }}</p>
@@ -195,72 +219,107 @@ const funnel = (s: LinkStats) => [
       <BIcon name="AlertTriangle" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
       <div class="text-xs text-white/70 space-y-1">
         <p v-if="totals.lost_before_landing > 0">
-          <b class="text-amber-300">{{ totals.lost_before_landing }}</b> кликов не дошли до загрузки сайта с меткой
-          (закрыли вкладку, блокировщик, медленная сеть). Сервер их всё равно посчитал, так что воронка не теряет верхнюю часть.
+          <b class="text-amber-300">{{ totals.lost_before_landing }}</b> переходов не дошли до открытия сайта (закрыли вкладку, блокировщик, медленная сеть). Сервер их всё равно посчитал, поэтому в воронке они не пропадают.
         </p>
         <p v-if="totals.attribution_conflicts > 0">
-          <b class="text-amber-300">{{ totals.attribution_conflicts }}</b> из {{ totals.attributed_signups }} регистраций побывали на нескольких рекламах.
-          В таблице регистрация засчитана первой рекламе, а в строке ссылки видно, сколько раз она была последней.
+          <b class="text-amber-300">{{ totals.attribution_conflicts }}</b> из {{ totals.attributed_signups }} регистраций пришли с нескольких реклам. Регистрация засчитывается той, что была первой; в строке ссылки видно, сколько раз она была последней.
         </p>
       </div>
     </div>
 
     <!-- Форма -->
-    <form v-if="showForm" class="rounded-3xl border border-brand-border p-5 space-y-4" style="background:#1F223C" @submit.prevent="create">
-      <p class="text-sm font-bold text-white/85">Новая рекламная ссылка</p>
-      <div class="grid sm:grid-cols-2 gap-3">
+    <form v-if="showForm" class="rounded-3xl border border-brand-border p-5 md:p-6 space-y-5" style="background:#1F223C" @submit.prevent="create">
+      <div>
+        <p class="text-base font-bold text-white">Новая рекламная ссылка</p>
+        <p class="text-xs text-white/40 mt-1">Укажите, где будет стоять реклама. Ссылка сама проставит UTM-метки и посчитает переходы.</p>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
         <label class="block">
-          <span class="text-[11px] font-bold text-white/40">Название (для вас)</span>
-          <input v-model="form.name" class="adm-input mt-1" maxlength="120" placeholder="Пост в канале @furry_news, октябрь" required />
+          <span class="text-xs font-bold text-white/55">Название</span>
+          <input v-model="form.name" class="adm-input mt-1.5" maxlength="120" placeholder="Например: пост в канале про фурри" required />
+          <span class="block text-[11px] text-white/30 mt-1">Видно только вам, в списке ссылок</span>
         </label>
         <label class="block">
-          <span class="text-[11px] font-bold text-white/40">Куда ведёт</span>
-          <select v-model="form.target_path" class="adm-input mt-1">
-            <option v-for="p in PAGES" :key="p.path" :value="p.path">{{ p.label }} ({{ p.path }})</option>
+          <span class="text-xs font-bold text-white/55">Куда ведёт ссылка</span>
+          <select v-model="form.target_path" class="adm-input mt-1.5">
+            <option v-for="p in PAGES" :key="p.path" :value="p.path" class="bg-[#1F223C]">{{ p.label }}</option>
           </select>
-        </label>
-        <label class="block">
-          <span class="text-[11px] font-bold text-white/40">utm_source — где размещено</span>
-          <input v-model="form.utm_source" list="tr-sources" class="adm-input mt-1" maxlength="60" placeholder="telegram" required />
-          <datalist id="tr-sources"><option v-for="s in SOURCES" :key="s" :value="s" /></datalist>
-        </label>
-        <label class="block">
-          <span class="text-[11px] font-bold text-white/40">utm_medium — тип рекламы</span>
-          <input v-model="form.utm_medium" list="tr-mediums" class="adm-input mt-1" maxlength="60" placeholder="cpc" required />
-          <datalist id="tr-mediums"><option v-for="m in MEDIUMS" :key="m" :value="m" /></datalist>
-        </label>
-        <label class="block">
-          <span class="text-[11px] font-bold text-white/40">utm_campaign — кампания</span>
-          <input v-model="form.utm_campaign" class="adm-input mt-1" maxlength="100" placeholder="autumn_launch" required />
-        </label>
-        <label class="block">
-          <span class="text-[11px] font-bold text-white/40">utm_content — креатив (необязательно)</span>
-          <input v-model="form.utm_content" class="adm-input mt-1" maxlength="100" placeholder="video_a" />
-        </label>
-        <label class="block">
-          <span class="text-[11px] font-bold text-white/40">utm_term — ключевое слово (необязательно)</span>
-          <input v-model="form.utm_term" class="adm-input mt-1" maxlength="100" />
-        </label>
-        <label class="block">
-          <span class="text-[11px] font-bold text-white/40">Свой код ссылки (необязательно)</span>
-          <input v-model="form.code" class="adm-input mt-1" maxlength="40" placeholder="оставьте пустым — сгенерируется" />
+          <span class="block text-[11px] text-white/30 mt-1">Страница, на которую попадёт человек</span>
         </label>
       </div>
-      <p class="text-[11px] text-white/35">Только латиница, цифры и - _ . Регистр не важен. Метки и путь после создания не меняются: ссылка уже может стоять в рекламе.</p>
-      <p v-if="formError" class="text-xs text-brand-error">{{ formError }}</p>
+
+      <div class="border-t border-brand-border pt-5 grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block">
+            <span class="text-xs font-bold text-white/55">Где размещаем</span>
+            <select v-model="form.source" class="adm-input mt-1.5">
+              <option v-for="s in SOURCES" :key="s.value" :value="s.value" class="bg-[#1F223C]">{{ s.label }}</option>
+              <option :value="OTHER" class="bg-[#1F223C]">Другое…</option>
+            </select>
+          </label>
+          <input v-if="form.source === OTHER" v-model="form.sourceCustom" class="adm-input mt-2" maxlength="60" placeholder="Латиницей, например: habr" required />
+        </div>
+        <div>
+          <label class="block">
+            <span class="text-xs font-bold text-white/55">Тип рекламы</span>
+            <select v-model="form.medium" class="adm-input mt-1.5">
+              <option v-for="m in MEDIUMS" :key="m.value" :value="m.value" class="bg-[#1F223C]">{{ m.label }}</option>
+              <option :value="OTHER" class="bg-[#1F223C]">Другое…</option>
+            </select>
+          </label>
+          <input v-if="form.medium === OTHER" v-model="form.mediumCustom" class="adm-input mt-2" maxlength="60" placeholder="Латиницей, например: podcast" required />
+        </div>
+        <label class="block">
+          <span class="text-xs font-bold text-white/55">Название кампании</span>
+          <input v-model="form.utm_campaign" class="adm-input mt-1.5" maxlength="100" placeholder="autumn_launch" required />
+          <span class="block text-[11px] text-white/30 mt-1">Латиницей. Все ссылки одной акции называйте одинаково</span>
+        </label>
+        <label class="block">
+          <span class="text-xs font-bold text-white/55">Вариант объявления <span class="font-normal text-white/30">— по желанию</span></span>
+          <input v-model="form.utm_content" class="adm-input mt-1.5" maxlength="100" placeholder="video_a" />
+          <span class="block text-[11px] text-white/30 mt-1">Чтобы сравнить два креатива в одной кампании</span>
+        </label>
+      </div>
+
+      <details class="group border-t border-brand-border pt-4">
+        <summary class="cursor-pointer text-xs font-bold text-white/45 hover:text-white/70 select-none list-none flex items-center gap-1.5">
+          <BIcon name="Plus" class="w-3.5 h-3.5 group-open:rotate-45 transition-transform" /> Дополнительно
+        </summary>
+        <div class="grid sm:grid-cols-2 gap-4 mt-4">
+          <label class="block">
+            <span class="text-xs font-bold text-white/55">Свой код ссылки</span>
+            <input v-model="form.code" class="adm-input mt-1.5" maxlength="40" placeholder="Пусто — код создастся сам" />
+            <span class="block text-[11px] text-white/30 mt-1">Латиницей, 3–40 символов: ссылка станет /api/t/ваш-код</span>
+          </label>
+          <label class="block">
+            <span class="text-xs font-bold text-white/55">Ключевое слово</span>
+            <input v-model="form.utm_term" class="adm-input mt-1.5" maxlength="100" />
+            <span class="block text-[11px] text-white/30 mt-1">Нужно в основном для поисковой рекламы</span>
+          </label>
+        </div>
+      </details>
+
+      <div class="rounded-2xl bg-white/4 px-4 py-3 text-xs">
+        <span class="text-white/40">Метки ссылки: </span>
+        <span class="text-white/80 font-semibold break-all">{{ preview || '—' }}</span>
+        <p class="text-[11px] text-white/30 mt-1">После создания метки и страницу изменить нельзя: ссылка уже может стоять в рекламе.</p>
+      </div>
+
+      <p v-if="formError" role="alert" class="text-xs text-brand-error">{{ formError }}</p>
       <div class="flex gap-2">
         <button type="submit" :disabled="saving"
-          class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-accent text-white disabled:opacity-50 hover:brightness-110">
-          {{ saving ? 'Создание…' : 'Создать' }}
+          class="px-5 py-2.5 rounded-xl text-sm font-bold bg-brand-accent text-white disabled:opacity-50 hover:brightness-110 transition-all">
+          {{ saving ? 'Создаём…' : 'Создать ссылку' }}
         </button>
-        <button type="button" @click="showForm = false" class="px-4 py-2 rounded-xl text-xs font-bold text-white/50 hover:text-white">Отмена</button>
+        <button type="button" @click="showForm = false" class="px-4 py-2.5 rounded-xl text-sm font-bold text-white/50 hover:text-white">Отмена</button>
       </div>
     </form>
 
     <!-- Список -->
     <div v-if="loading && !links.length" class="text-xs text-white/40">Загрузка…</div>
     <div v-else-if="!links.length" class="rounded-3xl border border-brand-border p-8 text-center text-sm text-white/40" style="background:#1F223C">
-      Ссылок пока нет. Создайте первую — она сама проставит UTM-метки и посчитает клики.
+      Ссылок пока нет. Создайте первую: она сама проставит UTM-метки и посчитает переходы, регистрации и оплаты.
     </div>
 
     <div v-for="l in links" :key="l.id" class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C"
@@ -316,13 +375,13 @@ const funnel = (s: LinkStats) => [
             <p class="text-[10px] font-bold text-white/35 truncate">{{ f.label }}</p>
             <p class="text-lg font-black text-white leading-tight">{{ f.value }}</p>
             <p v-if="i > 0" class="text-[10px] text-white/35">{{ pct(f.value, f.base) }}</p>
-            <p v-else class="text-[10px] text-white/35">ботов {{ l.stats.bots }}</p>
+            <p v-else class="text-[10px] text-white/35">ботов: {{ l.stats.bots }}</p>
           </div>
         </div>
         <p v-if="l.stats.lost_before_landing > 0 || l.stats.last_touch_signups !== l.stats.signups" class="text-[11px] text-white/40">
           <template v-if="l.stats.lost_before_landing > 0">Не дошли до сайта: {{ l.stats.lost_before_landing }}. </template>
           <template v-if="l.stats.last_touch_signups !== l.stats.signups">
-            Регистраций по первому касанию: {{ l.stats.signups }}, по последнему: {{ l.stats.last_touch_signups }}.
+            Регистраций, где эта реклама была первой: {{ l.stats.signups }}, последней: {{ l.stats.last_touch_signups }}.
           </template>
         </p>
       </div>
@@ -344,7 +403,7 @@ const funnel = (s: LinkStats) => [
             <span>{{ series.length ? dateShort(series[series.length - 1].date) : '' }}</span>
           </div>
           <div class="flex gap-4 mt-2 text-[11px] text-white/50">
-            <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-sm bg-brand-accent/80" /> клики</span>
+            <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-sm bg-brand-accent/80" /> переходы</span>
             <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-sm bg-teal-400/80" /> открыли сайт</span>
             <span class="inline-flex items-center gap-1.5"><i class="w-2 h-2 rounded-sm bg-amber-400/90" /> регистрации</span>
           </div>
@@ -355,8 +414,8 @@ const funnel = (s: LinkStats) => [
     <!-- Ручные UTM -->
     <div v-if="manualUtm.length" class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
       <div class="px-5 py-3 border-b border-brand-border">
-        <p class="text-sm font-bold text-white/85">Метки, размеченные вручную</p>
-        <p class="text-[11px] text-white/40">Заходы с utm_* без рекламной ссылки из этого раздела. Клики по ним не считаются, только визиты.</p>
+        <p class="text-sm font-bold text-white/85">Метки, поставленные вручную</p>
+        <p class="text-[11px] text-white/40">Заходы с UTM-метками, поставленными вручную, мимо этого раздела. Для них считаются только открытия сайта, без переходов.</p>
       </div>
       <div class="divide-y divide-brand-border">
         <div v-for="(m, i) in manualUtm" :key="i" class="px-5 py-2.5 flex items-center gap-3 text-xs">
@@ -368,15 +427,20 @@ const funnel = (s: LinkStats) => [
     </div>
 
     <!-- Как работает защита -->
-    <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
-      <p class="text-sm font-bold text-white/85 mb-2">Защита от потери трафика</p>
-      <ul class="text-xs text-white/50 space-y-1.5 list-disc pl-4">
-        <li><b class="text-white/70">Клик пишет сервер</b> в момент перехода по короткой ссылке, до загрузки сайта. Блокировщики и закрытая вкладка его не отменят.</li>
-        <li><b class="text-white/70">Метки не теряются:</b> если посредник срезал utm_*, ссылка находится по id клика. Метки хранятся на устройстве и привязываются к аккаунту после входа, в том числе через Google и другие OAuth.</li>
-        <li><b class="text-white/70">Столкновения реклам:</b> первое и последнее касание хранятся отдельно, регистрация не достаётся случайному «победителю».</li>
-        <li><b class="text-white/70">Боты и повторы:</b> превью мессенджеров, краулеры и повторные клики с того же устройства за 30 минут не попадают в уникальные клики.</li>
-        <li><b class="text-white/70">Коды уникальны,</b> адрес назначения только внутри сайта: открытого редиректа нет. IP не хранится, только необратимый хеш.</li>
-      </ul>
+    <div class="rounded-3xl border border-brand-border p-5 md:p-6" style="background:#1F223C">
+      <p class="text-sm font-bold text-white">Как мы не теряем трафик</p>
+      <div class="grid sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
+        <div v-for="t in [
+          { title: 'Переход считает сервер', text: 'Он записывается в момент клика, до загрузки сайта. Закрытая вкладка или блокировщик его не отменят.' },
+          { title: 'Источник не пропадает', text: 'Метки запоминаются на устройстве и привязываются к аккаунту после регистрации, в том числе через Google и другие входы.' },
+          { title: 'Реклама не перебивает рекламу', text: 'Первый и последний источник хранятся отдельно, поэтому видно, откуда человек пришёл впервые.' },
+          { title: 'Боты и повторы не считаются', text: 'Превью мессенджеров, роботы и повторные клики с одного устройства за 30 минут не попадают в статистику.' },
+        ]" :key="t.title">
+          <p class="text-xs font-bold text-white/80">{{ t.title }}</p>
+          <p class="text-xs text-white/40 mt-1 leading-relaxed">{{ t.text }}</p>
+        </div>
+      </div>
+      <p class="text-[11px] text-white/30 mt-4">Ссылки ведут только на страницы сайта. IP-адреса не хранятся, остаётся только необратимый хеш.</p>
     </div>
   </div>
 </template>
