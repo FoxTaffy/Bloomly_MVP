@@ -2222,6 +2222,7 @@ export const cn: Translation = {
   groupSettingsSupportBlockHidden: '群组中的「支持」板块将被隐藏',
   groupSettingsTierNameFieldPlaceholder: '等级名称',
   groupSettingsTierPricePlaceholder: '¥30/月',
+  groupSupportPerMonth: '/月',
   groupSettingsTierDescPlaceholder: '描述——订阅者能获得什么',
   groupSettingsSaveSettings: '保存设置',
   groupSettingsRefresh: '刷新',

@@ -2223,6 +2223,7 @@ export const en: Translation = {
   groupSettingsSupportBlockHidden: 'The "Support" block in the group will be hidden',
   groupSettingsTierNameFieldPlaceholder: 'Tier name',
   groupSettingsTierPricePlaceholder: '$5/mo',
+  groupSupportPerMonth: '/mo',
   groupSettingsTierDescPlaceholder: 'Description — what the subscriber gets',
   groupSettingsSaveSettings: 'Save settings',
   groupSettingsRefresh: 'Refresh',

@@ -4,6 +4,7 @@ import LinkifiedText from '@/components/LinkifiedText.vue'
 import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
 import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
+import { formatPriceNative } from '@/lib/format'
 const langStore = useLangStore()
 import { ref, reactive, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -2435,7 +2436,7 @@ const vClickOutside = {
                       <span class="text-lg leading-none shrink-0">{{ tier.emoji || '⭐' }}</span>
                       <div class="flex-1 min-w-0">
                         <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
-                        <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }}<span v-if="tier.desc"> · {{ tier.desc }}</span></p>
+                        <p class="text-[10px] text-white/40 mt-0.5">{{ tier.currency ? `${formatPriceNative(tier.price, tier.currency)}${langStore.t.groupSupportPerMonth}` : tier.price }}<span v-if="tier.desc"> · {{ tier.desc }}</span></p>
                       </div>
                       <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold shrink-0"
                         :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border: 1px solid ${group.accent_color || '#4C67CF'}30`">

@@ -2218,6 +2218,7 @@ export const de: Translation = {
   groupSettingsSupportBlockHidden: 'Der „Unterstützen“-Block in der Gruppe wird ausgeblendet',
   groupSettingsTierNameFieldPlaceholder: 'Name der Stufe',
   groupSettingsTierPricePlaceholder: '5 €/Monat',
+  groupSupportPerMonth: '/Monat',
   groupSettingsTierDescPlaceholder: 'Beschreibung — was der Abonnent bekommt',
   groupSettingsSaveSettings: 'Einstellungen speichern',
   groupSettingsRefresh: 'Aktualisieren',

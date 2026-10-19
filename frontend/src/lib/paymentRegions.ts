@@ -24,6 +24,11 @@ export const REGION_VISUAL: Record<string, { flag: string | null; currency: stri
   GLOBAL: { flag: null, currency: '',    symbol: '🌐', color: '#a1b4ff' },
 }
 
+/** Валюты регионов оплаты из настроек (без «Другое») — для цен тарифов поддержки. */
+export const SUPPORT_CURRENCIES: { code: string; symbol: string }[] = [...new Map(
+  Object.values(REGION_VISUAL).filter(v => v.currency).map(v => [v.currency, { code: v.currency, symbol: v.symbol }]),
+).values()]
+
 export const PAYMENT_REGIONS: PaymentRegion[] = [
   { id: 'RU',     label: 'Россия / Russia' },
   { id: 'US',     label: 'США / United States' },

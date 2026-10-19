@@ -93,6 +93,7 @@ export interface SupportTier {
   emoji?: string
   name: string
   price: string | number
+  currency?: string // код валюты из настроек региона оплаты; у старых тарифов нет — цена свободным текстом
   desc?: string
 }
 

@@ -54,7 +54,7 @@ export interface UpdateGroupInput {
   hiddenMemberIds?: string[];
   donationsEnabled?: boolean;
   bankCardMasked?: string | null;
-  supportTiers?: Array<{ emoji: string; name: string; price: string; desc: string }>;
+  supportTiers?: Array<{ emoji: string; name: string; price: string; currency?: string; desc: string }>;
   businessEnabled?: boolean;
   welcomeMsgEnabled?: boolean;
   welcomeMsgText?: string;

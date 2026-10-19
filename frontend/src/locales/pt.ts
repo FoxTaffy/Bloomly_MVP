@@ -2218,6 +2218,7 @@ export const pt: Translation = {
   groupSettingsSupportBlockHidden: 'O bloco "Apoiar" do grupo ficará oculto',
   groupSettingsTierNameFieldPlaceholder: 'Nome do nível',
   groupSettingsTierPricePlaceholder: 'R$25/mês',
+  groupSupportPerMonth: '/mês',
   groupSettingsTierDescPlaceholder: 'Descrição — o que o assinante recebe',
   groupSettingsSaveSettings: 'Salvar configurações',
   groupSettingsRefresh: 'Atualizar',

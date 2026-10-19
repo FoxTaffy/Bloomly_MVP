@@ -2224,6 +2224,7 @@ export const ru = {
   groupSettingsSupportBlockHidden: 'Блок «Поддержать» в группе будет скрыт',
   groupSettingsTierNameFieldPlaceholder: 'Название тарифа',
   groupSettingsTierPricePlaceholder: '500 ₽/мес',
+  groupSupportPerMonth: '/мес',
   groupSettingsTierDescPlaceholder: 'Описание — что получит подписчик',
   groupSettingsSaveSettings: 'Сохранить настройки',
   groupSettingsRefresh: 'Обновить',

@@ -2222,6 +2222,7 @@ export const jp: Translation = {
   groupSettingsSupportBlockHidden: 'グループ内の「応援する」ブロックは非表示になります',
   groupSettingsTierNameFieldPlaceholder: 'プラン名',
   groupSettingsTierPricePlaceholder: '500円/月',
+  groupSupportPerMonth: '/月',
   groupSettingsTierDescPlaceholder: '説明 — 購読者が得られるもの',
   groupSettingsSaveSettings: '設定を保存',
   groupSettingsRefresh: '更新',

@@ -3,6 +3,8 @@ import { vStickyBottom } from '@/lib/stickyBottom'
 import { apiErrorCode, apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { rubricOptionsFor } from '@/lib/groupRubrics'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
+import { SUPPORT_CURRENCIES } from '@/lib/paymentRegions'
+import { displayCurrency } from '@/lib/displayCurrency'
 const langStore = useLangStore()
 import { ref, onMounted, computed, reactive, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
@@ -579,7 +581,7 @@ const form = reactive({
   groupTheme: '',
   donationsEnabled: false,
   bankCardMasked: '',
-  supportTiers: [] as Array<{ emoji: string; name: string; price: string; desc: string }>,
+  supportTiers: [] as Array<{ emoji: string; name: string; price: string; currency?: string; desc: string }>,
   businessEnabled: false,
   welcomeMsgEnabled: false,
   welcomeMsgText: '',
@@ -621,7 +623,7 @@ const savedForm = reactive({
   groupTheme: '',
   donationsEnabled: false,
   bankCardMasked: '',
-  supportTiers: [] as Array<{ emoji: string; name: string; price: string; desc: string }>,
+  supportTiers: [] as Array<{ emoji: string; name: string; price: string; currency?: string; desc: string }>,
   businessEnabled: false,
   welcomeMsgEnabled: false,
   welcomeMsgText: '',
@@ -762,6 +764,8 @@ const ticketSaving = ref(false)
 const ticketError = ref('')
 const showNewTierForm = ref<string | null>(null) // eventId for which form is open
 const editingTier = ref<string | null>(null) // tierId being edited
+// Валюта нового тарифа поддержки — валюта региона оплаты владельца, если она есть в списке
+const supportDefaultCurrency = SUPPORT_CURRENCIES.find(c => c.code === displayCurrency.value)?.code ?? 'USD'
 const newTierForm = reactive({ name: '', price: 0, currency: 'RUB', totalCount: 100, saleStartsAt: '', saleEndsAt: '' })
 const editTierForm = reactive({ name: '', price: 0, currency: 'RUB', totalCount: 100, saleStartsAt: '', saleEndsAt: '' })
 
@@ -2679,7 +2683,7 @@ async function deleteGroup() {
                           <p class="text-sm font-bold text-white">{{ langStore.t.groupSettingsSupportTiers }}</p>
                         </div>
                         <button
-                          @click="form.supportTiers.push({ emoji: '⭐', name: '', price: '', desc: '' })"
+                          @click="form.supportTiers.push({ emoji: '⭐', name: '', price: '', currency: supportDefaultCurrency, desc: '' })"
                           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-yellow/10 text-brand-yellow border border-brand-yellow/25 hover:bg-brand-yellow/20 transition-all">
                           <BIcon name="Plus" class="w-3.5 h-3.5" /> {{ langStore.t.groupSettingsAddTier }}
                         </button>
@@ -2700,8 +2704,13 @@ async function deleteGroup() {
                             class="w-14 text-center bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-2 py-2 text-lg outline-hidden transition-all" />
                           <input v-model="tier.name" :placeholder="langStore.t.groupSettingsTierNameFieldPlaceholder"
                             class="flex-1 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
-                          <input v-model="tier.price" :placeholder="langStore.t.groupSettingsTierPricePlaceholder" maxlength="20"
-                            class="w-28 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
+                          <input v-model="tier.price" :placeholder="tier.currency ? '500' : langStore.t.groupSettingsTierPricePlaceholder" maxlength="20" :inputmode="tier.currency ? 'decimal' : 'text'"
+                            class="w-24 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
+                          <select v-model="tier.currency"
+                            class="w-[4.5rem] bg-brand-bg border border-brand-border focus:border-brand-yellow/40 rounded-xl px-2 py-2 text-sm text-white outline-hidden transition-all appearance-none cursor-pointer text-center">
+                            <option v-if="!tier.currency" :value="undefined">—</option>
+                            <option v-for="c in SUPPORT_CURRENCIES" :key="c.code" :value="c.code">{{ c.code }} {{ c.symbol }}</option>
+                          </select>
                           <button @click="form.supportTiers.splice(idx, 1)"
                             class="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-brand-error hover:bg-brand-error/10 transition-all shrink-0">
                             <BIcon name="Trash2" class="w-4 h-4" />
