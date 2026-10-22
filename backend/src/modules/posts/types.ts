@@ -31,6 +31,8 @@ export interface GetPostsQuery {
   /** Resolved by the controller from `nsfw`/`safeMode` + viewer age; the service never reads the raw params. */
   nsfwMode?: NsfwMode;
   hasMedia?: boolean;
+  /** 'true' — только NSFW-посты (вкладка NSFW); для не-взрослых и при nsfw=hide ничего не вернёт. */
+  nsfwOnly?: string | boolean;
   page?: string;
   limit?: string;
 }

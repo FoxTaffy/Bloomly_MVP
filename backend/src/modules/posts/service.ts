@@ -603,11 +603,16 @@ export const postService = {
   },
 
   async getPosts(query: GetPostsQuery = {}, viewerId?: string) {
-    const { search, category, tag, synonyms, sort = 'new', nsfwMode = 'hide', hasMedia = false, page, limit } = query;
+    const { search, category, tag, synonyms, sort = 'new', nsfwMode = 'hide', hasMedia = false, nsfwOnly, page, limit } = query;
     const { page: pageNum, limit: limitNum } = pagination(page, limit);
 
     const where: any = { deleted_at: null, is_archived: false, ...NOT_DELETED_GROUP_FILTER };
     Object.assign(where, nsfwWhere(nsfwMode));
+    // Вкладка NSFW: только помеченные посты. В режиме hide (не-взрослые, гости) выдача пуста, а не обычная.
+    if (nsfwOnly === true || nsfwOnly === 'true') {
+      if (nsfwMode === 'hide') return [];
+      where.is_nsfw = true;
+    }
     if (hasMedia) where.media_urls = { isEmpty: false };
 
     const blockerIds = await getBlockerIds(viewerId);

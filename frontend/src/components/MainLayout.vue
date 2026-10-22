@@ -289,7 +289,9 @@ const feedRequestUrl = (page: number): string => {
       params.append('hasMedia', 'true')
       return `/posts?${params}`
     case 'nsfw':
-      return `/posts?nsfw=show&page=${page}`
+      params.set('nsfw', 'show')
+      params.append('nsfwOnly', 'true')
+      return `/posts?${params}`
     default:
       if (searchQuery.value) params.append('search', searchQuery.value)
       if (selectedCategory.value) params.append('category', selectedCategory.value)
