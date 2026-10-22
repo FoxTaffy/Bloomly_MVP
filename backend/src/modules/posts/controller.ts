@@ -305,8 +305,8 @@ export const editPostHandler = async (
   try {
     const { id: userId } = request.user as JwtUser;
     const { id: postId } = request.params;
-    const { content, isNsfw, isAiGenerated, tags, addMediaUrls, addMediaOriginalUrls } = request.body;
-    const post = await postService.editPost(userId, postId, { content, isNsfw, isAiGenerated, tags, addMediaUrls, addMediaOriginalUrls });
+    const { content, isNsfw, isAiGenerated, tags, addMediaUrls, addMediaOriginalUrls, listingId } = request.body;
+    const post = await postService.editPost(userId, postId, { content, isNsfw, isAiGenerated, tags, addMediaUrls, addMediaOriginalUrls, listingId });
     return reply.send({ success: true, data: { post }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to edit post';

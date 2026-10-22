@@ -659,7 +659,7 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.posts
   }
 
-  async function createGroupPost(groupId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
+  async function createGroupPost(groupId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string; listingId?: string | null }) {
     const { data } = await api.post(`/groups/${groupId}/posts`, input)
     return data.data.post
   }

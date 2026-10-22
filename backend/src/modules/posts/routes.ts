@@ -32,6 +32,7 @@ const editPostSchema = {
       tags: { type: 'array', items: { type: 'string' } },
       addMediaUrls: { type: 'array', items: { type: 'string' } },
       addMediaOriginalUrls: { type: 'array', items: { type: 'string' } },
+      listingId: { type: ['string', 'null'] },
     },
   },
 };

@@ -17,6 +17,7 @@ import { analyzeContent } from '../automod/service.js';
 import type { CreatePostInput, EditPostInput, GetPostsQuery } from './types.js';
 import { errCode } from '../../lib/httpErrors.js';
 import { logError } from '../../lib/logger.js';
+import { POST_LISTING_INCLUDE, assertListingAttachable, withPublicListing } from '../../lib/postListing.js';
 
 const MAX_MEDIA_PER_POST = 20;
 /** Сколько самых свежих подходящих постов ранжируется при поиске. */
@@ -384,10 +385,12 @@ const POST_INCLUDE = {
  */
 function maskGroupAuthor(post: any): any {
   if (!post) return post;
-  if (post.groupPosts && post.groupPosts.length > 0) {
-    return { ...post, author: null, can_view_content: true };
+  // Лот Dealers' Den виден зрителю, только пока он опубликован (черновики и архив — только продавцу)
+  const safe = withPublicListing(post);
+  if (safe.groupPosts && safe.groupPosts.length > 0) {
+    return { ...safe, author: null, can_view_content: true };
   }
-  return { ...post, can_view_content: true };
+  return { ...safe, can_view_content: true };
 }
 
 /** Same idea as maskGroupAuthor, but for a comment posted "as" a group (Comment.group_id). */
@@ -407,6 +410,7 @@ const FEED_POST_INCLUDE = {
   tags: { include: { tag: true } },
   _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
   groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
+  listing: POST_LISTING_INCLUDE,
 };
 
 /**
@@ -584,6 +588,7 @@ export const postService = {
       include: {
         ...POST_INCLUDE,
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+        listing: POST_LISTING_INCLUDE,
       },
     });
     if (!post) return null;
@@ -635,6 +640,7 @@ export const postService = {
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+        listing: POST_LISTING_INCLUDE,
       },
     });
     return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
@@ -737,6 +743,7 @@ export const postService = {
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+        listing: POST_LISTING_INCLUDE,
       },
     });
     const order = new Map(pageIds.map((id, i) => [id, i]));
@@ -1149,6 +1156,7 @@ export const postService = {
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+        listing: POST_LISTING_INCLUDE,
       },
     });
     return posts.map(maskGroupAuthor);
@@ -1166,6 +1174,7 @@ export const postService = {
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+        listing: POST_LISTING_INCLUDE,
       },
     });
     return posts.map(maskGroupAuthor);
@@ -1185,6 +1194,7 @@ export const postService = {
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
             groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+            listing: POST_LISTING_INCLUDE,
           },
         },
       },
@@ -1206,6 +1216,7 @@ export const postService = {
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
             groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+            listing: POST_LISTING_INCLUDE,
           },
         },
       },
@@ -1227,6 +1238,7 @@ export const postService = {
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
             groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+            listing: POST_LISTING_INCLUDE,
           },
         },
       },
@@ -1261,6 +1273,7 @@ export const postService = {
       tags: { include: { tag: true } },
       _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
       groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+      listing: POST_LISTING_INCLUDE,
     };
 
     const [favs, total] = await Promise.all([
@@ -1481,11 +1494,21 @@ export const postService = {
   },
 
   async editPost(userId: string, postId: string, input: EditPostInput) {
-    const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null } });
+    const post = await prisma.post.findUnique({
+      where: { id: postId, deleted_at: null },
+      include: { groupPosts: { select: { group_id: true }, take: 1 } },
+    });
     if (!post) throw new Error('Post not found');
     if (post.author_id !== userId) throw new Error('Not authorized');
     if (Date.now() - post.created_at.getTime() > POST_EDIT_WINDOW_MS) {
       throw new Error('Edit window expired');
+    }
+
+    // Карточка лота Dealers' Den: null — открепить, строка — заменить (лот должен быть из группы поста)
+    if (input.listingId) {
+      const groupId = post.groupPosts[0]?.group_id;
+      if (!groupId) throw Object.assign(new Error('LISTING_NOT_ALLOWED'), { statusCode: 422 });
+      if (input.listingId !== post.listing_id) await assertListingAttachable(prisma, input.listingId, groupId);
     }
 
     const content = input.content !== undefined ? input.content.trim() : post.content;
@@ -1529,15 +1552,17 @@ export const postService = {
           content,
           ...(input.isNsfw !== undefined && { is_nsfw: input.isNsfw }),
           ...(input.isAiGenerated !== undefined && { is_ai_generated: input.isAiGenerated }),
+          ...(input.listingId !== undefined && { listing_id: input.listingId }),
           ...(addMedia.length > 0 && { media_urls: mediaUrls, media_original_urls: mediaOriginalUrls }),
         },
         include: {
           author: { select: AUTHOR_SELECT },
           rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
           tags: { include: { tag: true } },
+          listing: POST_LISTING_INCLUDE,
           _count: { select: { votes: true, repaws: true } },
         },
-      });
+      }).then(withPublicListing);
     });
   },
 
@@ -1616,6 +1641,7 @@ export const postService = {
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+        listing: POST_LISTING_INCLUDE,
       },
     });
     return posts.map(maskGroupAuthor);

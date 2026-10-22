@@ -31,6 +31,8 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useMessagesStore } from '@/stores/messages'
 import api from '@/api'
+import PostListingPicker from '@/components/PostListingPicker.vue'
+import type { PostListingPreview } from '@/lib/postListing'
 import { contrastText } from '@/utils/contrastText'
 const DonateModal = defineAsyncComponent(() => import('@/components/groups/DonateModal.vue'))
 
@@ -206,6 +208,14 @@ const creativePostStatuses = computed(() => [
   { value: 'Готово', label: langStore.t.groupDetailStageDone },
 ])
 const selectedCreativeStatus = ref('')
+// Лот Dealers' Den, прикрепляемый карточкой к посту «Обновление заказа»
+const selectedListing = ref<PostListingPreview | null>(null)
+const createPostError = ref('')
+const LISTING_ERRORS: Record<string, string> = {
+  LISTING_NOT_FOUND: 'Лот не найден — выберите другой',
+  LISTING_NOT_ALLOWED: 'Этот лот нельзя прикрепить к посту группы',
+  LISTING_NOT_ACTIVE: 'Лот уже не продаётся — выберите другой',
+}
 
 function addGroupTag() {
   const t = newPostTagInput.value.trim().replace(/^#/, '')
@@ -238,6 +248,7 @@ async function createGroupPost() {
     if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
   }
   isCreatingPost.value = true
+  createPostError.value = ''
   try {
     const cfg = archetypeComposer.value
     const isAnnouncement = cfg.postType === 'announcement' ? true : newPostIsAnnouncement.value
@@ -257,6 +268,7 @@ async function createGroupPost() {
       tags: newPostTags.value,
       category,
       visibility: newPostVisibility.value,
+      listingId: selectedListing.value?.id,
     })
     if (post) groupPosts.value.unshift(post)
     newPostContent.value = ''
@@ -270,10 +282,15 @@ async function createGroupPost() {
     newPostTagInput.value = ''
     newPostVisibility.value = 'public'
     selectedCreativeStatus.value = ''
+    selectedListing.value = null
     groupMediaUploadRef.value?.clearAll()
     showPostForm.value = false
     if (group.value._count) group.value._count.posts++
-  } catch (e) { console.error('Create group post failed', e) }
+  } catch (e: any) {
+    console.error('Create group post failed', e)
+    const message = String(e?.response?.data?.error?.message ?? '')
+    if (LISTING_ERRORS[message]) createPostError.value = LISTING_ERRORS[message]
+  }
   finally { isCreatingPost.value = false }
 }
 
@@ -1937,6 +1954,11 @@ const vClickOutside = {
                       {{ s.label }}
                     </button>
                   </div>
+
+                  <!-- Лот Dealers' Den: карточка внизу поста «Обновление заказа» -->
+                  <PostListingPicker v-if="group.type === 'creative' && group.den_enabled"
+                    v-model="selectedListing" :group-id="group.id" :can-create="isOwner" />
+                  <p v-if="createPostError" class="px-1 text-xs text-brand-error" role="alert">{{ createPostError }}</p>
 
                   <MediaUpload ref="groupMediaUploadRef" type="posts" :multiple="true" :max-files="20" @uploaded="onGroupMediaUploaded" />
 

@@ -490,6 +490,19 @@
             >#{{ tag.tag?.name ?? tag.name }}</a>
           </router-link>
         </div>
+
+        <!-- Лот Dealers' Den, прикреплённый к посту: плоская карточка → страница лота -->
+        <div v-if="post.listing && !(isEditing && editDetachListing)" class="mt-3">
+          <PostListingCard :listing="post.listing" :interactive="!isEditing">
+            <template v-if="isEditing" #actions>
+              <button type="button" title="Открепить лот" aria-label="Открепить лот"
+                class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-brand-card transition-colors"
+                @click.stop="editDetachListing = true">
+                <BIcon name="X" class="w-4 h-4" />
+              </button>
+            </template>
+          </PostListingCard>
+        </div>
       </div>
 
       <!-- ── Actions ───────────────────────────────────────────────────── -->
@@ -768,6 +781,7 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
+import PostListingCard from '@/components/PostListingCard.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import PostComments from '@/components/PostComments.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
@@ -925,6 +939,7 @@ onUnmounted(() => window.removeEventListener('scroll', closeMenuOnScroll, true))
 const isEditing   = ref(false)
 const editContent = ref('')
 const editTags = ref<string[]>([])
+const editDetachListing = ref(false)
 const editNsfw = ref(false)
 const editAi = ref(false)
 const editNewMedia = ref<string[]>([])
@@ -1292,6 +1307,7 @@ function startEdit() {
   isEditing.value = true
   editContent.value = props.post.content
   editTags.value = (props.post.tags || []).map((t: any) => t.tag?.name ?? t.name).filter(Boolean)
+  editDetachListing.value = false
   editNsfw.value = !!props.post.is_nsfw
   editAi.value = !!props.post.is_ai_generated
   editNewMedia.value = []
@@ -1315,6 +1331,7 @@ async function saveEdit() {
       isAiGenerated: editAi.value,
       addMediaUrls: editNewMedia.value,
       addMediaOriginalUrls: editNewOriginals.value,
+      ...(editDetachListing.value && props.post.listing ? { listingId: null } : {}),
     })
     if (r.data.success) {
       emit('updated', r.data.data.post)

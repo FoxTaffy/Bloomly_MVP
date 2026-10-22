@@ -56,4 +56,6 @@ export interface EditPostInput {
   /** New files appended after the existing ones (existing media is never replaced here). */
   addMediaUrls?: string[];
   addMediaOriginalUrls?: string[];
+  /** Лот Dealers' Den группы поста: строка — прикрепить/заменить, null — открепить. */
+  listingId?: string | null;
 }

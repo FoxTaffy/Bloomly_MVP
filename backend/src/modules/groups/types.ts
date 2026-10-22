@@ -136,6 +136,8 @@ export interface CreateGroupPostInput {
   tags?: string[];
   visibility?: string;
   category?: string;
+  /** Лот Dealers' Den этой же группы, прикрепляемый карточкой к посту. */
+  listingId?: string | null;
 }
 
 export type RsvpStatus = 'going' | 'maybe' | 'not_going';

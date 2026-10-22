@@ -345,6 +345,8 @@ model Post {
   is_archived         Boolean             @default(false)
   comments_disabled   Boolean             @default(false)
   is_ai_generated     Boolean             @default(false)
+  // Лот Dealers' Den, прикреплённый к посту «Обновление заказа» (карточка внизу поста)
+  listing_id          String?             @db.Uuid
   comments            Comment[]
   favourites          Favourite[]
   author              User                @relation("PostAuthor", fields: [author_id], references: [id])
@@ -357,8 +359,10 @@ model Post {
   votes               Vote[]
   views               PostView[]
   notInterested       PostNotInterested[]
+  listing             DealerListing?      @relation(fields: [listing_id], references: [id], onDelete: SetNull)
 
   @@index([author_id])
+  @@index([listing_id])
   @@index([deleted_at, created_at])
   @@index([rating])
   // Лента: ORDER BY created_at DESC LIMIT n — без этого индекса планировщик читал все посты
@@ -1545,6 +1549,7 @@ model DealerListing {
   disputes         DenDispute[]
   fairParticipants DenFairParticipant[]
   avatarFrame      AvatarFrame?
+  posts            Post[]
 
   @@index([seller_id])
   @@index([group_id])

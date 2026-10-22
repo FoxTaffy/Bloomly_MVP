@@ -32,6 +32,7 @@ import type {
 import { logError } from '../../lib/logger.js';
 import { debitWallet, creditWallet } from '../wallet/ledger.js';
 import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
+import { POST_LISTING_INCLUDE, assertListingAttachable, withPublicListing } from '../../lib/postListing.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 // Group role hierarchy: owner > admin > moderator > everyone else (member/dealer/volunteer/guest_of_honor).
@@ -1361,6 +1362,7 @@ export const groupService = {
           include: {
             author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
             tags: { include: { tag: true } },
+            listing: POST_LISTING_INCLUDE,
             _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
           },
         },
@@ -1369,7 +1371,7 @@ export const groupService = {
       skip,
       take: limit,
     });
-    return rows.map(row => ({ ...row, post: { ...row.post, can_view_content: true } }));
+    return rows.map(row => ({ ...row, post: withPublicListing({ ...row.post, can_view_content: true }) }));
   },
 
   // ── Creative Kanban ───────────────────────────────────────────────────────
@@ -1646,7 +1648,7 @@ export const groupService = {
   },
 
   // ── Create post in group ──────────────────────────────────────────────────
-  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
+  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string; listingId?: string | null }) {
     if (!(await groupService.canPost(groupId, userId))) {
       throw httpError('You are not allowed to post in this group', 403);
     }
@@ -1672,11 +1674,16 @@ export const groupService = {
       ),
     );
 
+    // Прикреплённый лот Dealers' Den (карточка внизу поста «Обновление заказа»)
+    const listingId = input.listingId || null;
+    if (listingId) await assertListingAttachable(prisma, listingId, groupId);
+
     return prisma.$transaction(async (tx) => {
       const post = await tx.post.create({
         data: {
           content,
           author_id: userId,
+          listing_id: listingId,
           is_nsfw: input.isNsfw ?? false,
           is_ai_generated: input.isAiGenerated ?? false,
           is_announcement: input.isAnnouncement ?? false,
@@ -1718,6 +1725,7 @@ export const groupService = {
           tags: { include: { tag: true } },
           _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
           groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
+          listing: POST_LISTING_INCLUDE,
         },
       });
     }).then(async (created) => {
@@ -1738,7 +1746,7 @@ export const groupService = {
           }).catch(() => {})
         ),
       );
-      return created;
+      return created ? withPublicListing(created) : created;
     });
   },
 
