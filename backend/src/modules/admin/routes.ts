@@ -18,11 +18,13 @@ import {
   getSettingsHandler, updateSettingHandler,
 } from './controller.js';
 import {
-  shopOverviewHandler, shopItemsHandler, shopCreateItemHandler, shopUpdateItemHandler, shopDeleteItemHandler,
+  shopOverviewHandler, shopTypeStatsHandler, shopItemsHandler, shopCreateItemHandler, shopUpdateItemHandler, shopDeleteItemHandler,
   shopPacksHandler, shopPackStatusHandler, shopAccessRequestsHandler,
   denOverviewHandler, denListingsHandler, denListingStatusHandler, denListingDeleteHandler,
   denDisputesHandler, denFairsHandler, denFairStatusHandler, denGroupsHandler, denGroupDisconnectHandler,
 } from './market.controller.js';
+import { requireAdmin } from '../../lib/authHooks.js';
+import { onlineService } from './online.service.js';
 
 export async function adminRoutes(fastify: FastifyInstance) {
   // Explicitly typed to avoid @fastify/websocket overload ambiguity
@@ -31,6 +33,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Bloomly Shop (admin+)
   fastify.get<RouteGenericOf<typeof shopOverviewHandler>>('/shop/overview', auth, shopOverviewHandler);
+  fastify.get<RouteGenericOf<typeof shopTypeStatsHandler>>('/shop/stats/:type', auth, shopTypeStatsHandler);
   fastify.get<RouteGenericOf<typeof shopItemsHandler>>('/shop/items', auth, shopItemsHandler);
   fastify.post<RouteGenericOf<typeof shopCreateItemHandler>>('/shop/items', auth, shopCreateItemHandler);
   fastify.patch<RouteGenericOf<typeof shopUpdateItemHandler>>('/shop/items/:id', auth, shopUpdateItemHandler);
@@ -148,4 +151,14 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getPremiumOverviewHandler>>('/premium-overview', auth, getPremiumOverviewHandler);
   fastify.get<RouteGenericOf<typeof getFinanceReportHandler>>('/finance', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } } as RouteShorthandOptions, getFinanceReportHandler);
   fastify.get<RouteGenericOf<typeof getInfraOverviewHandler>>('/infra-overview',   auth, getInfraOverviewHandler);
+
+  // Онлайн в реальном времени и суточная аналитика активности (admin+)
+  fastify.get('/online/live', auth, async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return reply.send({ success: true, data: await onlineService.live(), error: null });
+  });
+  fastify.get<{ Querystring: { tz?: string } }>('/online/daily', auth, async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    return reply.send({ success: true, data: await onlineService.daily(req.query.tz), error: null });
+  });
 }

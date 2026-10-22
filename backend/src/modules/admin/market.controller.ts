@@ -21,6 +21,7 @@ function admin<T extends FastifyRequest = FastifyRequest>(code: string, fn: (req
 
 // ── Shop ─────────────────────────────────────────────────────────────────────
 export const shopOverviewHandler = admin('SHOP_OVERVIEW', async (_req, reply) => ok(reply, await shopAdminService.overview()));
+export const shopTypeStatsHandler = admin<FastifyRequest<{ Params: { type: string } }>>('SHOP_TYPE_STATS', async (req, reply) => ok(reply, await shopAdminService.typeStats(req.params.type)));
 export const shopItemsHandler = admin<FastifyRequest<{ Querystring: Q }>>('SHOP_ITEMS', async (req, reply) => {
   const q = req.query;
   return ok(reply, await shopAdminService.listItems({ type: q.type || undefined, status: q.status || undefined, search: q.search?.trim() || undefined, page: pageOf(q) }));

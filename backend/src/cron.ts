@@ -9,6 +9,7 @@ import { cleanupSoftDeletedRows, cleanupExpiredStories } from './jobs/cleanup.js
 import { logger } from './lib/logger.js';
 import { paymentsService } from './modules/payments/service.js';
 import { refreshBlmRate } from './modules/payments/rate.js';
+import { onlineService } from './modules/admin/online.service.js';
 import { processPendingVerifications } from './modules/agents/verification/agent.js';
 import { runSupervisor } from './modules/agents/supervisor.js';
 
@@ -23,6 +24,10 @@ interface CronJob {
 const JOBS: CronJob[] = [
   // DB keepalive — prevents idle connection drops (failures are reconnected by Prisma)
   { name: 'DB keepalive', schedule: '*/5 * * * *', run: () => prisma.$queryRaw`SELECT 1` },
+
+  // Замер числа пользователей онлайн — основа суточной аналитики активности в админке
+  { name: 'online sample', schedule: '* * * * *', run: () => onlineService.recordSample() },
+  { name: 'online samples cleanup', schedule: '40 3 * * *', run: () => onlineService.cleanup() },
 
   // Курс BLM (1 BLM = 1 $): обновляем из курса ЦБ 2 раза в сутки
   { name: 'BLM rate update', schedule: '0 9,21 * * *', announce: true, run: refreshBlmRate },

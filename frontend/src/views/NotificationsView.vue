@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { apiErrorMessage } from '@/lib/apiError'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
@@ -9,12 +9,14 @@ import BIcon from '@/components/BIcon.vue'
 import { useWarningModalStore } from '@/stores/warningModal'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useLangStore } from '@/stores/lang'
+import { useConfirm } from '@/composables/useConfirm'
 import { isDenNotification, denNotificationKey } from '@/lib/denNotifications'
 import { notifBadgeIcon, notifBadgeColor } from '@/lib/notifVisuals'
 import * as fmt from '@/lib/format'
 
 const warningModal = useWarningModalStore()
 const langStore = useLangStore()
+const { confirmDialog } = useConfirm()
 
 const rawNotifications = ref<any[]>([])
 const isLoading = ref(false)
@@ -46,12 +48,43 @@ const notifications = computed(() => {
 
 const normalizeNotif = (n: any) => ({ ...n, is_read: n.is_read ?? n.read ?? false })
 
-const fetchAll = async () => {
-  isLoading.value = true
+const loadFailed = ref(false)
+const fetchAll = async (silent = false) => {
+  if (!silent) isLoading.value = true
   try {
     const res = await api.get('/notifications')
-    if (res.data.success) rawNotifications.value = res.data.data.notifications.map(normalizeNotif)
-  } catch {} finally { isLoading.value = false }
+    if (res.data.success) {
+      const prev = new Map(rawNotifications.value.map((n: any) => [n.id, n]))
+      // Тихое обновление не должно сбрасывать «Принято/Одобрено», уже нажатое на странице
+      rawNotifications.value = res.data.data.notifications.map((n: any) => {
+        const norm = normalizeNotif(n)
+        const old = prev.get(norm.id)
+        return old ? { ...norm, _relDone: old._relDone, _stickerDone: old._stickerDone } : norm
+      })
+      loadFailed.value = false
+    }
+  } catch { if (!silent) loadFailed.value = true } finally { isLoading.value = false }
+}
+
+// Страница обновляется сама: при возврате на вкладку и раз в полминуты, пока она открыта
+const refreshIfVisible = () => { if (!document.hidden) fetchAll(true) }
+let refreshTimer: ReturnType<typeof setInterval> | undefined
+
+const actionError = ref('')
+let actionErrorTimer: ReturnType<typeof setTimeout> | undefined
+const showActionError = (e: unknown) => {
+  actionError.value = apiErrorMessage(e) ?? 'Не удалось выполнить действие'
+  clearTimeout(actionErrorTimer)
+  actionErrorTimer = setTimeout(() => { actionError.value = '' }, 4000)
+}
+
+const clearAll = async () => {
+  if (!rawNotifications.value.length) return
+  if (!(await confirmDialog('Удалить все уведомления? Это действие нельзя отменить.', { danger: true }))) return
+  try {
+    await api.delete('/notifications')
+    rawNotifications.value = []
+  } catch (e) { showActionError(e) }
 }
 
 const markAllRead = async () => {
@@ -119,7 +152,7 @@ const decideStickerAccess = async (n: any, action: 'approve' | 'reject') => {
     n._stickerDone = action === 'approve' ? 'approved' : 'rejected'
     n.is_read = true
   } catch (e) {
-    alert(apiErrorMessage(e) ?? 'Ошибка')
+    showActionError(e)
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -131,7 +164,7 @@ const acceptRelationship = async (n: any) => {
     await api.post(`/relationships/${reqId}/accept`)
     n._relDone = 'accepted'
   } catch (e) {
-    alert(apiErrorMessage(e) ?? 'Ошибка')
+    showActionError(e)
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -143,7 +176,7 @@ const declineRelationship = async (n: any) => {
     await api.post(`/relationships/${reqId}/decline`)
     n._relDone = 'declined'
   } catch (e) {
-    alert(apiErrorMessage(e) ?? 'Ошибка')
+    showActionError(e)
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -194,23 +227,51 @@ const onClick = async (n: any) => {
 }
 
 // ── Tabs + sections ───────────────────────────────────────────────────────────
-const TABS = [
-  { id: 'all',      label: 'Все',          types: null as string[] | null },
-  { id: 'likes',    label: 'Лайки',        types: ['LIKE', 'REPAW'] },
-  { id: 'comments', label: 'Комментарии',  types: ['COMMENT', 'MENTION'] },
-  { id: 'follows',  label: 'Подписки',     types: ['FOLLOW', 'FOLLOW_POST', 'GROUP_POST', 'RELATIONSHIP_REQUEST', 'RELATIONSHIP_ACCEPTED', 'FRIEND_REQUEST', 'FRIEND_ACCEPT'] },
+const isSystemNotif = (n: any) => isAutomodNotif(n) || n.type.startsWith('STICKER_ACCESS')
+const TABS: { id: string; label: string; match: ((n: any) => boolean) | null; empty: string }[] = [
+  { id: 'all',      label: 'Все',          match: null, empty: 'Здесь пока ничего нет' },
+  { id: 'likes',    label: 'Лайки',        match: n => ['LIKE', 'REPAW'].includes(n.type), empty: 'Лайков и RePaw пока нет' },
+  { id: 'comments', label: 'Комментарии',  match: n => ['COMMENT', 'MENTION'].includes(n.type), empty: 'Комментариев и упоминаний пока нет' },
+  { id: 'follows',  label: 'Подписки',     match: n => ['FOLLOW', 'FOLLOW_POST', 'GROUP_POST', 'RELATIONSHIP_REQUEST', 'RELATIONSHIP_ACCEPTED', 'FRIEND_REQUEST', 'FRIEND_ACCEPT'].includes(n.type), empty: 'Новых подписчиков и заявок пока нет' },
+  { id: 'den',      label: "Dealers' Den", match: n => isDenNotification(n.type), empty: "Уведомлений из Dealers' Den пока нет" },
+  { id: 'system',   label: 'Система',      match: isSystemNotif, empty: 'Системных уведомлений пока нет' },
 ]
 const tab = ref('all')
+const tabMatch = (id: string) => TABS.find(t => t.id === id)?.match ?? null
+const unreadByTab = computed(() => Object.fromEntries(TABS.map(t => [
+  t.id, notifications.value.filter((n: any) => !n.is_read && (!t.match || t.match(n))).length,
+])) as Record<string, number>)
 const filtered = computed(() => {
-  const types = TABS.find(t => t.id === tab.value)?.types
-  return types ? notifications.value.filter((n: any) => types.includes(n.type)) : notifications.value
+  const m = tabMatch(tab.value)
+  return m ? notifications.value.filter(m) : notifications.value
 })
-const sections = computed(() => [
-  { key: 'new', title: 'Новые', items: filtered.value.filter((n: any) => !n.is_read) },
-  { key: 'old', title: 'Ранее', items: filtered.value.filter((n: any) => n.is_read) },
-].filter(s => s.items.length))
+const emptyText = computed(() => TABS.find(t => t.id === tab.value)?.empty ?? '')
 
-onMounted(fetchAll)
+// Новые отдельно, прочитанные — по давности
+const dayBucket = (iso: string) => {
+  const d = new Date(iso); const now = new Date()
+  const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const diff = Math.round((start(now) - start(d)) / 86_400_000)
+  return diff <= 0 ? 'today' : diff === 1 ? 'yesterday' : diff < 7 ? 'week' : 'older'
+}
+const BUCKET_TITLES: Record<string, string> = { today: 'Сегодня', yesterday: 'Вчера', week: 'На этой неделе', older: 'Ранее' }
+const sections = computed(() => {
+  const read = filtered.value.filter((n: any) => n.is_read)
+  return [
+    { key: 'new', title: 'Новые', items: filtered.value.filter((n: any) => !n.is_read) },
+    ...Object.keys(BUCKET_TITLES).map(k => ({ key: k, title: BUCKET_TITLES[k], items: read.filter((n: any) => dayBucket(n.created_at) === k) })),
+  ].filter(sec => sec.items.length)
+})
+
+onMounted(() => {
+  fetchAll()
+  refreshTimer = setInterval(refreshIfVisible, 30_000)
+  document.addEventListener('visibilitychange', refreshIfVisible)
+})
+onBeforeUnmount(() => {
+  clearInterval(refreshTimer); clearTimeout(actionErrorTimer)
+  document.removeEventListener('visibilitychange', refreshIfVisible)
+})
 </script>
 
 <template>
@@ -226,12 +287,19 @@ onMounted(fetchAll)
             <h1 class="text-2xl max-md:text-xl font-extrabold text-white tracking-tight">Уведомления</h1>
             <p class="text-xs text-white/40 mt-0.5">{{ unreadCount > 0 ? `${unreadCount} непрочитанных` : 'Всё прочитано' }}</p>
           </div>
-          <button @click="markAllRead" :disabled="unreadCount === 0"
-            class="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-3.5 py-2 transition-all shrink-0"
-            :class="unreadCount > 0 ? 'bg-brand-accent/15 text-brand-accent hover:bg-brand-accent hover:text-white' : 'bg-white/4 text-white/25 cursor-not-allowed'">
-            <BIcon name="CheckCheck" class="w-3.5 h-3.5" />
-            Прочитать все
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button @click="markAllRead" :disabled="unreadCount === 0"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full px-3.5 py-2 transition-all"
+              :class="unreadCount > 0 ? 'bg-brand-accent/15 text-brand-accent hover:bg-brand-accent hover:text-white' : 'bg-white/4 text-white/25 cursor-not-allowed'">
+              <BIcon name="CheckCheck" class="w-3.5 h-3.5" />
+              Прочитать все
+            </button>
+            <button @click="clearAll" :disabled="!rawNotifications.length" aria-label="Удалить все уведомления" title="Удалить все"
+              class="inline-flex items-center justify-center w-8 h-8 rounded-full transition-all"
+              :class="rawNotifications.length ? 'bg-white/5 text-white/50 hover:bg-rose-500/15 hover:text-rose-400' : 'bg-white/4 text-white/20 cursor-not-allowed'">
+              <BIcon name="Trash2" class="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <div class="flex gap-1.5 mb-4 overflow-x-auto scrollbar-hide -mx-1 px-1">
@@ -239,16 +307,25 @@ onMounted(fetchAll)
             class="px-4 py-1.5 rounded-full text-[13px] font-semibold whitespace-nowrap transition-all border"
             :class="tab === t.id ? 'bg-white text-brand-bg border-white' : 'bg-white/3 text-white/55 border-white/8 hover:text-white hover:bg-white/6'">
             {{ t.label }}
+            <span v-if="unreadByTab[t.id]" class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              :class="tab === t.id ? 'bg-brand-bg/15 text-brand-bg' : 'bg-brand-accent/20 text-brand-accent'">{{ unreadByTab[t.id] }}</span>
           </button>
         </div>
+
+        <p v-if="actionError" role="alert" class="mb-3 px-4 py-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-xs font-semibold text-rose-300">{{ actionError }}</p>
 
         <div v-if="isLoading" class="rounded-3xl border border-white/8 bg-white/2 divide-y divide-white/6 overflow-hidden">
           <div v-for="n in 6" :key="n" class="h-[72px] animate-pulse bg-white/2" />
         </div>
+        <div v-else-if="loadFailed && !rawNotifications.length"
+          class="rounded-3xl border border-white/8 bg-white/2 flex flex-col items-center gap-3 py-16 text-white/40">
+          <p class="text-sm font-semibold">Не удалось загрузить уведомления</p>
+          <button @click="fetchAll()" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/8 hover:bg-white/12 text-white/70">Повторить</button>
+        </div>
         <div v-else-if="filtered.length === 0"
           class="rounded-3xl border border-white/8 bg-white/2 flex flex-col items-center gap-3 py-16 text-white/30">
           <div class="w-14 h-14 rounded-full bg-white/4 flex items-center justify-center"><BIcon name="BellOff" class="w-6 h-6" /></div>
-          <p class="text-sm font-semibold">Здесь пока ничего нет</p>
+          <p class="text-sm font-semibold">{{ emptyText }}</p>
         </div>
         <template v-else>
           <section v-for="sec in sections" :key="sec.key" class="mb-5">

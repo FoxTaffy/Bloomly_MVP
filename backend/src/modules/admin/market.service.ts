@@ -88,6 +88,69 @@ export const shopAdminService = {
     };
   },
 
+  /** Статистика по одному виду товаров магазина: рамки, фоны, темы. */
+  async typeStats(type: string) {
+    if (!['frame', 'background', 'theme'].includes(type)) throw Object.assign(new Error('Неизвестный тип'), { statusCode: 400 });
+    const week = startOfWeek();
+    const live = { deleted_at: null, type } as const;
+    const since = new Date(Date.now() - 30 * 86_400_000);
+    const [byStatus, free, downloads, owners, ownersWeek, turnover, top, daily, recent] = await Promise.all([
+      prisma.shopItem.groupBy({ by: ['status'], where: live, _count: { _all: true } }),
+      prisma.shopItem.count({ where: { ...live, is_free: true } }),
+      prisma.shopItem.aggregate({ where: live, _sum: { downloads_count: true } }),
+      prisma.userShopItem.count({ where: { item: live } }),
+      prisma.userShopItem.count({ where: { item: live, purchased_at: { gte: week } } }),
+      prisma.$queryRaw<{ sum: number }[]>`
+        SELECT COALESCE(SUM(i.price), 0)::float8 AS sum FROM "UserShopItem" u JOIN "ShopItem" i ON i.id = u.item_id
+        WHERE i.deleted_at IS NULL AND i.type = ${type} AND i.is_free = false`,
+      prisma.shopItem.findMany({
+        where: live, orderBy: [{ owners: { _count: 'desc' } }, { downloads_count: 'desc' }], take: 10,
+        select: { id: true, name: true, preview_url: true, price: true, is_free: true, status: true, downloads_count: true, _count: { select: { owners: true } } },
+      }),
+      prisma.$queryRaw<{ day: string; value: number }[]>`
+        SELECT to_char(date_trunc('day', u.purchased_at), 'YYYY-MM-DD') AS day, COUNT(*)::int AS value
+        FROM "UserShopItem" u JOIN "ShopItem" i ON i.id = u.item_id
+        WHERE i.deleted_at IS NULL AND i.type = ${type} AND u.purchased_at >= ${since}
+        GROUP BY 1 ORDER BY 1`,
+      prisma.userShopItem.findMany({
+        where: { item: live }, orderBy: { purchased_at: 'desc' }, take: 8,
+        select: { purchased_at: true, user: { select: USER }, item: { select: { id: true, name: true, price: true, is_free: true } } },
+      }),
+    ]);
+    const total = byStatus.reduce((n, r) => n + r._count._all, 0);
+    const published = byStatus.find(r => r.status === 'published')?._count._all ?? 0;
+
+    // Рамки аватара живут ещё и отдельной таблицей (пользовательские, с модерацией)
+    let avatarFrames = null;
+    if (type === 'frame') {
+      const [approved, pending, acquired, equipped, topFrames] = await Promise.all([
+        prisma.avatarFrame.count({ where: { deleted_at: null, status: 'approved' } }),
+        prisma.avatarFrame.count({ where: { deleted_at: null, status: 'pending' } }),
+        prisma.userAvatarFrame.count({ where: { frame: { deleted_at: null } } }),
+        prisma.user.count({ where: { deleted_at: null, profile_frame_id: { not: null } } }),
+        prisma.avatarFrame.findMany({
+          where: { deleted_at: null, status: 'approved' }, orderBy: { owners: { _count: 'desc' } }, take: 10,
+          select: { id: true, name: true, image_url: true, price: true, _count: { select: { owners: true, equippedBy: true } } },
+        }),
+      ]);
+      avatarFrames = {
+        approved, pending, acquired, equipped,
+        top: topFrames.map(f => ({ id: f.id, name: f.name, imageUrl: f.image_url, price: num(f.price), owners: f._count.owners, equipped: f._count.equippedBy })),
+      };
+    }
+    return {
+      type,
+      totals: {
+        items: total, published, hidden: total - published, free, paid: total - free,
+        downloads: downloads._sum.downloads_count ?? 0, owners, ownersWeek, turnover: Math.round(num(turnover[0]?.sum) * 100) / 100,
+      },
+      top: top.map(i => ({ id: i.id, name: i.name, previewUrl: i.preview_url, price: num(i.price), isFree: i.is_free, status: i.status, downloads: i.downloads_count, owners: i._count.owners })),
+      daily,
+      recent: recent.map(r => ({ purchasedAt: r.purchased_at, user: r.user, item: { ...r.item, price: num(r.item.price) } })),
+      avatarFrames,
+    };
+  },
+
   async listItems(opts: { type?: string; status?: string; search?: string; page?: number; limit?: number }) {
     const page = Math.max(1, opts.page ?? 1);
     const limit = Math.min(50, Math.max(1, opts.limit ?? 18));

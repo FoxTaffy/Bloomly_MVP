@@ -12,6 +12,8 @@ export type AdminTab = 'overview' | 'users' | 'posts' | 'reports' | 'support' | 
 // Users tab has five views: the user list, team & roles, frozen accounts, banned accounts, sponsors
 export type UsersView = 'all' | 'team' | 'frozen' | 'archived' | 'sponsors'
 
+export type StatsSubTab = 'network' | 'infra' | 'online'
+
 export function createAdminContext() {
   const auth = useAuthStore()
   const langStore = useLangStore()
@@ -24,6 +26,8 @@ export function createAdminContext() {
   // ── Navigation ──────────────────────────────────────────────────────
   const activeTab = ref<AdminTab>('overview')
   const usersView = ref<UsersView>('all')
+  // Active sub-tab of the Statistics block (the overview cards can jump straight to one)
+  const statsSubTab = ref<StatsSubTab>('network')
   // Header search: AdminView puts the query here, the Users tab consumes it
   const userSearchRequest = ref('')
   const switchTab = (tab: AdminTab, opts?: { usersView?: UsersView }) => {
@@ -82,6 +86,7 @@ export function createAdminContext() {
     myRole, myRoleRank, isOwnerRole, isAdminPlus,
     activeTab, usersView, userSearchRequest, switchTab,
     badges, automodVersion, adminActionError, reportAdminError,
+    statsSubTab,
     stats, isLoadingStats, statsError, fetchStats,
     stickerStats, networkStats, isLoadingStatistics, fetchStatistics,
   }

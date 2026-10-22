@@ -6,12 +6,14 @@ import BIcon from '@/components/BIcon.vue'
 import { formatNum, formatDate } from './adminHelpers'
 import { useAdminContext } from './adminContext'
 import { useMarketT } from './market/strings'
+import ShopStickerStats from './market/ShopStickerStats.vue'
+import ShopTypeStats from './market/ShopTypeStats.vue'
 
 const gt = useMarketT()
 const { confirmDialog } = useConfirm()
 const { badges, reportAdminError } = useAdminContext()
 
-type View = 'overview' | 'items' | 'packs' | 'requests'
+type View = 'overview' | 'stats' | 'items' | 'packs' | 'requests'
 const view = ref<View>('overview')
 const TYPES = ['sticker_pack', 'theme', 'background', 'frame'] as const
 const STATUSES = ['published', 'hidden', 'draft'] as const
@@ -127,6 +129,16 @@ const fetchRequests = async () => {
   } catch { requestsFailed.value = true }
 }
 
+// ── Statistics: one inner tab per kind of goods ─────────────────────────
+type StatsKind = 'sticker' | 'frame' | 'background' | 'theme'
+const STATS_KINDS: { key: StatsKind; label: string; icon: string }[] = [
+  { key: 'sticker', label: 'Стикеры', icon: 'Sticker' },
+  { key: 'frame', label: 'Рамки', icon: 'Frame' },
+  { key: 'background', label: 'Фоны', icon: 'Image' },
+  { key: 'theme', label: 'Темы', icon: 'Palette' },
+]
+const statsKind = ref<StatsKind>('sticker')
+
 const switchView = (v: View) => {
   view.value = v
   if (v === 'items' && !items.value) fetchItems()
@@ -144,17 +156,31 @@ const statusClass = (s: string) => s === 'published' ? 'bg-emerald-500/15 text-e
   <div>
     <!-- Sub-views -->
     <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/4 w-fit flex-wrap">
-      <button v-for="v in (['overview', 'items', 'packs', 'requests'] as const)" :key="v" type="button" @click="switchView(v)"
+      <button v-for="v in (['overview', 'stats', 'items', 'packs', 'requests'] as const)" :key="v" type="button" @click="switchView(v)"
         class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
         :class="view === v ? 'bg-brand-accent/20 text-brand-accent' : 'text-white/40 hover:text-white/70'">
-        <BIcon :name="{ overview: 'LayoutDashboard', items: 'ShoppingBag', packs: 'Sparkles', requests: 'Gift' }[v]" class="w-3.5 h-3.5" />
-        {{ gt({ overview: 'shopOverview', items: 'shopItems', packs: 'shopPacks', requests: 'shopRequests' }[v]) }}
+        <BIcon :name="{ overview: 'LayoutDashboard', stats: 'BarChart2', items: 'ShoppingBag', packs: 'Sparkles', requests: 'Gift' }[v]" class="w-3.5 h-3.5" />
+        {{ v === 'stats' ? 'Статистика' : gt({ overview: 'shopOverview', items: 'shopItems', packs: 'shopPacks', requests: 'shopRequests' }[v]) }}
         <span v-if="v === 'requests' && overview?.stats.packs.pendingAccess" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-400/20 text-rose-300">{{ overview.stats.packs.pendingAccess }}</span>
       </button>
     </div>
 
+    <!-- ═════ Statistics ═════ -->
+    <template v-if="view === 'stats'">
+      <div class="flex gap-2 mb-5 flex-wrap">
+        <button v-for="k in STATS_KINDS" :key="k.key" type="button" @click="statsKind = k.key"
+          class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
+          :class="statsKind === k.key ? 'text-white border border-emerald-500/30' : 'text-white/40 hover:text-white/70 bg-white/3 border border-brand-border'"
+          :style="statsKind === k.key ? 'background:rgba(16,185,129,0.12)' : ''">
+          <BIcon :name="k.icon" class="w-4 h-4" /> {{ k.label }}
+        </button>
+      </div>
+      <ShopStickerStats v-if="statsKind === 'sticker'" />
+      <ShopTypeStats v-else :type="statsKind" />
+    </template>
+
     <!-- ═════ Overview ═════ -->
-    <template v-if="view === 'overview'">
+    <template v-else-if="view === 'overview'">
       <div v-if="overviewFailed" class="rounded-2xl border border-brand-border bg-brand-card flex flex-col items-center gap-3 py-16 text-white/40">
         <p class="text-sm font-semibold">{{ gt('loadFailed') }}</p>
         <button type="button" @click="fetchOverview" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/8 hover:bg-white/12 text-white/70">{{ gt('retry') }}</button>

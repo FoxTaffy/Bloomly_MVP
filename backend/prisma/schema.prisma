@@ -2329,3 +2329,12 @@ model UserAttribution {
   @@index([last_link_id])
   @@index([created_at])
 }
+
+/// Минутный замер числа пользователей онлайн (по открытым WebSocket-сессиям) — для суточной аналитики активности в админке.
+model OnlineSample {
+  id         Int      @id @default(autoincrement())
+  sampled_at DateTime @unique
+  online     Int
+
+  @@index([online])
+}

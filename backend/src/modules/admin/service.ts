@@ -1,3 +1,4 @@
+import { presence } from '../realtime/presence.js';
 import prisma from '../../config/prisma.js';
 import { Prisma } from '@prisma/client';
 import { notificationService } from '../notifications/service.js';
@@ -73,6 +74,7 @@ export const adminService = {
       activeAds,
       frozenUsers, pendingVerification, autoModFlags24h,
       premiumSubscribers,
+      supportOpen, groupsTotal, shopPendingAccess, denActiveListings, denOpenDisputes, tagsTotal, broadcastsTotal,
     ] = await Promise.all([
       prisma.user.count({ where: { deleted_at: null } }),
       prisma.user.count({ where: { deleted_at: null, created_at: { gte: dayAgo } } }),
@@ -91,6 +93,13 @@ export const adminService = {
       prisma.verificationRequest.count({ where: { status: 'pending' } }),
       prisma.autoModLog.count({ where: { created_at: { gte: dayAgo } } }),
       prisma.user.count({ where: { deleted_at: null, subscription_tier: { not: 'free' } } }),
+      prisma.supportTicket.count({ where: { status: 'open' } }),
+      prisma.group.count({ where: { deleted_at: null } }),
+      prisma.stickerAccessRequest.count({ where: { status: 'pending' } }),
+      prisma.dealerListing.count({ where: { status: 'active' } }),
+      prisma.denDispute.count({ where: { status: 'open' } }),
+      prisma.tag.count(),
+      prisma.adminBroadcast.count(),
     ]);
 
     // Posts per day for last 14 days
@@ -134,6 +143,8 @@ export const adminService = {
       moderation: { pendingReports, pendingAds, frozenUsers, pendingVerification, autoModFlags24h },
       ads: { active: activeAds },
       premiumSubscribers,
+      online: presence.onlineCount(),
+      sections: { supportOpen, groupsTotal, shopPendingAccess, denActiveListings, denOpenDisputes, tagsTotal, broadcastsTotal },
       postsHistory: postsHistory.map((r) => ({ day: r.bucket, count: Number(r.count) })),
       roleBreakdown: roleBreakdown.map((r) => ({ role: r.role, count: Number(r.count) })),
       userGrowth: fillMonths(usersByMonth, firstMonth),

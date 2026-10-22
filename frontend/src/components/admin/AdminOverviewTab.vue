@@ -4,20 +4,46 @@ import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import BIcon from '@/components/BIcon.vue'
 import AdminStatisticsTab from './AdminStatisticsTab.vue'
 import AdminAgentsCard from './AdminAgentsCard.vue'
-import { roleLabel, roleColor, formatNum, formatMonthShort } from './adminHelpers'
-import { useAdminContext, type UsersView } from './adminContext'
+import { roleLabel, roleColor, formatNum, formatMonthShort, ROLE_RANK } from './adminHelpers'
+import { useAdminContext, type AdminTab, type StatsSubTab, type UsersView } from './adminContext'
 
 const langStore = useLangStore()
-const { usersView, switchTab, stats, isLoadingStats, statsError, fetchStats, networkStats } = useAdminContext()
+const { usersView, switchTab, myRoleRank, statsSubTab, stats, isLoadingStats, statsError, fetchStats, networkStats } = useAdminContext()
 
-const statCards = computed(() => stats.value ? [
-  { label: langStore.t.adminStatTotalUsers,   icon: 'Users',       color: '#4C67CF', value: formatNum(stats.value.users.total),          sub: `+${stats.value.users.today} ${langStore.t.adminSubToday}` },
-  { label: langStore.t.adminStatNewToday,     icon: 'UserPlus',    color: '#10b981', value: formatNum(stats.value.users.today),          sub: `+${stats.value.users.week} ${langStore.t.adminSubThisWeek}` },
-  { label: langStore.t.adminStatWithSub,      icon: 'Sparkles',    color: '#a78bfa', value: formatNum(stats.value.premiumSubscribers),   sub: `${langStore.t.adminSubOutOf} ${formatNum(stats.value.users.total)} ${langStore.t.adminSubUsersGenitive}` },
-  { label: langStore.t.adminStatTotalPosts,   icon: 'FileText',    color: '#22d3ee', value: formatNum(stats.value.posts.total),          sub: `+${stats.value.posts.week} ${langStore.t.adminSubThisWeek}` },
-  { label: langStore.t.adminStatPostsToday,   icon: 'FilePlus2',   color: '#f59e0b', value: formatNum(stats.value.posts.today),          sub: langStore.t.adminSubPublications },
-  { label: langStore.t.adminStatReportsQueue, icon: 'Flag',        color: '#f43f5e', value: formatNum(stats.value.moderation.pendingReports), sub: langStore.t.adminSubAwaitingReview },
-] : [])
+// Каждая карточка ведёт в раздел админки, откуда взято число; minRole — как у пункта меню
+type CardTarget = { tab: AdminTab; usersView?: UsersView; statsSubTab?: StatsSubTab; minRole: 'moderator' | 'admin' }
+const statCards = computed(() => {
+  const st = stats.value
+  if (!st) return []
+  const sec = st.sections ?? {}
+  const t = langStore.t
+  const cards: (CardTarget & { label: string; icon: string; color: string; value: string; sub: string })[] = [
+    { tab: 'users',   minRole: 'moderator', label: t.adminStatTotalUsers,   icon: 'Users',       color: '#4C67CF', value: formatNum(st.users.total),          sub: `+${st.users.today} ${t.adminSubToday}` },
+    { tab: 'users',   minRole: 'moderator', label: t.adminStatNewToday,     icon: 'UserPlus',    color: '#10b981', value: formatNum(st.users.today),          sub: `+${st.users.week} ${t.adminSubThisWeek}` },
+    { tab: 'finance', minRole: 'admin',     label: t.adminStatWithSub,      icon: 'Sparkles',    color: '#a78bfa', value: formatNum(st.premiumSubscribers),   sub: `${t.adminSubOutOf} ${formatNum(st.users.total)} ${t.adminSubUsersGenitive}` },
+    { tab: 'posts',   minRole: 'moderator', label: t.adminStatTotalPosts,   icon: 'FileText',    color: '#22d3ee', value: formatNum(st.posts.total),          sub: `+${st.posts.week} ${t.adminSubThisWeek}` },
+    { tab: 'posts',   minRole: 'moderator', label: t.adminStatPostsToday,   icon: 'FilePlus2',   color: '#f59e0b', value: formatNum(st.posts.today),          sub: t.adminSubPublications },
+    { tab: 'reports', minRole: 'moderator', label: t.adminStatReportsQueue, icon: 'Flag',        color: '#f43f5e', value: formatNum(st.moderation.pendingReports), sub: t.adminSubAwaitingReview },
+    { tab: 'support', minRole: 'moderator', label: t.adminNavSupport,       icon: 'LifeBuoy',    color: '#4C67CF', value: formatNum(sec.supportOpen ?? 0),    sub: 'открытых обращений' },
+    { tab: 'groups',  minRole: 'moderator', label: t.adminNavGroupsEvents,  icon: 'LayoutGrid',  color: '#818cf8', value: formatNum(sec.groupsTotal ?? 0),    sub: 'групп на платформе' },
+    { tab: 'ads',     minRole: 'admin',     label: t.adLabel,               icon: 'Megaphone',   color: '#f97316', value: formatNum(st.ads?.active ?? 0),     sub: `${st.moderation.pendingAds} на проверке` },
+    { tab: 'shop',    minRole: 'admin',     label: 'Bloomly Shop',          icon: 'ShoppingBag', color: '#f59e0b', value: formatNum(sec.shopPendingAccess ?? 0), sub: 'заявок на доступ к стикерам' },
+    { tab: 'den',     minRole: 'admin',     label: "Dealers' Den",          icon: 'Store',       color: '#fb923c', value: formatNum(sec.denActiveListings ?? 0), sub: `${sec.denOpenDisputes ?? 0} открытых споров` },
+    { tab: 'tags',    minRole: 'moderator', label: 'Синонимы тегов',        icon: 'Hash',        color: '#94a3b8', value: formatNum(sec.tagsTotal ?? 0),      sub: 'тегов в системе' },
+    { tab: 'updates', minRole: 'admin',     label: t.adminNavBroadcasts,    icon: 'Send',        color: '#4C67CF', value: formatNum(sec.broadcastsTotal ?? 0), sub: 'отправлено рассылок' },
+    { tab: 'overview', statsSubTab: 'online', minRole: 'admin', label: 'Онлайн сейчас', icon: 'Activity', color: '#34d399', value: formatNum(st.online ?? 0), sub: 'активность по часам' },
+  ]
+  return cards.filter(c => myRoleRank.value >= ROLE_RANK[c.minRole])
+})
+
+const openCard = (c: CardTarget) => {
+  if (c.statsSubTab) {
+    statsSubTab.value = c.statsSubTab
+    document.getElementById('admin-statistics')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    return
+  }
+  switchTab(c.tab, { usersView: c.usersView })
+}
 
 // ── Growth charts — cumulative totals reconstructed from last-12-months deltas
 
@@ -156,10 +182,10 @@ const modSnapshot = computed(() => stats.value ? [
 
       <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">{{ langStore.t.adminGeneralStats }}</h2>
       <!-- Stat cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-        <div v-for="sc in statCards" :key="sc.label"
-          class="relative rounded-2xl p-4 border border-brand-border bg-brand-card hover:border-white/20 transition-all duration-200">
-          <div class="flex items-center justify-between mb-3">
+      <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-6">
+        <button v-for="sc in statCards" :key="sc.label" type="button" @click="openCard(sc)"
+          class="group relative text-left rounded-2xl p-4 border border-brand-border bg-brand-card hover:border-white/25 hover:-translate-y-0.5 transition-all duration-200">
+          <div class="flex items-center justify-between mb-3 gap-2">
             <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ sc.label }}</p>
             <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" :style="`background:${sc.color}20`">
               <BIcon :name="sc.icon" class="w-3.5 h-3.5" :style="`color:${sc.color}`" />
@@ -167,7 +193,8 @@ const modSnapshot = computed(() => stats.value ? [
           </div>
           <p class="text-2xl font-black text-white">{{ sc.value }}</p>
           <p class="text-xs font-semibold mt-1" :style="`color:${sc.color}`">{{ sc.sub }}</p>
-        </div>
+          <BIcon name="ArrowUpRight" class="absolute right-3 bottom-3 w-3.5 h-3.5 text-white/15 group-hover:text-white/50 transition-colors" />
+        </button>
       </div>
 
       <!-- Growth charts -->
@@ -367,7 +394,7 @@ const modSnapshot = computed(() => stats.value ? [
     </template>
 
     <!-- Statistics — merged from the former separate tab, same look -->
-    <div class="flex items-center gap-2 mt-10 mb-4">
+    <div id="admin-statistics" class="flex items-center gap-2 mt-10 mb-4 scroll-mt-20">
       <BIcon name="BarChart2" class="w-4 h-4 text-emerald-400" />
       <h2 class="text-xs font-extrabold text-white/50 tracking-[0.15em] uppercase">{{ langStore.t.statsTab }}</h2>
     </div>
