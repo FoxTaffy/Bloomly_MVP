@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import BIcon from '@/components/BIcon.vue'
 import AdminStatisticsTab from './AdminStatisticsTab.vue'
+import AdminAgentsCard from './AdminAgentsCard.vue'
 import { roleLabel, roleColor, formatNum, formatMonthShort } from './adminHelpers'
 import { useAdminContext, type UsersView } from './adminContext'
 
@@ -117,6 +118,8 @@ const modSnapshot = computed(() => stats.value ? [
 
 <template>
   <div>
+    <AdminAgentsCard />
+
     <!-- Skeleton -->
     <div v-if="isLoadingStats" class="stack-y-5">
       <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">

@@ -1434,11 +1434,35 @@ model VerificationRequest {
   evidence_urls     String[]  @default([])
   evidence_text     String?   @db.VarChar(2000) // optional written explanation, alongside or instead of uploaded evidence
   badge_type        String?   @db.VarChar(30) // verified, artist, master, event
+  // ── Агент верификации (modules/agents/verification) ───────────────────────
+  decided_by_agent  Boolean   @default(false) // решение принял агент; reviewed_by у такой заявки пуст
+  agent_confidence  Int?      // 0–100, уверенность вердикта
+  agent_report      Json?     // сводка, сигналы, сработавшие проверки, модель — то, что видит модератор
+  agent_attempts    Int       @default(0)
+  agent_last_error  String?   @db.VarChar(300)
+  agent_checked_at  DateTime?
+  evidence_hashes   String[]  @default([]) // sha256 загруженных файлов: одно и то же доказательство у разных аккаунтов = подмена
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([status])
+  @@index([evidence_hashes], type: Gin)
+}
+
+/// Журнал агентов-наблюдателей админ-панели: по записи на изменение состояния вкладки, а не на каждый проход.
+model AgentLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent       String   @db.VarChar(40)  // reports, ads, support, verification, ...
+  tab         String   @db.VarChar(30)  // вкладка админки, за которой закреплён агент
+  level       String   @db.VarChar(10)  // ok | info | warn | alert
+  summary     String   @db.VarChar(300)
+  details     Json?
+  fingerprint String   @db.VarChar(64)  // хэш level+summary: повтор того же состояния не плодит записи
+  created_at  DateTime @default(now())
+
+  @@index([agent, created_at(sort: Desc)])
+  @@index([created_at])
 }
 
 // ── Dealers Den ───────────────────────────────────────────────────────────────

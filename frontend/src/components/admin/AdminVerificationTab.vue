@@ -55,6 +55,47 @@ const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason
   } catch (e) { reportAdminError(e) } finally { delete verBusy.value[id] }
 }
 
+// ── Агент верификации ─────────────────────────────────────────────────
+const agentInfo = ref<{ mode: string; model: string; llmConfigured: boolean } | null>(null)
+const agentLoadFailed = ref(false)
+const fetchAgentInfo = async () => {
+  try {
+    const res = await api.get('/agents')
+    agentInfo.value = res.data?.data?.verification ?? null
+    agentLoadFailed.value = false
+  } catch { agentLoadFailed.value = true }
+}
+const agentModeLabel = computed(() => ({
+  auto: 'Агент сам принимает решения',
+  shadow: 'Тестовый режим: агент только считает вердикт, решения принимаете вы',
+  off: 'Агент выключен: все заявки разбираются вручную',
+}[agentInfo.value?.mode ?? 'off']))
+const agentModeTone = computed(() => ({
+  auto: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  shadow: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  off: 'text-white/50 bg-white/5 border-white/10',
+}[agentInfo.value?.mode ?? 'off']))
+
+// Заявка, которую агент оставил человеку (ссылки на соцсети, видео)
+const isEscalated = (req: any) => req.status === 'pending' && req.agent_report?.outcome === 'escalated'
+const agentSignals = (req: any): string[] => req.agent_report?.verdict?.signals ?? []
+const agentSummary = (req: any): string => req.agent_report?.verdict?.summary || req.agent_report?.summary || ''
+
+// Обжалование решения агента: галочка снимается или выдаётся сразу
+const overrideAgent = async (req: any) => {
+  const action = req.status === 'approved' ? 'reject' : 'approve'
+  const reason = action === 'reject' ? window.prompt(langStore.t.adminReasonPromptLabel) : ''
+  if (reason === null) return
+  if (verBusy.value[req.id]) return
+  verBusy.value[req.id] = true
+  try {
+    await api.patch(`/verification/admin/requests/${req.id}/override`, { action, reason: reason || undefined })
+    req.status = action === 'approve' ? 'approved' : 'rejected'
+    req.decided_by_agent = false
+    if (verFilter.value !== '') verRequests.value = verRequests.value.filter(r => r.id !== req.id)
+  } catch (e) { reportAdminError(e) } finally { delete verBusy.value[req.id] }
+}
+
 // `prompt()` cannot be called directly inside a template expression — Vue's compiler
 // only resolves a small allowlist of browser globals there (window.prompt isn't in
 // it), so a bare `prompt(...)` in `@click` silently resolves to `undefined` and
@@ -112,12 +153,19 @@ const verTypeColors: Record<string, string> = {
   programmer: 'text-fuchsia-400 bg-fuchsia-400/10 border-fuchsia-400/20',
 }
 
-onActivated(() => { if (!verRequests.value.length) fetchVerRequests() })
+onActivated(() => { fetchAgentInfo(); if (!verRequests.value.length) fetchVerRequests() })
 watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r.status === 'pending').length })
 </script>
 
 <template>
   <div>
+    <div v-if="agentInfo" class="mb-4 rounded-2xl border px-4 py-3 flex items-center gap-3 flex-wrap" :class="agentModeTone">
+      <BIcon name="Bot" class="w-4 h-4 shrink-0" />
+      <p class="text-xs font-bold flex-1 min-w-0">{{ agentModeLabel }}</p>
+      <span v-if="agentInfo.mode !== 'off'" class="text-[11px] font-semibold opacity-70">{{ agentInfo.model }}</span>
+      <span v-if="!agentInfo.llmConfigured" class="text-[11px] font-semibold text-rose-400">Нет ANTHROPIC_API_KEY</span>
+    </div>
+
     <div class="flex gap-2 mb-5 flex-wrap">
       <button v-for="s in (['', 'pending', 'approved', 'rejected'] as const)" :key="s"
         @click="verFilter = s; fetchVerRequests()"
@@ -204,6 +252,24 @@ watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r
               </span>
             </div>
 
+            <!-- Агент верификации -->
+            <div v-if="req.agent_report" class="rounded-xl border p-3 flex flex-col gap-1.5 min-w-0"
+              :class="isEscalated(req) ? 'border-amber-500/25 bg-amber-500/5' : 'border-white/8 bg-white/3'">
+              <div class="flex items-center gap-2 flex-wrap">
+                <BIcon name="Bot" class="w-3.5 h-3.5 text-white/50 shrink-0" />
+                <span class="text-[11px] font-extrabold uppercase tracking-wide text-white/50">Агент</span>
+                <span v-if="req.agent_confidence != null" class="text-[11px] font-bold text-white/70">уверенность {{ req.agent_confidence }}%</span>
+                <span v-if="isEscalated(req)" class="text-[11px] font-bold text-amber-400">нужен модератор</span>
+                <span v-else-if="req.agent_report.shadow" class="text-[11px] font-bold text-amber-400">тест: {{ req.agent_report.would === 'approve' ? 'одобрил бы' : 'отклонил бы' }}</span>
+                <span v-else-if="req.decided_by_agent" class="text-[11px] font-bold text-blue-400">решение агента</span>
+              </div>
+              <p v-if="agentSummary(req)" class="text-xs text-white/70 leading-relaxed wrap-break-word">{{ agentSummary(req) }}</p>
+              <ul v-if="agentSignals(req).length" class="text-[11px] text-white/45 list-disc pl-4 space-y-0.5">
+                <li v-for="(sig, i) in agentSignals(req)" :key="i" class="wrap-break-word">{{ sig }}</li>
+              </ul>
+            </div>
+            <p v-else-if="req.agent_last_error && req.status === 'pending'" class="text-[11px] text-rose-400/80">Агент не смог разобрать заявку: {{ req.agent_last_error }}</p>
+
             <!-- Доказательства -->
             <div v-if="req.evidence_urls?.length || req.evidence_text" class="rounded-xl bg-black/15 border border-white/5 p-3 flex flex-col gap-2.5 min-w-0">
               <p v-if="req.evidence_text" class="text-sm text-white/75 whitespace-pre-line wrap-break-word leading-relaxed">{{ req.evidence_text }}</p>
@@ -235,6 +301,16 @@ watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r
             <button @click="rejectVerRequest(req.id)" :disabled="verBusy[req.id]"
               class="disabled:opacity-50 disabled:pointer-events-none flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-1.5">
               <BIcon name="X" class="w-3.5 h-3.5" /> {{ langStore.t.adminRejectBtn }}
+            </button>
+          </div>
+          <div v-else-if="req.decided_by_agent" class="mt-auto border-t border-white/6 bg-white/2 pl-5 pr-4 py-3">
+            <button @click="overrideAgent(req)" :disabled="verBusy[req.id]"
+              class="disabled:opacity-50 disabled:pointer-events-none w-full px-3 py-2 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-1.5"
+              :class="req.status === 'approved'
+                ? 'bg-rose-500/10 border-rose-500/15 text-rose-400 hover:bg-rose-500/20'
+                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'">
+              <BIcon :name="req.status === 'approved' ? 'X' : 'Check'" class="w-3.5 h-3.5" />
+              {{ req.status === 'approved' ? 'Отменить одобрение агента' : 'Одобрить вопреки агенту' }}
             </button>
           </div>
         </article>

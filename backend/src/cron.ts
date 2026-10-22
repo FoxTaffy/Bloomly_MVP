@@ -9,6 +9,8 @@ import { cleanupSoftDeletedRows, cleanupExpiredStories } from './jobs/cleanup.js
 import { logger } from './lib/logger.js';
 import { paymentsService } from './modules/payments/service.js';
 import { refreshBlmRate } from './modules/payments/rate.js';
+import { processPendingVerifications } from './modules/agents/verification/agent.js';
+import { runSupervisor } from './modules/agents/supervisor.js';
 
 interface CronJob {
   name: string;
@@ -54,6 +56,15 @@ const JOBS: CronJob[] = [
     const published = await scheduledPostService.publishDueOnes();
     if (published > 0) logger.info(`[CRON] Scheduled posts: published ${published} post(s)`);
   } },
+
+  // Агент верификации: разбирает новые заявки (режим VERIFICATION_AGENT_MODE: off | shadow | auto)
+  { name: 'verification agent', schedule: '*/2 * * * *', run: async () => {
+    const done = await processPendingVerifications();
+    if (done.length > 0) logger.info(`[CRON] Verification agent: ${done.map((r) => r.status).join(', ')}`);
+  } },
+
+  // Субагенты вкладок админки: следят за очередями и пишут в журнал только изменения состояния
+  { name: 'admin tab agents', schedule: '*/10 * * * *', run: runSupervisor },
 
   // Оплаченные периоды подписки: истёкшие → free (бессрочные, выданные админом, не трогаются)
   { name: 'subscription expiry', schedule: '*/10 * * * *', run: async () => {

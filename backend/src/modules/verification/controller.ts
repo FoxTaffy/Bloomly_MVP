@@ -6,10 +6,13 @@ import {
   requestVerification,
   adminGetRequests,
   adminReviewRequest,
+  adminOverrideAgentDecision,
   getProfileCompleteness,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
 import { errMessage } from '../../lib/httpErrors.js';
+import { reviewVerificationRequest } from '../agents/verification/agent.js';
+import { logger } from '../../lib/logger.js';
 
 // GET /api/verification/status
 export async function getStatusHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -38,6 +41,8 @@ export async function requestHandler(request: FastifyRequest, reply: FastifyRepl
   const { verificationType, evidenceUrls, socialLinks, evidenceText } = request.body as any;
   try {
     const result = await requestVerification(userId, verificationType, evidenceUrls, socialLinks, evidenceText);
+    // Агент берёт заявку сразу, не дожидаясь cron; сбой здесь не должен ломать подачу (cron повторит).
+    void reviewVerificationRequest(result.request.id).catch((err) => logger.error({ err }, '[verification-agent] быстрый разбор не удался'));
     return reply.send({ success: true, data: result });
   } catch (err) {
     return reply.code(400).send({ success: false, error: { message: errMessage(err) } });
@@ -76,6 +81,31 @@ export async function adminReviewHandler(request: FastifyRequest, reply: Fastify
       result.user_id ?? user.id,
       action === 'approve' ? 'verify_profile' : 'reject_verification',
       action === 'approve' ? 'Профиль верифицирован' : (reason || 'Заявка на верификацию отклонена'),
+    ).catch(() => {});
+    return reply.send({ success: true, data: result });
+  } catch (err) {
+    return reply.code(400).send({ success: false, error: { message: errMessage(err) } });
+  }
+}
+
+// PATCH /api/verification/admin/requests/:id/override — обжалование решения агента
+export async function adminOverrideHandler(request: FastifyRequest, reply: FastifyReply) {
+  const user = request.user as any;
+  if (!isModerator(user.role)) {
+    return reply.code(403).send({ success: false, error: { message: 'Forbidden' } });
+  }
+  const { id } = request.params as any;
+  const { action, reason } = request.body as any;
+  if (!['approve', 'reject'].includes(action)) {
+    return reply.code(400).send({ success: false, error: { message: 'Invalid action' } });
+  }
+  try {
+    const result = await adminOverrideAgentDecision(id, action, user.id, reason);
+    await logStaffAction(
+      user.id,
+      result.user_id,
+      action === 'approve' ? 'verify_profile' : 'reject_verification',
+      `Решение агента изменено: ${reason || (action === 'approve' ? 'одобрено' : 'отклонено')}`.slice(0, 300),
     ).catch(() => {});
     return reply.send({ success: true, data: result });
   } catch (err) {

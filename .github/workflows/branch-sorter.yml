@@ -1,0 +1,50 @@
+name: Branch sorter
+
+# Раскладывает PR и задачи по областям: метки type:* / area:* и подсказка с логичным названием ветки.
+# Код PR не исполняется: берём только скрипт из базовой ветки и список файлов через API.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  sort:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # базовая ветка, не head PR
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { classify } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/agents/lib/branches.mjs`);
+            const isPr = !!context.payload.pull_request;
+            const item = context.payload.pull_request ?? context.payload.issue;
+            const labels = item.labels.map((l) => l.name);
+            let paths = [];
+            if (isPr) {
+              paths = (await github.paginate(github.rest.pulls.listFiles, { ...context.repo, pull_number: item.number, per_page: 100 })).map((f) => f.filename);
+            }
+            const { type, area, branch } = classify({ title: item.title, labels, paths });
+
+            const want = [`type:${type}`, `area:${area}`];
+            for (const name of want) {
+              try { await github.rest.issues.getLabel({ ...context.repo, name }); }
+              catch { await github.rest.issues.createLabel({ ...context.repo, name, color: name.startsWith('type:') ? '1d76db' : 'c5def5' }); }
+            }
+            // Старые type/area-метки заменяем, чтобы после правки заголовка не копились противоречивые.
+            const stale = labels.filter((l) => /^(type|area):/.test(l) && !want.includes(l));
+            for (const name of stale) await github.rest.issues.removeLabel({ ...context.repo, issue_number: item.number, name }).catch(() => {});
+            await github.rest.issues.addLabels({ ...context.repo, issue_number: item.number, labels: want });
+
+            if (!isPr || context.payload.pull_request.head.ref === branch) return;
+            const marker = '<!-- branch-sorter -->';
+            const body = `${marker}\n🌿 **Branch sorter:** по составу изменений это \`${branch}\` (тип: ${type}, область: ${area}). Ветка PR — \`${item.head.ref}\`. Менять ничего не обязательно; если изменения относятся к разным областям, лучше разнести их по отдельным PR.`;
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: item.number });
+            const mine = comments.find((c) => c.body?.startsWith(marker));
+            if (mine) await github.rest.issues.updateComment({ ...context.repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ ...context.repo, issue_number: item.number, body });

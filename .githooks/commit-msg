@@ -1,0 +1,4 @@
+#!/bin/sh
+[ -n "$SKIP_AGENTS" ] && exit 0
+root=$(git rev-parse --show-toplevel) || exit 1
+node "$root/scripts/agents/commit-msg.mjs" "$1"

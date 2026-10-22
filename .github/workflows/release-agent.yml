@@ -1,0 +1,50 @@
+name: Release agent
+
+# Крупное обновление (feat-коммиты на 6+ файлов или breaking change) → пост в Discussions с меткой updates.
+# Мелкие исправления поста не создают. Ветки задаются переменной репозитория RELEASE_BRANCHES (через пробел), по умолчанию main.
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      range:
+        description: 'Диапазон коммитов A..B'
+        required: true
+
+permissions:
+  contents: read
+  discussions: write
+
+jobs:
+  release-notes:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(format(' {0} ', vars.RELEASE_BRANCHES || 'main'), format(' {0} ', github.ref_name))
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build notes
+        id: notes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RANGE_INPUT: ${{ inputs.range }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          zero=0000000000000000000000000000000000000000
+          if [ -n "$RANGE_INPUT" ]; then range="$RANGE_INPUT"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "$zero" ]; then range="$BEFORE..$GITHUB_SHA"
+          else range="$GITHUB_SHA~1..$GITHUB_SHA"; fi
+          node scripts/agents/release-notes.mjs "$range" > "$RUNNER_TEMP/release.json"
+          node -e '
+            const j = JSON.parse(require("fs").readFileSync(process.env.RUNNER_TEMP + "/release.json", "utf8"));
+            require("fs").writeFileSync(process.env.RUNNER_TEMP + "/body.md", j.body);
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `post=${j.post}\nscale=${j.scale}\ntitle=${j.title}\n`);
+          '
+      - name: Post to Discussions
+        if: steps.notes.outputs.post == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TITLE: ${{ steps.notes.outputs.title }}
+        run: node scripts/agents/post-discussion.mjs --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"

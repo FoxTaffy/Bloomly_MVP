@@ -1,0 +1,7 @@
+#!/bin/sh
+# Агент репозитория: 1) не даёт закоммитить секреты, 2) поднимает номер сборки.
+# Отключить на один коммит: SKIP_AGENTS=1 git commit …
+[ -n "$SKIP_AGENTS" ] && exit 0
+root=$(git rev-parse --show-toplevel) || exit 1
+node "$root/scripts/agents/secret-scan.mjs" --staged || exit 1
+node "$root/scripts/agents/version-bump.mjs" || exit 1

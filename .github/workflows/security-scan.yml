@@ -1,0 +1,40 @@
+name: Security scan
+
+# Репозиторий публичный: каждый пуш и PR проверяются на токены, пароли и .env до того, как их увидят посторонние.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '17 3 * * 1' # раз в неделю — вся история
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Scan new commits
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        env:
+          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          zero=0000000000000000000000000000000000000000
+          if [ -n "$BASE_SHA" ]; then range="$BASE_SHA..$HEAD_SHA"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "$zero" ]; then range="$BEFORE..$HEAD_SHA"
+          else range="$HEAD_SHA"; fi   # новая ветка: вся её история
+          node scripts/agents/secret-scan.mjs --range $range
+      - name: Scan working tree
+        run: node scripts/agents/secret-scan.mjs --tree
+      - name: Scan full history
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: node scripts/agents/secret-scan.mjs --history

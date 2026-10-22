@@ -1,0 +1,10 @@
+#!/bin/sh
+# Перед публикацией проверяем добавляемые коммиты на секреты (репозиторий публичный).
+[ -n "$SKIP_AGENTS" ] && exit 0
+root=$(git rev-parse --show-toplevel) || exit 1
+zero=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then range="$local_sha --not --remotes"; else range="$remote_sha..$local_sha"; fi
+  node "$root/scripts/agents/secret-scan.mjs" --range $range || exit 1
+done

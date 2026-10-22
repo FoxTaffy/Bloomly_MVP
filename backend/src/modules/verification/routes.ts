@@ -7,6 +7,7 @@ import {
   requestHandler,
   adminRequestsHandler,
   adminReviewHandler,
+  adminOverrideHandler,
 } from './controller.js';
 
 export async function verificationRoutes(fastify: FastifyInstance) {
@@ -21,4 +22,5 @@ export async function verificationRoutes(fastify: FastifyInstance) {
   // Admin endpoints
   fastify.get<RouteGenericOf<typeof adminRequestsHandler>>('/admin/requests',       auth, adminRequestsHandler);
   fastify.patch<RouteGenericOf<typeof adminReviewHandler>>('/admin/requests/:id', auth, adminReviewHandler);
+  fastify.patch<RouteGenericOf<typeof adminOverrideHandler>>('/admin/requests/:id/override', auth, adminOverrideHandler);
 }

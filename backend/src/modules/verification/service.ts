@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { assertOwnedMedia } from '../media/service.js';
 import { normalizeSafeLink } from '../../lib/safeLink.js';
@@ -17,7 +18,9 @@ import { normalizeSafeLink } from '../../lib/safeLink.js';
  *   - programmer: Screenshot of source code/repo or project demo with "signa"
  *
  * Rules:
- *   - NO auto-approve. All requests go to manual admin review.
+ *   - Заявки разбирает агент (modules/agents/verification): решения принимает он, человек — только
+ *     для того, что машине не проверить (ссылки на соцсети, видео), и для обжалования решений агента.
+ *     requestVerification сам по-прежнему ничего не одобряет: заявка всегда создаётся как pending.
  *   - Verification is bound to user UUID, non-transferable.
  *   - Profile must be ≥ 80% complete to submit (avatar, fursona tab filled, email).
  */
@@ -96,9 +99,12 @@ export async function getProfileCompleteness(userId: string): Promise<ProfileCom
   return { hasAvatar, hasEmail, hasFursonaName, hasFursonaSpecies, hasFursonaGender, hasFursonaDescription, hasBio, percentage, canSubmit };
 }
 
-const MIN_ACCOUNT_AGE = 14;
-const MIN_POSTS = 3;
-const MIN_FOLLOWERS = 5;
+export const MIN_ACCOUNT_AGE = 14;
+export const MIN_POSTS = 3;
+export const MIN_FOLLOWERS = 5;
+
+/** Пауза после отказа: иначе агента можно перебором подбирать «проходной» вариант материалов. */
+export const RESUBMIT_COOLDOWN_HOURS = 24;
 
 export async function checkCriteria(userId: string): Promise<VerificationCriteria> {
   const user = await prisma.user.findUnique({
@@ -170,6 +176,18 @@ export async function requestVerification(
   });
   if (pending) throw new Error('Already have pending request');
 
+  const lastRejected = await prisma.verificationRequest.findFirst({
+    where: { user_id: userId, status: 'rejected' },
+    orderBy: { reviewed_at: 'desc' },
+    select: { reviewed_at: true },
+  });
+  if (lastRejected?.reviewed_at) {
+    const waitMs = lastRejected.reviewed_at.getTime() + RESUBMIT_COOLDOWN_HOURS * 3600_000 - Date.now();
+    if (waitMs > 0) {
+      throw new Error(`Новую заявку можно подать через ${Math.ceil(waitMs / 3600_000)} ч. после отказа`);
+    }
+  }
+
   // Check profile completeness (≥ 80%)
   const completeness = await getProfileCompleteness(userId);
   if (!completeness.canSubmit) {
@@ -211,7 +229,7 @@ export async function requestVerification(
   // Determine badge type based on verification type
   const badgeType = verificationType;
 
-  // Create the request — ALWAYS pending, NO auto-approve
+  // Create the request — ALWAYS pending; решение принимает агент отдельным шагом (cron / сразу после подачи)
   const request = await prisma.verificationRequest.create({
     data: {
       user_id: userId,
@@ -225,7 +243,7 @@ export async function requestVerification(
       has_bio: criteria.hasBio,
       has_email: criteria.hasEmail,
       follower_count: criteria.followerCount,
-      status: 'pending', // NEVER auto-approve
+      status: 'pending',
     },
   });
 
@@ -288,8 +306,10 @@ export async function adminGetRequests(status?: string, page = 1, limit = 20) {
 export async function adminReviewRequest(
   requestId: string,
   action: 'approve' | 'reject',
-  reviewerId: string,
+  /** null — решение принял агент (в reviewed_by пишется NULL, отметка — decided_by_agent). */
+  reviewerId: string | null,
   reason?: string,
+  extra: Pick<Prisma.VerificationRequestUpdateManyMutationInput, 'decided_by_agent' | 'agent_confidence' | 'agent_report' | 'evidence_hashes'> = {},
 ) {
   return prisma.$transaction(async (tx) => {
     const req = await tx.verificationRequest.findUnique({ where: { id: requestId } });
@@ -302,19 +322,65 @@ export async function adminReviewRequest(
         reviewed_at: reviewedAt,
         reviewed_by: reviewerId,
         reason: reason?.trim().slice(0, 500) || null,
+        ...extra,
       },
     });
     if (updated.count !== 1) throw new Error('Request already reviewed');
     if (action === 'approve') {
-      await tx.user.update({
-        where: { id: req.user_id },
-        data: {
-          is_verified: true,
-          verified_at: reviewedAt,
-          verification_type: req.verification_type,
-          badge_type: req.badge_type || 'verified',
-        },
-      });
+      await grantBadge(tx, req.user_id, req.verification_type, req.badge_type, reviewedAt);
+    }
+    return { success: true, user_id: req.user_id };
+  });
+}
+
+async function grantBadge(tx: Prisma.TransactionClient, userId: string, type: string | null, badge: string | null, at: Date) {
+  await tx.user.update({
+    where: { id: userId },
+    data: { is_verified: true, verified_at: at, verification_type: type, badge_type: badge || 'verified' },
+  });
+}
+
+/**
+ * Обжалование решения агента: модератор меняет вердикт в любую сторону. Одобрение, отозванное этим
+ * способом, снимает галочку; отказ, отменённый этим способом, выдаёт её. Решение теперь человеческое
+ * (decided_by_agent = false), отчёт агента остаётся в заявке как справка.
+ */
+export async function adminOverrideAgentDecision(
+  requestId: string,
+  action: 'approve' | 'reject',
+  reviewerId: string,
+  reason?: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const req = await tx.verificationRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new Error('Request not found');
+    if (!req.decided_by_agent) throw new Error('Решение принято не агентом — используйте обычную проверку заявки');
+    const target = action === 'approve' ? 'approved' : 'rejected';
+    if (req.status === target) throw new Error('Заявка уже в этом статусе');
+
+    const at = new Date();
+    const updated = await tx.verificationRequest.updateMany({
+      // status в условии: два модератора, нажавшие одновременно, не применят вердикт дважды
+      where: { id: requestId, status: req.status, decided_by_agent: true },
+      data: { status: target, decided_by_agent: false, reviewed_by: reviewerId, reviewed_at: at, reason: reason?.trim().slice(0, 500) || null },
+    });
+    if (updated.count !== 1) throw new Error('Заявка уже изменена');
+
+    if (action === 'approve') {
+      await grantBadge(tx, req.user_id, req.verification_type, req.badge_type, at);
+    } else {
+      // Снимаем галочку только если она выдана именно по этой заявке, а не по более новой.
+      const user = await tx.user.findUnique({ where: { id: req.user_id }, select: { verification_type: true, is_verified: true, badge_type: true } });
+      if (user?.is_verified && user.verification_type === req.verification_type) {
+        await tx.user.update({
+          where: { id: req.user_id },
+          data: {
+            is_verified: false, verified_at: null, verification_type: null,
+            // Временный бейдж (топ недели Dealers Den) принадлежит не верификации — его не трогаем.
+            ...(user.badge_type === (req.badge_type || 'verified') ? { badge_type: null } : {}),
+          },
+        });
+      }
     }
     return { success: true, user_id: req.user_id };
   });
