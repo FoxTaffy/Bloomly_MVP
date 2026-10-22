@@ -13,7 +13,6 @@ import { listingShop } from '@/lib/dealerShop'
 import AppHeader          from '@/components/AppHeader.vue'
 import AppSidebar         from '@/components/AppSidebar.vue'
 import BIcon              from '@/components/BIcon.vue'
-import DenWishlistButton  from '@/components/DenWishlistButton.vue'
 import CommissionOrderPanel from '@/components/CommissionOrderPanel.vue'
 import CommissionInfoBlocks from '@/components/CommissionInfoBlocks.vue'
 import CommissionReviews   from '@/components/CommissionReviews.vue'
@@ -235,6 +234,25 @@ const kindTheme = computed(() => KIND_THEME.value[(listing.value?.listing_kind ?
 // ── Wishlist ──────────────────────────────────────────────────────────────────
 const isWishlisted  = ref(false)
 const wishlistCount = ref(0)
+const bookmarkBusy  = ref(false)
+
+// Закладка товара: тот же список, что и сердечко в каталоге, показывается в разделе «Закладки»
+async function toggleBookmark() {
+  if (!listing.value || bookmarkBusy.value) return
+  bookmarkBusy.value = true
+  const was = isWishlisted.value
+  isWishlisted.value = !was
+  wishlistCount.value = Math.max(0, wishlistCount.value + (was ? -1 : 1))
+  try {
+    if (was) await store.removeFromWishlist(listing.value.id)
+    else await store.addToWishlist(listing.value.id)
+  } catch {
+    isWishlisted.value = was
+    wishlistCount.value = Math.max(0, wishlistCount.value + (was ? 1 : -1))
+  } finally {
+    bookmarkBusy.value = false
+  }
+}
 
 // ── Reviews ───────────────────────────────────────────────────────────────────
 const reviews         = ref<DenReview[]>([])
@@ -540,11 +558,22 @@ async function submitReport() {
               <BIcon name="Flag" class="w-3.5 h-3.5" /> {{ langStore.t.report }}
             </button>
 
-            <!-- Share (always) -->
-            <button @click="shareListing"
-              class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white/40 bg-brand-card border border-brand-border rounded-2xl transition-all hover:text-white hover:border-white/20 ml-auto">
-              <BIcon name="Share2" class="w-3.5 h-3.5" /> {{ langStore.t.share }}
-            </button>
+            <!-- Bookmark + Share -->
+            <div class="flex items-center gap-2 ml-auto">
+              <button v-if="auth.user" @click="toggleBookmark" :disabled="bookmarkBusy"
+                :title="isWishlisted ? langStore.t.unbookmarkListing : langStore.t.bookmarkListing"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-bold border rounded-2xl transition-all disabled:opacity-60"
+                :class="isWishlisted
+                  ? 'text-brand-yellow bg-brand-yellow/10 border-brand-yellow/30'
+                  : 'text-white/40 bg-brand-card border-brand-border hover:text-white hover:border-white/20'">
+                <BIcon name="Bookmark" class="w-3.5 h-3.5" :class="isWishlisted ? 'fill-current' : ''" />
+                {{ isWishlisted ? langStore.t.bookmarkedListing : langStore.t.bookmarkListing }}
+              </button>
+              <button @click="shareListing"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white/40 bg-brand-card border border-brand-border rounded-2xl transition-all hover:text-white hover:border-white/20">
+                <BIcon name="Share2" class="w-3.5 h-3.5" /> {{ langStore.t.share }}
+              </button>
+            </div>
           </div>
 
           <!-- ═══ MAIN LAYOUT ═══════════════════════════════════════════════ -->
@@ -641,12 +670,6 @@ async function submitReport() {
                     </div>
                   </RouterLink>
                   <div class="flex items-center gap-2">
-                    <DenWishlistButton
-                      :listingId="listing.id"
-                      :initialWishlisted="isWishlisted"
-                      :count="wishlistCount"
-                      @change="v => { isWishlisted = v; wishlistCount += v ? 1 : -1 }"
-                    />
                     <button v-if="auth.user && auth.user.id !== listing.seller_id"
                       @click="contactSeller"
                       class="flex items-center gap-2 px-4 py-2 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:opacity-90"

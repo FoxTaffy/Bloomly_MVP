@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { bookmarksService } from './service.js';
+import { requestIsAdult } from '../../lib/age.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -84,6 +85,34 @@ export const getBookmarkedGroupsHandler = async (
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Failed to fetch bookmarked groups';
     return reply.code(500).send({ success: false, data: null, error: { code: 'BOOKMARKED_GROUPS_ERROR', message } });
+  }
+};
+
+export const toggleListingBookmarkHandler = async (
+  request: FastifyRequest<{ Params: { listingId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await bookmarksService.toggleListingBookmark(userId, request.params.listingId, requestIsAdult(request.user));
+    return reply.send({ success: true, data: result, error: null });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Failed to toggle listing bookmark';
+    return reply.code(400).send({ success: false, data: null, error: { code: 'LISTING_BOOKMARK_ERROR', message } });
+  }
+};
+
+export const getBookmarkedListingsHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const listings = await bookmarksService.getBookmarkedListings(userId, requestIsAdult(request.user));
+    return reply.send({ success: true, data: { listings }, error: null });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Failed to fetch bookmarked listings';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'BOOKMARKED_LISTINGS_ERROR', message } });
   }
 };
 

@@ -17,6 +17,11 @@ export function apiErrorCode(e: unknown): string | undefined {
   return isAxiosError(e) ? e.response?.data?.error?.code : undefined
 }
 
+/** `error.details` from an API error response (extra context, e.g. how much money is missing). */
+export function apiErrorDetails<T = Record<string, unknown>>(e: unknown): T | undefined {
+  return isAxiosError(e) ? e.response?.data?.error?.details : undefined
+}
+
 /** `message` of a thrown Error (network failures, JS errors); undefined for anything else. */
 export function errorMessage(e: unknown): string | undefined {
   return e instanceof Error ? e.message : undefined

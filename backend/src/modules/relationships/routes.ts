@@ -3,6 +3,7 @@ import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   sendRequestHandler, acceptRequestHandler, declineRequestHandler,
   cancelRequestHandler, clearPartnershipHandler, getPendingHandler,
+  getOutgoingHandler, getCandidatesHandler,
 } from './controller.js';
 
 export async function relationshipsRoutes(fastify: FastifyInstance) {
@@ -10,6 +11,12 @@ export async function relationshipsRoutes(fastify: FastifyInstance) {
 
   // GET  /api/relationships/pending  — incoming pending requests
   fastify.get<RouteGenericOf<typeof getPendingHandler>>('/pending', auth, getPendingHandler);
+
+  // GET  /api/relationships/outgoing — own outgoing pending requests
+  fastify.get<RouteGenericOf<typeof getOutgoingHandler>>('/outgoing', auth, getOutgoingHandler);
+
+  // GET  /api/relationships/candidates — mutual friends with in_relationship flag
+  fastify.get<RouteGenericOf<typeof getCandidatesHandler>>('/candidates', auth, getCandidatesHandler);
 
   // POST /api/relationships/request  — send a request { toId }
   fastify.post<RouteGenericOf<typeof sendRequestHandler>>('/request', auth, sendRequestHandler);

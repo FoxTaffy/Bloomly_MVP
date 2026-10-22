@@ -66,6 +66,10 @@ import {
   updateOrderHandler,
   getOrderDetailHandler,
   confirmOrderPaymentHandler,
+  confirmOrderCompletionHandler,
+  getOrderProgressHandler,
+  addOrderProgressHandler,
+  deleteOrderProgressHandler,
   deleteOrderHandler,
   getBusinessStatsHandler,
   donateToGroupHandler,
@@ -214,6 +218,10 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.patch<RouteGenericOf<typeof updateOrderStatusHandler>>('/:id/orders/:orderId/status', auth, updateOrderStatusHandler);
   fastify.post<RouteGenericOf<typeof confirmOrderPaymentHandler>>('/:id/orders/:orderId/confirm-payment', auth, confirmOrderPaymentHandler);
   fastify.get<RouteGenericOf<typeof getOrderDetailHandler>>('/:id/orders/:orderId', auth, getOrderDetailHandler);
+  fastify.post<RouteGenericOf<typeof confirmOrderCompletionHandler>>('/:id/orders/:orderId/confirm-completion', auth, confirmOrderCompletionHandler);
+  fastify.get<RouteGenericOf<typeof getOrderProgressHandler>>('/:id/orders/:orderId/progress', auth, getOrderProgressHandler);
+  fastify.post<RouteGenericOf<typeof addOrderProgressHandler>>('/:id/orders/:orderId/progress', auth, addOrderProgressHandler);
+  fastify.delete<RouteGenericOf<typeof deleteOrderProgressHandler>>('/:id/orders/:orderId/progress/:progressId', auth, deleteOrderProgressHandler);
   fastify.patch<RouteGenericOf<typeof updateOrderHandler>>('/:id/orders/:orderId', auth, updateOrderHandler);
   fastify.delete<RouteGenericOf<typeof deleteOrderHandler>>('/:id/orders/:orderId', auth, deleteOrderHandler);
   fastify.get<RouteGenericOf<typeof getBusinessStatsHandler>>('/:id/orders-stats', auth, getBusinessStatsHandler);

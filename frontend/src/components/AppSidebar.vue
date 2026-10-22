@@ -161,7 +161,7 @@ const navItems = computed(() => [
 
 const categoryItems = computed(() => [
   { key: 'shop',        icon: 'ShoppingBag', label: langStore.t.shop ?? 'Магазин', disabled: false, to: { name: 'shop' } },
-  { key: 'dealers-den', icon: 'Tag',         label: langStore.t.dealersDen,  disabled: false, to: { name: 'dealers-den' } },
+  { key: 'dealers-den', icon: 'Tag',         label: langStore.t.dealersDen,  disabled: false, to: { name: 'dealers-den' }, highlight: true },
   { key: 'scheduled-posts', icon: 'CalendarClock', label: 'Черновики и отложенные', disabled: false, to: { name: 'scheduled-posts' } },
   { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,       disabled: true,  to: null as any },
   { key: 'help',        icon: 'CircleHelp',  label: langStore.t.help,        disabled: false, to: { name: 'help' } },
@@ -256,10 +256,12 @@ const categoryItems = computed(() => [
                 @click="!cat.disabled && mobileSidebar.close()"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
                 :class="cat.disabled ? 'opacity-40 cursor-not-allowed text-white/35'
+                  : cat.highlight ? ['den-link text-white', isActive(cat.key) && 'den-link--active']
                   : isActive(cat.key) ? 'bg-brand-card text-white'
                   : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
-                <BIcon :name="cat.icon" class="w-5 h-5" />
+                <BIcon :name="cat.icon" class="w-5 h-5" :class="cat.highlight && 'den-icon'" />
                 <span class="flex-1 text-left">{{ cat.label }}</span>
+                <span v-if="cat.highlight" class="den-dot" aria-hidden="true" />
                 <BIcon v-if="cat.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
               </component>
             </nav>
@@ -419,11 +421,14 @@ const categoryItems = computed(() => [
           class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
           :class="cat.disabled
             ? 'opacity-40 cursor-not-allowed text-white/35'
+            : cat.highlight
+              ? ['den-link text-white', isActive(cat.key) && 'den-link--active']
             : isActive(cat.key)
               ? 'bg-brand-card text-white'
               : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
-          <BIcon :name="cat.icon" class="w-5 h-5" />
+          <BIcon :name="cat.icon" class="w-5 h-5" :class="cat.highlight && 'den-icon'" />
           <span class="flex-1 text-left">{{ cat.label }}</span>
+          <span v-if="cat.highlight" class="den-dot" aria-hidden="true" />
           <BIcon v-if="cat.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
         </component>
       </nav>
@@ -447,4 +452,26 @@ const categoryItems = computed(() => [
 
 .sidebar-slide-enter-active, .sidebar-slide-leave-active { transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
 .sidebar-slide-enter-from, .sidebar-slide-leave-to { transform: translateX(-100%); }
+
+/* Dealers' Den — accent entry */
+.den-link {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.22), rgba(236, 72, 153, 0.14) 60%, rgba(251, 146, 60, 0.10));
+  box-shadow: inset 0 0 0 1px rgba(192, 132, 252, 0.35), 0 0 18px -6px rgba(168, 85, 247, 0.6);
+}
+.den-link:hover, .den-link--active {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.38), rgba(236, 72, 153, 0.26) 60%, rgba(251, 146, 60, 0.18));
+  box-shadow: inset 0 0 0 1px rgba(216, 180, 254, 0.55), 0 0 22px -4px rgba(168, 85, 247, 0.75);
+}
+.den-icon { color: #f0abfc; filter: drop-shadow(0 0 4px rgba(240, 171, 252, 0.7)); }
+.den-dot {
+  width: 8px; height: 8px; border-radius: 9999px; background: #f472b6;
+  box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.7);
+  animation: den-pulse 1.8s infinite;
+}
+@keyframes den-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.7); }
+  70% { box-shadow: 0 0 0 7px rgba(244, 114, 182, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(244, 114, 182, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .den-dot { animation: none; } }
 </style>

@@ -125,6 +125,7 @@ model User {
   groupMemberships               GroupMember[]
   groupSubscriptions             GroupSubscriber[]
   orders                         Order[]                   @relation("OrderCustomer")
+  orderProgress                  OrderProgress[]           @relation("OrderProgressAuthor")
   soonBadges                     SoonBadge[]
   verificationRequests           VerificationRequest[]
   groupRatings                   GroupRating[]
@@ -609,6 +610,8 @@ model Wallet {
   id         String    @id @default(uuid()) @db.Uuid
   user_id    String    @unique @db.Uuid
   balance    Decimal   @default(0.00) @db.Decimal(18, 2)
+  /// Бонусные BLM (кэшбэк подписок): тратятся только на услуги площадки, не выводятся и не уходят в донаты/покупки
+  promo_balance Decimal @default(0) @db.Decimal(18, 2)
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
@@ -621,8 +624,9 @@ model WalletTransaction {
   id            String   @id @default(uuid()) @db.Uuid
   user_id       String   @db.Uuid
   amount        Decimal  @db.Decimal(18, 2)
-  balance_after Decimal  @db.Decimal(18, 2)
-  kind          String   @db.VarChar(30) // topup | subscription | sticker_purchase | sticker_sale | shop_purchase | group_donation | dev_topup
+  balance_after Decimal  @db.Decimal(18, 2) // остаток того баланса, что изменился (см. balance_type)
+  balance_type  String   @default("main") @db.VarChar(8) // main | promo
+  kind          String   @db.VarChar(30) // topup | subscription | sticker_purchase | sticker_sale | shop_purchase | group_donation | dev_topup | order_escrow | order_payout | order_refund | promo_grant | promo_spend
   ref_id        String?  @db.VarChar(100) // платёж / пак / товар / группа
   created_at    DateTime @default(now())
 
@@ -1181,6 +1185,11 @@ model Order {
   invoice_message_id   String?   @db.Uuid // карточка счёта в чате заказа
   paid_reported_at     DateTime?
   payment_confirmed_at DateTime?
+  /// Безопасная сделка: none — денег в заказе нет, held — оплата удержана системой, released — переведена художнику после подтверждения заказчика, refunded — возвращена заказчику
+  escrow_status        String    @default("none") @db.VarChar(10)
+  escrow_blm           Decimal?  @db.Decimal(18, 2) // сколько BLM удержано (в BLM, 1 BLM = 1 $)
+  escrow_held_at       DateTime?
+  escrow_released_at   DateTime?
   started_at      DateTime? // когда исполнитель взял заказ в работу (и поставил дедлайн)
   finished_at     DateTime? // когда заказ перешёл в «Готово»
   conversation_id String?    @unique @db.Uuid
@@ -1192,10 +1201,28 @@ model Order {
   group        Group         @relation(fields: [group_id], references: [id], onDelete: Cascade)
   customer     User          @relation("OrderCustomer", fields: [customer_id], references: [id], onDelete: Cascade)
   conversation Conversation? @relation("OrderConversation", fields: [conversation_id], references: [id], onDelete: SetNull)
+  progress     OrderProgress[]
 
   @@index([group_id, deleted_at])
   @@index([customer_id])
   @@index([deadline_at])
+}
+
+/// Промежуточный этап работы над заказом: скетч, WIP, комментарий художника. Видят художник и заказчик.
+model OrderProgress {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_id   String    @db.Uuid
+  author_id  String    @db.Uuid
+  stage      TodoStatus?
+  text       String?   @db.VarChar(1000)
+  image_urls String[]  @default([])
+  created_at DateTime  @default(now())
+  deleted_at DateTime?
+
+  order  Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  author User  @relation("OrderProgressAuthor", fields: [author_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id, created_at])
 }
 
 model GroupCustomRole {
@@ -2158,6 +2185,11 @@ model SupportTicket {
   source           String   @default("app") @db.VarChar(10)
   // Raw sender address for email-origin tickets (used as the reply-to target); distinct from contact_email.
   external_email   String?  @db.VarChar(255)
+  // Структурированный баг-репорт (type = 'bug'): сообщение первого письма — «что произошло».
+  steps_to_reproduce String? @db.Text
+  expected_result    String? @db.Text
+  device             String? @db.VarChar(20) // desktop | mobile | tablet
+  browser            String? @db.VarChar(60)
   // Message-ID of the most recent inbound email in this thread, for In-Reply-To/References on outgoing replies.
   email_message_id String?  @db.VarChar(255)
   created_at       DateTime @default(now())

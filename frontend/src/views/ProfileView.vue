@@ -297,55 +297,6 @@
                       class="absolute bottom-1 right-1 md:bottom-1.5 md:right-1.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-brand-success border-[3px] border-brand-card shadow-xs z-30 transition-all duration-500"
                       :title="langStore.t.onlineStatus" />
 
-                    <!-- Status note bubble — IG Notes style above avatar -->
-                    <Transition name="status-pop">
-                      <div v-if="isOwnProfile || hasActiveStatus"
-                        :key="profileStatus.text + profileStatus.emoji + (profileStatus.music?.title || '')"
-                        class="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full z-30"
-                        style="width:120px">
-                        <button
-                          @click="isOwnProfile ? openStatusEdit() : null"
-                          :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
-                          class="relative block w-full hover:opacity-90 active:scale-95 transition-all">
-                          <!-- Bubble -->
-                          <div class="w-full px-2.5 py-2 rounded-2xl text-white overflow-hidden"
-                            :class="hasActiveStatus ? 'status-bubble-glow' : ''"
-                            :style="{ background: statusBubbleGradient, boxShadow: hasActiveStatus ? `0 4px 18px -2px ${statusBubbleColor}80, 0 2px 6px rgba(0,0,0,0.35)` : '0 8px 20px rgba(0,0,0,0.35)' }">
-                            <!-- Text/emoji -->
-                            <div v-if="profileStatus.text || profileStatus.emoji"
-                              class="flex gap-1 items-start"
-                              :class="profileStatus.music ? 'mb-1' : ''">
-                              <span v-if="profileStatus.emoji" class="text-sm shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
-                              <span v-if="profileStatus.text"
-                                class="text-[11px] font-semibold leading-snug"
-                                style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ profileStatus.text }}</span>
-                            </div>
-                            <!-- Music -->
-                            <div v-if="profileStatus.music" class="flex items-center gap-1.5" @click.stop="toggleStatusMusicPreview">
-                              <div class="relative w-6 h-6 rounded-md overflow-hidden shrink-0 bg-black/30">
-                                <img v-if="profileStatus.music.artworkUrl" :src="profileStatus.music.artworkUrl" class="w-full h-full object-cover" />
-                                <div class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/50 transition-colors">
-                                  <BIcon :name="isStatusMusicPlaying ? 'Pause' : 'Play'" class="w-2.5 h-2.5 text-white" />
-                                </div>
-                              </div>
-                              <div class="min-w-0 overflow-hidden">
-                                <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
-                                <p class="text-[9px] opacity-70 leading-tight truncate">{{ profileStatus.music.title }}</p>
-                              </div>
-                            </div>
-                            <!-- Empty own profile -->
-                            <span v-if="!hasActiveStatus && isOwnProfile"
-                              class="flex items-center gap-1 text-[11px] text-white/60">
-                              {{ langStore.t.emptyBio }}</span>
-                            <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
-                              <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
-                          </div>
-                          <!-- Arrow tail -->
-                          <div class="absolute bottom-[-7px] left-4 w-0 h-0 pointer-events-none"
-                            :style="{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: `8px solid ${shadeColor(statusBubbleColor, -20)}` }" />
-                        </button>
-                      </div>
-                    </Transition>
                     <audio ref="statusPreviewAudioEl" class="hidden"
                       @play="isStatusMusicPlaying = true" @pause="isStatusMusicPlaying = false" @ended="isStatusMusicPlaying = false" />
                   </div>
@@ -510,6 +461,51 @@
                       <BIcon name="Link" class="w-3 h-3" />{{ viewedProfile.website.replace(/^https?:\/\//, '') }}
                     </a>
                   </div>
+                    <!-- Status bubble — right of avatar, under the name/chips -->
+                    <Transition name="status-pop">
+                      <div v-if="isOwnProfile || hasActiveStatus"
+                        :key="profileStatus.text + profileStatus.emoji + (profileStatus.music?.title || '')"
+                        class="relative mt-2.5 w-fit max-w-full md:max-w-sm">
+                        <button
+                          @click="isOwnProfile ? openStatusEdit() : null"
+                          :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
+                          class="relative block w-full text-left hover:opacity-90 active:scale-95 transition-all">
+                          <!-- Bubble -->
+                          <div class="w-full px-3 py-2 rounded-2xl text-white overflow-hidden"
+                            :class="hasActiveStatus ? 'status-bubble-glow' : ''"
+                            :style="{ background: statusBubbleGradient, boxShadow: hasActiveStatus ? `0 4px 18px -2px ${statusBubbleColor}80, 0 2px 6px rgba(0,0,0,0.35)` : '0 8px 20px rgba(0,0,0,0.35)' }">
+                            <!-- Text/emoji -->
+                            <div v-if="profileStatus.text || profileStatus.emoji"
+                              class="flex gap-1 items-start"
+                              :class="profileStatus.music ? 'mb-1' : ''">
+                              <span v-if="profileStatus.emoji" class="text-sm shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
+                              <span v-if="profileStatus.text"
+                                class="text-[11px] font-semibold leading-snug"
+                                style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-word">{{ profileStatus.text }}</span>
+                            </div>
+                            <!-- Music -->
+                            <div v-if="profileStatus.music" class="flex items-center gap-1.5" @click.stop="toggleStatusMusicPreview">
+                              <div class="relative w-6 h-6 rounded-md overflow-hidden shrink-0 bg-black/30">
+                                <img v-if="profileStatus.music.artworkUrl" :src="profileStatus.music.artworkUrl" class="w-full h-full object-cover" />
+                                <div class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/50 transition-colors">
+                                  <BIcon :name="isStatusMusicPlaying ? 'Pause' : 'Play'" class="w-2.5 h-2.5 text-white" />
+                                </div>
+                              </div>
+                              <div class="min-w-0 overflow-hidden">
+                                <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
+                                <p class="text-[9px] opacity-70 leading-tight truncate">{{ profileStatus.music.title }}</p>
+                              </div>
+                            </div>
+                            <!-- Empty own profile -->
+                            <span v-if="!hasActiveStatus && isOwnProfile"
+                              class="flex items-center gap-1 text-[11px] text-white/60">
+                              {{ langStore.t.emptyBio }}</span>
+                            <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
+                              <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
+                          </div>
+                        </button>
+                      </div>
+                    </Transition>
 
                 </div>
               </div>
@@ -566,7 +562,7 @@
                     <div class="stack-y-2">
 
                       <!-- Отношения + партнёр -->
-                      <div v-if="viewedProfile.relationship_status"
+                      <div v-if="viewedProfile.relationship_status || partnerProfile"
                         class="relative overflow-hidden rounded-2xl border transition-all group"
                         :class="partnerProfile ? 'border-pink-500/30 hover:border-pink-500/50' : 'border-pink-500/20 hover:border-pink-500/35 bg-brand-bg'">
                         <!-- Gradient background -->
@@ -582,17 +578,7 @@
                               </div>
                               <div>
                                 <p class="text-[10px] text-pink-300/60 uppercase tracking-widest font-bold">{{ langStore.t.relationsLabel }}</p>
-                                <p class="text-sm text-white font-bold">{{ {
-                                  single: langStore.t.relStatusSingle,
-                                  in_relationship: langStore.t.relStatusInRel,
-                                  relationship: langStore.t.relStatusInRel,
-                                  married: langStore.t.relStatusMarried,
-                                  complicated: langStore.t.relStatusComplicated,
-                                  open: langStore.t.relStatusOpen,
-                                  open_relationship: langStore.t.relStatusOpen,
-                                  looking: langStore.t.relStatusLooking,
-                                  secret: langStore.t.relStatusSecret,
-                                }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
+                                <p class="text-sm text-white font-bold">{{ relationshipStatusLabel }}</p>
                               </div>
                             </div>
                           </template>
@@ -601,17 +587,7 @@
                           <template v-else>
                             <p class="text-[10px] text-pink-300/60 uppercase tracking-widest font-bold mb-2 flex items-center gap-1.5">
                               <BIcon name="Heart" class="w-3 h-3 text-pink-400" />
-                              {{ {
-                                  single: langStore.t.relStatusSingle,
-                                  in_relationship: langStore.t.relStatusInRel,
-                                  relationship: langStore.t.relStatusInRel,
-                                  married: langStore.t.relStatusMarried,
-                                  complicated: langStore.t.relStatusComplicated,
-                                  open: langStore.t.relStatusOpen,
-                                  open_relationship: langStore.t.relStatusOpen,
-                                  looking: langStore.t.relStatusLooking,
-                                  secret: langStore.t.relStatusSecret,
-                                }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}
+                              {{ relationshipStatusLabel }}
                             </p>
                             <!-- Two avatars with heart between -->
                             <div class="flex items-center gap-2">
@@ -2697,6 +2673,25 @@ const notifyLoading = ref(false)
 const isTogglingFollow = ref(false)
 
 
+// Принятая заявка пишет только relationship_with, поэтому у второй стороны статус может быть пуст —
+// карточка всё равно показывается, подпись по умолчанию «В отношениях».
+const relationshipStatusLabel = computed(() => {
+  const t = langStore.t
+  const status = viewedProfile.value?.relationship_status
+  if (!status) return t.relStatusInRel
+  const labels: Record<string, string> = {
+    single: t.relStatusSingle,
+    in_relationship: t.relStatusInRel,
+    relationship: t.relStatusInRel,
+    married: t.relStatusMarried,
+    complicated: t.relStatusComplicated,
+    open: t.relStatusOpen,
+    open_relationship: t.relStatusOpen,
+    looking: t.relStatusLooking,
+    secret: t.relStatusSecret,
+  }
+  return labels[status] ?? status
+})
 const partnerProfile = ref<{ id: string; username: string; display_name: string | null; avatar_url: string | null } | null>(null)
 
 // ── Online status ─────────────────────────────────────────────────────────────
@@ -3695,8 +3690,8 @@ watch(() => route.params.username, () => { aboutTab.value = 'about'; activeConte
 /* Status note bubble: pop-in/out when it appears, changes, or expires */
 .status-pop-enter-active { transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .status-pop-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; position: absolute; }
-.status-pop-enter-from { opacity: 0; transform: translateX(-50%) translateY(calc(-100% + 6px)) scale(0.85); }
-.status-pop-leave-to { opacity: 0; transform: translateX(-50%) translateY(-100%) scale(0.9); }
+.status-pop-enter-from { opacity: 0; transform: translateY(-6px) scale(0.92); }
+.status-pop-leave-to { opacity: 0; transform: translateY(-4px) scale(0.95); }
 
 /* Slow ambient glow pulse on an active status bubble/icon */
 .status-bubble-glow { animation: statusBubbleGlow 3.2s ease-in-out infinite; }

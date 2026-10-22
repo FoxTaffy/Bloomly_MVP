@@ -6,6 +6,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useGroupsStore, type ArtistQueueItem, type TodoStatus } from '@/stores/groups'
 import { useConfirm } from '@/composables/useConfirm'
 import BIcon from '@/components/BIcon.vue'
+import OrderProgressFeed from '@/components/groups/OrderProgressFeed.vue'
+import { ORDER_STAGE_COLOR } from '@/lib/orderStages'
 
 const props = defineProps<{ groupId: string; isAdmin: boolean }>()
 const groupsStore = useGroupsStore()
@@ -19,6 +21,15 @@ const showModal   = ref(false)
 const editingId   = ref<string | null>(null)
 const formStatus  = ref<TodoStatus>('WAITING')
 const form        = ref({ title: '', description: '' })
+
+// Окно с этапами работы по заказу: художник выкладывает скетчи и WIP, заказчик их видит
+const progressItem = ref<ArtistQueueItem | null>(null)
+function onProgressChanged(entries: { id: string; stage: TodoStatus | null; text: string | null; image_urls: string[]; created_at: string }[]) {
+  const it = progressItem.value
+  if (!it) return
+  const idx = items.value.findIndex(i => i.id === it.id)
+  if (idx !== -1) items.value[idx] = { ...items.value[idx], progress: { count: entries.length, latest: entries[entries.length - 1] ?? null } }
+}
 
 const addingInCol = ref<TodoStatus | null>(null)
 const inlineTitle = ref('')
@@ -156,7 +167,26 @@ async function removeItem(id: string) {
             :class="STATUS_CONFIG[status].cardAccent"
             @click="isAdmin && openEdit(item)">
             <p class="text-[12px] font-semibold text-white leading-snug">{{ item.title }}</p>
-            <p v-if="item.description" class="text-[10px] text-white/40 mt-1 leading-relaxed line-clamp-2">{{ item.description }}</p>
+            <!-- Заказ: вместо текстового описания — блок прогресса с последним этапом работы -->
+            <div v-if="item.order_id" class="mt-2 rounded-lg bg-black/20 border border-white/5 p-1.5" @click.stop>
+              <div class="flex gap-0.5 mb-1.5">
+                <span v-for="(s, i) in STATUSES" :key="s" class="flex-1 h-1 rounded-full"
+                  :style="{ background: i <= STATUSES.indexOf(asTodoStatus(item.status)) ? ORDER_STAGE_COLOR[asTodoStatus(item.status)] : 'rgba(255,255,255,0.08)' }" />
+              </div>
+              <button type="button" class="w-full flex items-center gap-1.5 text-left" :disabled="!item.progress" @click="progressItem = item">
+                <img v-if="item.progress?.latest?.image_urls?.[0]" :src="item.progress.latest.image_urls[0]" class="w-8 h-8 rounded-md object-cover shrink-0 border border-white/10" />
+                <span class="min-w-0 flex-1 text-[10px] leading-snug" :class="item.progress?.latest ? 'text-white/60' : 'text-white/30'">
+                  <template v-if="item.progress?.latest"><span class="line-clamp-2">{{ item.progress.latest.text || 'Новый этап выложен' }}</span></template>
+                  <template v-else>{{ isAdmin ? 'Этапов пока нет' : item.description || 'Заказ в очереди' }}</template>
+                </span>
+                <span v-if="item.progress?.count" class="shrink-0 text-[9px] font-bold text-white/50 bg-white/8 rounded-md px-1.5 py-0.5">{{ item.progress.count }}</span>
+              </button>
+              <button v-if="isAdmin" type="button" @click="progressItem = item"
+                class="mt-1.5 w-full flex items-center justify-center gap-1 text-[10px] font-bold py-1 rounded-md bg-brand-accent/15 text-brand-accent hover:bg-brand-accent/25 transition-colors">
+                <BIcon name="ImagePlus" class="w-3 h-3" /> Выложить этап
+              </button>
+            </div>
+            <p v-else-if="item.description" class="text-[10px] text-white/40 mt-1 leading-relaxed line-clamp-2">{{ item.description }}</p>
             <div v-if="isAdmin" class="flex items-center gap-1 mt-2 pt-2 border-t border-white/5 opacity-0 group-hover/card:opacity-100 transition-opacity">
               <button v-if="STATUSES.indexOf(status) < STATUSES.length - 1"
                 @click.stop="moveNext(item)"
@@ -196,6 +226,23 @@ async function removeItem(id: string) {
         </button>
       </div>
     </div>
+
+    <!-- Этапы работы по заказу -->
+    <Teleport to="body">
+      <div v-if="progressItem && progressItem.order_id" class="fixed inset-0 z-9999 flex items-center justify-center p-4"
+        style="background:rgba(0,0,0,.75)" @click.self="progressItem = null">
+        <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-white truncate pr-3">Ход работы · {{ progressItem.title }}</h3>
+            <button @click="progressItem = null" class="w-7 h-7 flex items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all shrink-0">
+              <BIcon name="X" class="w-4 h-4" />
+            </button>
+          </div>
+          <OrderProgressFeed :group-id="groupId" :order-id="progressItem.order_id" :current-stage="asTodoStatus(progressItem.status)"
+            :can-manage="isAdmin" @changed="onProgressChanged" />
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Edit modal -->
     <Teleport to="body">

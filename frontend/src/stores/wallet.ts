@@ -4,6 +4,8 @@ import api from '../api'
 
 export const useWalletStore = defineStore('wallet', () => {
   const balance = ref(0)
+  /** Бонусные BLM: тратятся только на услуги площадки, вывести нельзя */
+  const promoBalance = ref(0)
   const loading = ref(false)
 
   async function fetchBalance() {
@@ -11,6 +13,7 @@ export const useWalletStore = defineStore('wallet', () => {
     try {
       const { data } = await api.get('/wallet')
       balance.value = Number(data.data.balance)
+      promoBalance.value = Number(data.data.promo_balance ?? 0)
       return balance.value
     } finally {
       loading.value = false
@@ -23,5 +26,5 @@ export const useWalletStore = defineStore('wallet', () => {
     return balance.value
   }
 
-  return { balance, loading, fetchBalance, topup }
+  return { balance, promoBalance, loading, fetchBalance, topup }
 })

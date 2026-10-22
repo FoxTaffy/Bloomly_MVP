@@ -240,9 +240,31 @@ export interface ArtistQueueItem {
   position: number
   /** Заказ, стоящий в очереди: статус пункта и этап заказа синхронизированы */
   order_id: string | null
-  order?: { id: string; deadline_at: string | null; customer: { id: string; username: string; display_name: string | null } } | null
+  order?: {
+    id: string; deadline_at: string | null; started_at: string | null
+    payment_status?: 'none' | 'unpaid' | 'reported' | 'confirmed'; escrow_status?: EscrowStatus
+    customer: { id: string; username: string; display_name: string | null }
+  } | null
+  /** Только у пунктов заказа: сколько этапов выложено и какой последний */
+  progress?: { count: number; latest: OrderProgressSummary | null } | null
   created_at: string
   updated_at: string
+}
+
+/** Безопасная сделка: held — оплата удержана, released — переведена художнику, refunded — возвращена заказчику */
+export type EscrowStatus = 'none' | 'held' | 'released' | 'refunded'
+
+export interface OrderProgressSummary {
+  id: string
+  stage: TodoStatus | null
+  text: string | null
+  image_urls: string[]
+  created_at: string
+}
+
+/** Этап работы над заказом: скетч, WIP-арт или комментарий художника */
+export interface OrderProgressEntry extends OrderProgressSummary {
+  author: { id: string; username: string; display_name: string | null; avatar_url: string | null }
 }
 
 export interface TodoColumn {
@@ -273,6 +295,8 @@ export interface Order {
   invoice_currency?: string | null
   invoice_message_id?: string | null
   payment_confirmed_at?: string | null
+  escrow_status?: EscrowStatus
+  escrow_blm?: string | number | null
   conversation_id: string | null
   /** Персонажи из принятой заявки (референсы подтянуты из профилей) и референсы, добавленные художником */
   characters?: import('./listingApplications').ResolvedCharacter[]
@@ -291,6 +315,7 @@ export interface OrderDetail extends Order {
   references: string[]
   fromApplication: boolean
   canManage: boolean
+  progress: OrderProgressEntry[]
 }
 
 export interface BusinessStats {
@@ -807,6 +832,26 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.order as Order
   }
 
+  /** Заказчик подтверждает готовую работу — удержанная оплата переводится художнику */
+  async function confirmOrderCompletion(groupId: string, orderId: string): Promise<Order> {
+    const { data } = await api.post(`/groups/${groupId}/orders/${orderId}/confirm-completion`)
+    return data.data.order as Order
+  }
+
+  async function fetchOrderProgress(groupId: string, orderId: string): Promise<OrderProgressEntry[]> {
+    const { data } = await api.get(`/groups/${groupId}/orders/${orderId}/progress`)
+    return data.data.progress as OrderProgressEntry[]
+  }
+
+  async function addOrderProgress(groupId: string, orderId: string, payload: { text?: string; imageUrls?: string[]; stage?: TodoStatus }): Promise<OrderProgressEntry> {
+    const { data } = await api.post(`/groups/${groupId}/orders/${orderId}/progress`, payload)
+    return data.data.entry as OrderProgressEntry
+  }
+
+  async function deleteOrderProgress(groupId: string, orderId: string, progressId: string) {
+    await api.delete(`/groups/${groupId}/orders/${orderId}/progress/${progressId}`)
+  }
+
   async function updateOrder(groupId: string, orderId: string, payload: { deadlineAt?: string | null; description?: string | null; references?: string[] }): Promise<Order> {
     const { data } = await api.patch(`/groups/${groupId}/orders/${orderId}`, payload)
     return data.data.order as Order
@@ -911,7 +956,7 @@ export const useGroupsStore = defineStore('groups', () => {
     fetchMembers, changeMemberRole, removeMember,
     fetchTodoColumns, updateTodoColumns,
     fetchTodoItems, createTodoItem, updateTodoItem, deleteTodoItem, reorderTodoItems,
-    fetchOrders, fetchOrderDetail, createOrder, updateOrderStatus, confirmOrderPayment, updateOrder, deleteOrder, fetchBusinessStats, getOrderConversation,
+    fetchOrders, fetchOrderDetail, createOrder, updateOrderStatus, confirmOrderPayment, confirmOrderCompletion, fetchOrderProgress, addOrderProgress, deleteOrderProgress, updateOrder, deleteOrder, fetchBusinessStats, getOrderConversation,
     donateToGroup, getGroupBalance,
     fetchCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   }

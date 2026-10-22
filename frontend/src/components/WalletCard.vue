@@ -32,6 +32,9 @@ function openModal() {
   paymentsStore.fetchConfig().catch(() => {})
 }
 
+// Форму пополнения открывают и снаружи — например, чат, когда на оплату заказа не хватило денег
+defineExpose({ openModal, startTopupPicker: () => { showTopupPicker.value = true } })
+
 async function topupWallet(amount: number) {
   if (toppingUp.value) return
   toppingUp.value = true

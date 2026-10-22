@@ -545,6 +545,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLangStore } from '@/stores/lang'
+import { formatPriceNative } from '@/lib/format'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 const langStore = useLangStore()
 import { useRouter } from 'vue-router'
@@ -816,9 +817,10 @@ function categoryUnreadCount(cat: 'personal' | 'groups' | 'community'): number {
 
 const STORY_REPLY_PREVIEW_RE = /^\[story_reply:[^\]]*\]/
 
-function formatMoneyPreview(amount: number | undefined): string {
+// Счёт по заказу идёт в валюте лота; у обычных запросов валюты нет — это рубли
+function formatMoneyPreview(amount: number | undefined, currency?: string): string {
   if (!amount && amount !== 0) return ''
-  return new Intl.NumberFormat('ru-RU').format(amount) + ' ₽'
+  return currency ? formatPriceNative(amount, currency) : new Intl.NumberFormat('ru-RU').format(amount) + ' ₽'
 }
 
 function lastMessagePreview(msg: Conversation['last_message']): string {
@@ -828,8 +830,8 @@ function lastMessagePreview(msg: Conversation['last_message']): string {
   if (msg.type === 'sticker') return t.stickerPreview
   if (msg.type === 'voice' || msg.type === 'audio') return t.voiceMessagePreview
   // Order cards are currently Russian-only, matching the rest of this chat-only feature (no i18n yet)
-  if (msg.type === 'payment_request') return `💳 ${msg.metadata?.status === 'paid' ? 'Оплачено' : 'Запрос оплаты'} · ${formatMoneyPreview(msg.metadata?.amount)}`
-  if (msg.type === 'payment_confirmation') return `✅ Оплачено · ${formatMoneyPreview(msg.metadata?.amount)}`
+  if (msg.type === 'payment_request') return `💳 ${msg.metadata?.status === 'paid' ? 'Оплачено' : 'Запрос оплаты'} · ${formatMoneyPreview(msg.metadata?.amount, msg.metadata?.currency)}`
+  if (msg.type === 'payment_confirmation') return `✅ Оплачено · ${formatMoneyPreview(msg.metadata?.amount, msg.metadata?.currency)}`
   if (msg.type === 'tip') return `🎉 Чаевые · ${formatMoneyPreview(msg.metadata?.amount)}`
   if (msg.type === 'post_share') return '📎 Поделился(-ась) постом'
   if (msg.type === 'group_share') return '👥 Приглашение в группу'

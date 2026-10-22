@@ -21,6 +21,7 @@ export const REGION_VISUAL: Record<string, { flag: string | null; currency: stri
   CN:     { flag: 'cn', currency: 'CNY', symbol: '¥',  color: '#ffc01f' },
   IN:     { flag: 'in', currency: 'INR', symbol: '₹',  color: '#e76f51' },
   BR:     { flag: 'br', currency: 'BRL', symbol: 'R$', color: '#2fb36b' },
+  KZ:     { flag: 'kz', currency: 'KZT', symbol: '₸',  color: '#00afca' },
   GLOBAL: { flag: null, currency: '',    symbol: '🌐', color: '#a1b4ff' },
 }
 
@@ -36,6 +37,7 @@ export const PAYMENT_REGIONS: PaymentRegion[] = [
   { id: 'CN',     label: 'Китай / China' },
   { id: 'IN',     label: 'Индия / India' },
   { id: 'BR',     label: 'Бразилия / Brazil' },
+  { id: 'KZ',     label: 'Казахстан / Kazakhstan' },
   { id: 'GLOBAL', label: 'Другое / Global' },
 ]
 
@@ -69,6 +71,7 @@ export const REGION_CARD_BRANDS: Record<string, string[]> = {
   CN:     ['visa', 'mastercard'],
   IN:     ['visa', 'mastercard'],
   BR:     ['visa', 'mastercard'],
+  KZ:     ['visa', 'mastercard'],
   GLOBAL: ['visa', 'mastercard', 'mir'],
 }
 

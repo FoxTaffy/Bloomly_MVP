@@ -10,13 +10,17 @@ import { errMessage, errStatus } from '../../lib/httpErrors.js';
 // POST /api/support/tickets
 export async function createTicketHandler(request: FastifyRequest, reply: FastifyReply) {
   const userId = request.user.id;
-  const { type, subject, message, contact_email, attachment_urls } = request.body as any;
+  const {
+    type, subject, message, contact_email, attachment_urls,
+    steps_to_reproduce, expected_result, device, browser,
+  } = request.body as any;
   if (!subject?.trim() || !message?.trim()) {
     return reply.code(400).send({ success: false, error: { message: 'Заполните тему и сообщение' } });
   }
   try {
     const ticket = await createTicket(userId, {
       type, subject, message, contactEmail: contact_email, attachmentUrls: attachment_urls,
+      stepsToReproduce: steps_to_reproduce, expectedResult: expected_result, device, browser,
     });
     return reply.code(201).send({ success: true, data: { ticket } });
   } catch (e) {

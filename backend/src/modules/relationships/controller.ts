@@ -60,3 +60,21 @@ export const getPendingHandler = async (
   const requests = await relationshipsService.getPending(id);
   return reply.send({ success: true, data: { requests }, error: null });
 };
+
+export const getOutgoingHandler = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const { id } = req.user as JwtUser;
+  const requests = await relationshipsService.getOutgoing(id);
+  return reply.send({ success: true, data: { requests }, error: null });
+};
+
+export const getCandidatesHandler = async (
+  req: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const { id } = req.user as JwtUser;
+  const users = await relationshipsService.getCandidates(id);
+  return reply.send({ success: true, data: { users }, error: null });
+};

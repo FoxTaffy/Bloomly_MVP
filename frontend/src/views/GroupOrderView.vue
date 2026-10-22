@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import OrderStartModal from '@/components/groups/OrderStartModal.vue'
 import OrderEditModal from '@/components/groups/OrderEditModal.vue'
+import OrderProgressFeed from '@/components/groups/OrderProgressFeed.vue'
+import WalletCard from '@/components/WalletCard.vue'
 import { useGroupsStore, type OrderDetail, type OrderStatus } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useMessagesStore } from '@/stores/messages'
 import { useNsfwMode } from '@/composables/useNsfwMode'
-import { errorMessage } from '@/lib/apiError'
+import { useConfirm } from '@/composables/useConfirm'
+import { errorMessage, apiErrorCode, apiErrorDetails, apiErrorMessage } from '@/lib/apiError'
 import { formatPrice } from '@/lib/format'
 import { ORDER_STAGES, ORDER_STAGE_LABEL, ORDER_STAGE_COLOR, deadlineText, DEADLINE_TONE_CLASS, orderStatePill } from '@/lib/orderStages'
 
@@ -20,6 +23,7 @@ const groupsStore = useGroupsStore()
 const auth = useAuthStore()
 const messages = useMessagesStore()
 const nsfwMode = useNsfwMode().nsfwEnabled
+const { confirmDialog } = useConfirm()
 const activeNav = ref('groups')
 
 const order = ref<OrderDetail | null>(null)
@@ -118,16 +122,68 @@ async function confirmPayment(deadlineAt: string) {
   }
 }
 
-// Заказчик отмечает оплату счёта — художнику приходит уведомление
+// Деньги удержаны на заказе и уходят художнику только после подтверждения заказчика
+const escrowHeld = computed(() => order.value?.escrow_status === 'held')
+const canConfirmCompletion = computed(() => isCustomer.value && isFinished.value && escrowHeld.value)
+const insufficientFunds = ref(false)
+const walletCardMounted = ref(false)
+const walletCardRef = ref<InstanceType<typeof WalletCard> | null>(null)
+
+async function openWalletTopup() {
+  walletCardMounted.value = true
+  await nextTick()
+  walletCardRef.value?.openModal()
+  walletCardRef.value?.startTopupPicker()
+}
+
+// Заказчик оплачивает счёт с кошелька: деньги списываются и удерживаются, художнику приходит уведомление
 async function markPaid() {
   if (!order.value?.invoice_message_id) return
   payBusy.value = true
   actionError.value = ''
+  insufficientFunds.value = false
   try {
     await messages.payRequest(order.value.invoice_message_id)
     await reload()
   } catch (e) {
-    actionError.value = errorMessage(e) ?? 'Не удалось отметить оплату'
+    insufficientFunds.value = apiErrorCode(e) === 'INSUFFICIENT_FUNDS'
+    const d = apiErrorDetails<{ needed?: number; balance?: number }>(e)
+    actionError.value = insufficientFunds.value && d?.needed != null
+      ? `Оплата не прошла: недостаточно средств — нужно ${d.needed} BLM, на балансе ${d.balance ?? 0} BLM.`
+      : apiErrorMessage(e) ?? errorMessage(e) ?? 'Оплата не прошла'
+    // Денег нет — сразу ведём на форму пополнения
+    if (insufficientFunds.value) void openWalletTopup()
+  } finally {
+    payBusy.value = false
+  }
+}
+
+function cancelPayFailure() {
+  actionError.value = ''
+  insufficientFunds.value = false
+}
+
+function contactSupport() {
+  if (!order.value) return
+  router.push({
+    name: 'help',
+    query: {
+      subject: 'Проблема с оплатой заказа',
+      message: `Заказ «${order.value.title}»\nID заказа: ${order.value.id}\nСумма: ${formatPrice(order.value.invoice_amount ?? 0, order.value.invoice_currency || 'RUB')}\n\nОпишите, что пошло не так:`,
+    },
+  })
+}
+
+async function confirmCompletion() {
+  if (!order.value?.group) return
+  if (!(await confirmDialog('Работа получена и вас всё устраивает? Оплата будет переведена художнику — отменить это нельзя.'))) return
+  payBusy.value = true
+  actionError.value = ''
+  try {
+    await groupsStore.confirmOrderCompletion(order.value.group.id, order.value.id)
+    await reload()
+  } catch (e) {
+    actionError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Не удалось подтвердить получение'
   } finally {
     payBusy.value = false
   }
@@ -242,7 +298,7 @@ onMounted(load)
                 </button>
               </template>
             </div>
-            <p v-if="actionError" class="relative mt-3 text-xs text-brand-error bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ actionError }}</p>
+            <p v-if="actionError && !(order.payment_status === 'unpaid' && !order.canManage)" class="relative mt-3 text-xs text-brand-error bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ actionError }}</p>
           </section>
 
           <div class="grid lg:grid-cols-3 gap-5 mt-5">
@@ -285,6 +341,13 @@ onMounted(load)
                 </div>
               </section>
 
+              <!-- Ход работы: скетчи, WIP и комментарии художника -->
+              <section v-if="order.group" class="rounded-3xl border border-brand-border bg-brand-card p-5">
+                <h2 class="text-[11px] font-bold text-white/45 uppercase tracking-widest mb-3">Ход работы</h2>
+                <OrderProgressFeed :group-id="order.group.id" :order-id="order.id" :current-stage="order.status"
+                  :can-manage="order.canManage" :initial="order.progress" />
+              </section>
+
               <!-- Референсы художника -->
               <section class="rounded-3xl border border-brand-border bg-brand-card p-5">
                 <h2 class="text-[11px] font-bold text-white/45 uppercase tracking-widest mb-3">Референсы к заказу</h2>
@@ -306,22 +369,43 @@ onMounted(load)
                 <p class="text-2xl font-extrabold text-white tabular-nums">{{ formatPrice(order.invoice_amount ?? 0, order.invoice_currency || 'RUB') }}</p>
                 <p class="text-xs mt-1.5 leading-relaxed"
                   :class="order.payment_status === 'confirmed' ? 'text-brand-success font-bold' : 'text-white/55'">
-                  <template v-if="order.payment_status === 'confirmed'">Оплата подтверждена — работа идёт</template>
+                  <template v-if="order.escrow_status === 'released'">Работа принята — оплата переведена художнику</template>
+                  <template v-else-if="order.escrow_status === 'refunded'">Оплата возвращена заказчику на кошелёк</template>
+                  <template v-else-if="order.payment_status === 'confirmed' && escrowHeld">
+                    {{ order.canManage ? 'Оплата удержана — она поступит вам, когда заказчик подтвердит готовую работу.' : 'Деньги удержаны безопасной сделкой и уйдут художнику, когда вы подтвердите готовую работу.' }}
+                  </template>
+                  <template v-else-if="order.payment_status === 'confirmed'">Оплата подтверждена — работа идёт</template>
                   <template v-else-if="order.payment_status === 'reported'">
-                    {{ order.canManage ? 'Заказчик отметил оплату. Проверьте поступление и подтвердите начало работы.' : 'Вы отметили оплату — ждём подтверждения художника, после этого работа начнётся.' }}
+                    {{ order.canManage ? 'Заказчик оплатил заказ, деньги удержаны. Подтвердите начало работы.' : 'Оплачено, деньги удержаны безопасной сделкой — ждём, пока художник подтвердит начало работы.' }}
                   </template>
                   <template v-else>
-                    {{ order.canManage ? 'Счёт выставлен, ждём оплату от заказчика.' : 'Оплатите счёт и отметьте оплату — художник подтвердит и начнёт работу.' }}
+                    {{ order.canManage ? 'Счёт выставлен, ждём оплату от заказчика.' : 'Оплатите счёт с кошелька Bloom. Деньги удерживаются и уходят художнику только после вашего подтверждения работы.' }}
                   </template>
                 </p>
                 <button v-if="order.payment_status === 'unpaid' && !order.canManage && order.invoice_message_id" @click="markPaid" :disabled="payBusy"
                   class="w-full mt-3 py-2.5 rounded-xl text-white font-extrabold text-sm hover:opacity-90 disabled:opacity-40 transition-all"
                   style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
-                  {{ payBusy ? 'Отмечаем…' : 'Я оплатил(а)' }}
+                  {{ payBusy ? 'Оплачиваем…' : 'Оплатить с кошелька' }}
+                </button>
+                <!-- Оплата не прошла: пополнить, отменить или написать в поддержку -->
+                <div v-if="actionError && order.payment_status === 'unpaid' && !order.canManage" class="mt-3 rounded-xl border border-brand-error/30 bg-brand-error/10 px-3 py-2.5 stack-y-2">
+                  <p class="text-xs text-white/75 leading-snug">{{ actionError }}</p>
+                  <div class="flex flex-wrap gap-2">
+                    <button v-if="insufficientFunds" @click="openWalletTopup" class="px-3 py-1.5 rounded-lg bg-brand-accent text-white text-xs font-bold hover:bg-brand-accent-plus transition-all">Пополнить кошелёк</button>
+                    <button @click="cancelPayFailure" class="px-3 py-1.5 rounded-lg bg-white/10 text-white/80 text-xs font-bold hover:bg-white/15 transition-all">Отменить</button>
+                  </div>
+                </div>
+                <button v-if="canConfirmCompletion" @click="confirmCompletion" :disabled="payBusy"
+                  class="w-full mt-3 py-2.5 rounded-xl border border-brand-success/40 bg-brand-success/10 text-brand-success font-extrabold text-sm hover:bg-brand-success/15 disabled:opacity-40 transition-all">
+                  Подтвердить получение работы
                 </button>
                 <button v-if="needsPayment && order.canManage" @click="showStart = true" :disabled="busy"
                   class="w-full mt-3 py-2.5 rounded-xl border border-brand-success/40 bg-brand-success/10 text-brand-success font-extrabold text-sm hover:bg-brand-success/15 disabled:opacity-40 transition-all">
                   Подтвердить оплату и начать работу
+                </button>
+                <button v-if="!order.canManage && order.payment_status !== 'none'" @click="contactSupport"
+                  class="mt-3 inline-flex items-center gap-1.5 text-[11px] font-bold text-white/45 hover:text-white transition-colors">
+                  <BIcon name="LifeBuoy" class="w-3.5 h-3.5" /> Написать в поддержку
                 </button>
               </section>
 
@@ -364,6 +448,7 @@ onMounted(load)
             </aside>
           </div>
 
+          <div v-if="walletCardMounted" class="hidden"><WalletCard ref="walletCardRef" /></div>
           <OrderStartModal v-if="showStart && order" :order="order" :avg-days="null" :busy="busy" :error="actionError" :payment-confirm="needsPayment"
             @close="showStart = false" @confirm="(d: string) => needsPayment ? confirmPayment(d) : (nextStatus && moveTo(nextStatus, d))" />
           <OrderEditModal v-if="showEdit && order && order.group" :group-id="order.group.id" :order="order"

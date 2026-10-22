@@ -7,6 +7,8 @@ import {
   toggleGroupBookmarkHandler,
   getBookmarkedGroupsHandler,
   getGroupBookmarkStatusHandler,
+  toggleListingBookmarkHandler,
+  getBookmarkedListingsHandler,
   getLabelsHandler,
   createLabelHandler,
   deleteLabelHandler,
@@ -25,6 +27,10 @@ export async function bookmarksRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getBookmarkedGroupsHandler>>('/groups',                     auth, getBookmarkedGroupsHandler);
   fastify.get<RouteGenericOf<typeof getGroupBookmarkStatusHandler>>('/groups/:groupId',            auth, getGroupBookmarkStatusHandler);
   fastify.post<RouteGenericOf<typeof toggleGroupBookmarkHandler>>('/groups/:groupId',           auth, toggleGroupBookmarkHandler);
+
+  // Dealers' Den listing bookmarks
+  fastify.get<RouteGenericOf<typeof getBookmarkedListingsHandler>>('/listings',                 auth, getBookmarkedListingsHandler);
+  fastify.post<RouteGenericOf<typeof toggleListingBookmarkHandler>>('/listings/:listingId',        auth, toggleListingBookmarkHandler);
 
   // Post bookmark labels
   fastify.get<RouteGenericOf<typeof getLabelsHandler>>('/labels',                     auth, getLabelsHandler);

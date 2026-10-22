@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { errCode } from '../../lib/httpErrors.js';
+import { dealersDenService } from '../dealers-den/service.js';
 
 // Цвет идёт в style-строку на фронтенде: принимаем только #rrggbb, иначе лезут лишние CSS-свойства
 const normalizeHexColor = (color?: string | null) => (color && /^#[0-9a-f]{6}$/i.test(color) ? color : '#4C67CF');
@@ -19,6 +20,8 @@ const GROUP_SELECT = {
   members_count: true, category: true,
   _count: { select: { members: true } },
 } as const;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const bookmarksService = {
   // ── User bookmarks ────────────────────────────────────────────────────────
@@ -96,6 +99,35 @@ export const bookmarksService = {
     });
     const set = new Set(rows.map(r => r.group_id));
     return Object.fromEntries(groupIds.map(id => [id, set.has(id)]));
+  },
+
+  // ── Dealers' Den listing bookmarks ────────────────────────────────────────
+  // Хранятся в DenWishlist: сердечко в каталоге Dealers' Den и закладка в этом разделе — один и тот же список.
+
+  async toggleListingBookmark(userId: string, listingId: string, viewerIsAdult: boolean) {
+    if (!UUID_RE.test(listingId)) throw new Error('Listing not found');
+    const listing = await prisma.dealerListing.findFirst({
+      where: { id: listingId, deleted_at: null, ...(viewerIsAdult ? {} : { is_nsfw: false }) },
+      select: { id: true },
+    });
+    if (!listing) throw new Error('Listing not found');
+    const existing = await prisma.denWishlist.findUnique({
+      where: { user_id_listing_id: { user_id: userId, listing_id: listingId } },
+    });
+    if (existing) {
+      await prisma.denWishlist.delete({ where: { id: existing.id } });
+      return { bookmarked: false };
+    }
+    try {
+      await prisma.denWishlist.create({ data: { user_id: userId, listing_id: listingId } });
+    } catch (err) {
+      if (errCode(err) !== 'P2002') throw err;
+    }
+    return { bookmarked: true };
+  },
+
+  async getBookmarkedListings(userId: string, viewerIsAdult: boolean) {
+    return dealersDenService.getMyWishlist(userId, viewerIsAdult);
   },
 
   // ── Post bookmark labels ──────────────────────────────────────────────────

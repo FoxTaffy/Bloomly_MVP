@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { useLangStore } from '@/stores/lang'
+import { isDenNotification, denNotificationKey } from '@/lib/denNotifications'
 
 export interface NotifToast {
   id: string
@@ -78,6 +79,8 @@ export function useNotifToast() {
         : (subscriptionPostLabel(notif.type, sender.pronouns)
           ?? friendLabel(notif.type)
           ?? typeLabel[String(notif.type).toUpperCase()]
+          // Dealers' Den: текст описывает действие («принял(а) вашу заявку…»), а не общее «отправил(а) уведомление»
+          ?? (isDenNotification(String(notif.type)) ? (useLangStore().t as any)[denNotificationKey(String(notif.type))] : undefined)
           // Unknown type: neutral sentence in the UI language, never the raw type code.
           ?? (useLangStore().t as any).notifGeneric),
       postId: notif.post_id ?? undefined,
@@ -94,6 +97,8 @@ export function useNotifToast() {
   function addMessageToast(opts: { senderName: string; senderAvatar: string | null; senderUsername: string; text: string; convId: string; isGroupDm?: boolean; groupSlug?: string }) {
     const dedupeKey = `${opts.convId}:${opts.senderUsername}:${opts.text}`
     if (toasts.value.some(t => t.sourceId === dedupeKey)) return
+    // Серия сообщений в одном чате — один тост с последним сообщением, а не стопка из нескольких
+    for (const prev of toasts.value.filter(t => t.convId === opts.convId)) remove(prev.id)
 
     const id = String(++counter)
     const t: NotifToast = {

@@ -18,5 +18,6 @@ export async function topupWallet(userId: string, amount: number) {
 
 export async function getWallet(userId: string) {
   const wallet = await prisma.wallet.findUnique({ where: { user_id: userId } });
-  return { balance: wallet?.balance ?? 0 };
+  // balance — основные средства (их можно вывести), promo_balance — бонусные: только на услуги площадки
+  return { balance: wallet?.balance ?? 0, promo_balance: wallet?.promo_balance ?? 0 };
 }

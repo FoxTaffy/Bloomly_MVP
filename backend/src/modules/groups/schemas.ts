@@ -51,7 +51,7 @@ export const updateGroupSchema = {
             emoji: { type: 'string', maxLength: 16 },
             name:  { type: 'string', maxLength: 60 },
             price: { type: 'string', maxLength: 30 },
-            currency: { type: 'string', enum: ['RUB', 'USD', 'EUR', 'CNY', 'INR', 'BRL'] },
+            currency: { type: 'string', enum: ['RUB', 'USD', 'EUR', 'CNY', 'INR', 'BRL', 'KZT'] },
             desc:  { type: 'string', maxLength: 300 },
           },
         },

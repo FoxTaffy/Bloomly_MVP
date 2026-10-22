@@ -3,7 +3,7 @@
 // между экранами задаются параметрами (локаль, пресет, суффиксы).
 
 import { utcToZonedParts } from '@/lib/timezone'
-import { convertForDisplay } from './displayCurrency'
+import { blmToDisplay, convertForDisplay } from './displayCurrency'
 
 type DateInput = string | number | Date
 
@@ -89,8 +89,8 @@ export function formatPrice(price: string | number, currency: string, fractionDi
   const n0 = parseFloat(String(price))
   const conv = n0 > 0 ? convertForDisplay(n0, currency) : null
   if (conv) {
-    // Приблизительная сумма в валюте региона: рубли/йены целыми, остальное с копейками
-    const frac = conv.currency === 'RUB' || conv.currency === 'INR' ? 0 : 2
+    // Приблизительная сумма в валюте региона: ₽, ₸, ¥, ₹ целыми, остальное с копейками
+    const frac = fractionDigitsFor(conv.currency)
     return `≈ ${formatMoney(conv.amount, conv.currency, { minimumFractionDigits: frac, maximumFractionDigits: frac })}`
   }
   const opts: Intl.NumberFormatOptions = fractionDigits === undefined
@@ -105,6 +105,26 @@ export function formatPriceNative(price: string | number, currency: string): str
   return formatMoney(Number.isFinite(n) ? n : 0, currency, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
+/** Валюты с крупным номиналом показываем целыми: 180 ₽, 900 ₸. */
+const WHOLE_CURRENCIES = new Set(['RUB', 'KZT', 'CNY', 'INR'])
+export function fractionDigitsFor(currency: string): number {
+  return WHOLE_CURRENCIES.has(currency) ? 0 : 2
+}
+
+/**
+ * Цена в BLM с пересчётом в валюту региона: «2 BLM ≈ 180 ₽». Нет валюты показа или курсов — просто «2 BLM».
+ * Это только показ: списывается всегда BLM.
+ */
+export function formatBlm(amount: string | number): string {
+  const n = parseFloat(String(amount))
+  const value = Number.isFinite(n) ? n : 0
+  const base = `${Math.round(value * 100) / 100} BLM`
+  const conv = value > 0 ? blmToDisplay(value) : null
+  if (!conv) return base
+  const frac = fractionDigitsFor(conv.currency)
+  return `${base} ≈ ${formatMoney(conv.amount, conv.currency, { minimumFractionDigits: frac, maximumFractionDigits: frac })}`
+}
+
 function formatMoney(n: number, currency: string, opts: Intl.NumberFormatOptions): string {
   if (currency === 'RUB') return `${n.toLocaleString('ru-RU', opts)} ₽`
   if (currency === 'USD') return `$${n.toLocaleString('en-US', opts)}`
@@ -112,5 +132,6 @@ function formatMoney(n: number, currency: string, opts: Intl.NumberFormatOptions
   if (currency === 'CNY') return `¥${n.toLocaleString('zh-CN', opts)}`
   if (currency === 'INR') return `₹${n.toLocaleString('en-IN', opts)}`
   if (currency === 'BRL') return `R$ ${n.toLocaleString('pt-BR', opts)}`
+  if (currency === 'KZT') return `${n.toLocaleString('ru-RU', opts)} ₸`
   return `${n.toLocaleString(undefined, opts)} ${currency}`
 }

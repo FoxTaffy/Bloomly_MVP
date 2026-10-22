@@ -678,6 +678,22 @@
                         {{ langStore.t.settingsProfilePartnerFromFriends }}
                       </p>
 
+                      <!-- Исходящая заявка: видна только отправителю, пока партнёр не ответил -->
+                      <div v-if="outgoingRequest" class="flex items-center gap-3 p-3 rounded-xl border border-pink-500/30 bg-pink-500/5">
+                        <img v-if="outgoingRequest.to.avatar_url" :src="outgoingRequest.to.avatar_url" class="w-8 h-8 rounded-full object-cover shrink-0"/>
+                        <div v-else class="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 shrink-0">
+                          {{ (outgoingRequest.to.display_name ?? outgoingRequest.to.username)[0].toUpperCase() }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white truncate">{{ outgoingRequest.to.display_name ?? outgoingRequest.to.username }}</p>
+                          <p class="text-xs text-pink-300/70 truncate">{{ langStore.t.settingsProfilePartnerPending }}</p>
+                        </div>
+                        <button type="button" @click="cancelOutgoingRequest" :disabled="cancellingRequest"
+                          class="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-white/55 hover:text-white hover:bg-white/10 transition-all shrink-0 disabled:opacity-50">
+                          {{ langStore.t.settingsProfilePartnerCancelRequest }}
+                        </button>
+                      </div>
+
                       <!-- Current partner chip -->
                       <div v-if="selectedPartner" class="flex items-center gap-3 p-3 rounded-xl border border-brand-border bg-brand-card">
                         <img v-if="selectedPartner.avatar_url" :src="selectedPartner.avatar_url" class="w-8 h-8 rounded-full object-cover shrink-0"/>
@@ -695,7 +711,7 @@
                       </div>
 
                       <!-- Search / select -->
-                      <div class="relative">
+                      <div v-if="!outgoingRequest" class="relative">
                         <input
                           v-model="partnerSearch"
                           type="text"
@@ -708,7 +724,9 @@
                           <div v-if="partnerDropOpen && filteredPartners.length"
                             class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-48">
                             <button v-for="u in filteredPartners" :key="u.id" type="button"
-                              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-all"
+                              class="w-full flex items-center gap-3 px-4 py-2.5 transition-all"
+                              :class="u.in_relationship ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5'"
+                              :disabled="u.in_relationship"
                               @mousedown.prevent="selectPartner(u)">
                               <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover shrink-0"/>
                               <div v-else class="w-7 h-7 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 shrink-0">
@@ -718,12 +736,13 @@
                                 <p class="text-sm font-semibold text-white truncate">{{ u.display_name ?? u.username }}</p>
                                 <p class="text-xs text-white/55 truncate">@{{ u.username }}</p>
                               </div>
+                              <span v-if="u.in_relationship" class="text-xs font-semibold text-pink-300/80 shrink-0">{{ langStore.t.relStatusInRel }}</span>
                             </button>
                             <p v-if="!filteredPartners.length" class="text-xs text-white/55 px-4 py-3">{{ langStore.t.noPersonFound }}</p>
                           </div>
                         </Transition>
                       </div>
-                      <p v-if="!followingList.length" class="text-xs text-white/35">{{ langStore.t.noFollowingYet }}</p>
+                      <p v-if="!outgoingRequest && !followingList.length" class="text-xs text-white/35">{{ langStore.t.noFollowingYet }}</p>
                     </div>
                   </Transition>
 
@@ -2396,6 +2415,11 @@ async function handleSubmit() {
       try {
         await api.post('/relationships/request', { toId: newPartner })
         showToast('success', langStore.t.settingsProfilePartnerRequestSent)
+        // Заявка ещё не принята — партнёром считаем только после подтверждения,
+        // а до тех пор показываем её отправителю как «Ожидание подтверждения».
+        form.relationship_with = ''
+        partnerSearch.value    = ''
+        await loadFollowing()
       } catch (e) {
         const msg = apiErrorMessage(e) ?? langStore.t.settingsProfileRequestSendError
         showToast('error', msg)
@@ -2860,22 +2884,40 @@ function onPartnerBlur() {
 }
 
 // ── Following / partner picker ────────────────────────────────────────────
-interface FollowUser { id: string; username: string; display_name: string | null; avatar_url: string | null }
+interface FollowUser { id: string; username: string; display_name: string | null; avatar_url: string | null; in_relationship?: boolean }
+interface OutgoingRelRequest { id: string; to: FollowUser }
 const followingList   = ref<FollowUser[]>([])
+const outgoingRequest = ref<OutgoingRelRequest | null>(null)
+const cancellingRequest = ref(false)
 const partnerSearch   = ref('')
 const partnerDropOpen = ref(false)
 
 async function loadFollowing() {
-  const auth = authStore
-  if (!auth.user?.id) return
+  if (!authStore.user?.id) return
   try {
-    // Load mutual friends for partner picker
-    const res  = await fetch(`/api/follows/${auth.user.id}/friends`, {
-      headers: { Authorization: `Bearer ${auth.token}` },
-    })
-    const data = await res.json()
-    if (data.success) followingList.value = data.data.users ?? []
+    // Mutual friends for the partner picker (с флагом in_relationship) + собственная исходящая заявка
+    const [friendsRes, outgoingRes] = await Promise.all([
+      api.get('/relationships/candidates'),
+      api.get('/relationships/outgoing'),
+    ])
+    if (friendsRes.data.success) followingList.value = friendsRes.data.data.users ?? []
+    if (outgoingRes.data.success) outgoingRequest.value = outgoingRes.data.data.requests?.[0] ?? null
   } catch { /* ignore */ }
+}
+
+async function cancelOutgoingRequest() {
+  const req = outgoingRequest.value
+  if (!req || cancellingRequest.value) return
+  cancellingRequest.value = true
+  try {
+    await api.delete('/relationships/request', { data: { toId: req.to.id } })
+    outgoingRequest.value = null
+    showToast('success', langStore.t.settingsProfilePartnerRequestCancelled)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileRequestSendError)
+  } finally {
+    cancellingRequest.value = false
+  }
 }
 
 const filteredPartners = computed(() => {
@@ -2888,6 +2930,7 @@ const filteredPartners = computed(() => {
 })
 
 const showPartnerPicker = computed(() =>
+  !!outgoingRequest.value ||
   ['in_relationship', 'relationship', 'married', 'open', 'open_relationship'].includes(form.relationship_status),
 )
 
@@ -2896,6 +2939,7 @@ const selectedPartner = computed(() =>
 )
 
 function selectPartner(u: FollowUser) {
+  if (u.in_relationship) return
   form.relationship_with = u.id
   partnerSearch.value    = u.display_name ?? u.username
   partnerDropOpen.value  = false

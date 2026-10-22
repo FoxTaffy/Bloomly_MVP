@@ -263,7 +263,7 @@ export class AuthService {
         select: { id: true, post_id: true, content: true, created_at: true, deleted_at: true },
         orderBy: { created_at: 'desc' },
       }),
-      prisma.wallet.findUnique({ where: { user_id: user.id }, select: { balance: true } }),
+      prisma.wallet.findUnique({ where: { user_id: user.id }, select: { balance: true, promo_balance: true } }),
     ]);
 
     const { password: _pw, ...profile } = user;

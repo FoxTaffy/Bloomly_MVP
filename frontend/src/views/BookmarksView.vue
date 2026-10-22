@@ -10,6 +10,7 @@ import PostCard from '@/components/PostCard.vue'
 import SkeletonPost from '@/components/SkeletonPost.vue'
 import BookmarkUserCard from '@/components/BookmarkUserCard.vue'
 import BookmarkGroupCard from '@/components/BookmarkGroupCard.vue'
+import BookmarkListingCard from '@/components/BookmarkListingCard.vue'
 import BIcon from '@/components/BIcon.vue'
 
 const router = useRouter()
@@ -30,7 +31,7 @@ const vClickOutside = {
 }
 
 // ── Tabs & sort ────────────────────────────────────────────────────────────
-type SubTab  = 'all' | 'media' | 'accounts' | 'groups'
+type SubTab  = 'all' | 'media' | 'accounts' | 'groups' | 'listings'
 type SortKey = 'newest' | 'oldest' | 'top'
 
 const activeTab   = ref<SubTab>('all')
@@ -45,6 +46,7 @@ const subTabs = computed(() => [
   { key: 'media'    as SubTab, icon: 'Image',       label: langStore.t.tabMedia    },
   { key: 'accounts' as SubTab, icon: 'UserCircle',  label: langStore.t.tabAccounts },
   { key: 'groups'   as SubTab, icon: 'Users',       label: langStore.t.groups      },
+  { key: 'listings' as SubTab, icon: 'ShoppingBag', label: langStore.t.tabListings },
 ])
 
 const sortOptions = computed<{ key: SortKey; label: string; icon: string }[]>(() => [
@@ -223,16 +225,42 @@ async function fetchGroups() {
 
 function onGroupUnbookmarked(id: string) { bookmarkedGroups.value = bookmarkedGroups.value.filter((g: any) => g.id !== id) }
 
+// ── Dealers' Den listing bookmarks state ───────────────────────────────────
+const bookmarkedListings = ref<any[]>([])
+const isListingsLoading  = ref(false)
+const filteredListings = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return bookmarkedListings.value
+  return bookmarkedListings.value.filter((l: any) =>
+    (l.title ?? '').toLowerCase().includes(q) ||
+    (l.description ?? '').toLowerCase().includes(q) ||
+    (l.tags ?? []).some((t: string) => t.toLowerCase().includes(q)),
+  )
+})
+
+async function fetchListings() {
+  isListingsLoading.value = true
+  try {
+    const res = await api.get('/bookmarks/listings')
+    if (res.data.success) bookmarkedListings.value = res.data.data.listings ?? []
+  } catch (e) { console.error('fetchListings', e) }
+  finally { isListingsLoading.value = false }
+}
+
+function onListingUnbookmarked(id: string) { bookmarkedListings.value = bookmarkedListings.value.filter((l: any) => l.id !== id) }
+
 // ── Computed total for header ──────────────────────────────────────────────
 const displayTotal = computed(() => {
   if (activeTab.value === 'accounts') return bookmarkedUsers.value.length
   if (activeTab.value === 'groups')   return bookmarkedGroups.value.length
+  if (activeTab.value === 'listings') return bookmarkedListings.value.length
   return postsTotal.value
 })
 
 const isLoading = computed(() => {
   if (activeTab.value === 'accounts') return isUsersLoading.value
   if (activeTab.value === 'groups')   return isGroupsLoading.value
+  if (activeTab.value === 'listings') return isListingsLoading.value
   return isPostLoading.value
 })
 
@@ -244,18 +272,20 @@ function loadTab(tab: SubTab) {
   if (tab === 'all' || tab === 'media') fetchPosts(true)
   else if (tab === 'accounts') fetchUsers()
   else if (tab === 'groups')   fetchGroups()
+  else if (tab === 'listings') fetchListings()
 }
 
 watch(activeTab, loadTab)
 watch(activeSort, () => { if (isPostTab.value) fetchPosts(true) })
 watch(activeLabelId, () => { if (isPostTab.value) fetchPosts(true) })
 
-onMounted(() => { fetchPosts(true); fetchUsers(); fetchGroups(); fetchLabels() })
+onMounted(() => { fetchPosts(true); fetchUsers(); fetchGroups(); fetchListings(); fetchLabels() })
 
 // ── Refresh ───────────────────────────────────────────────────────────────
 function refresh() {
   if (activeTab.value === 'accounts') fetchUsers()
   else if (activeTab.value === 'groups') fetchGroups()
+  else if (activeTab.value === 'listings') fetchListings()
   else fetchPosts(true)
 }
 
@@ -498,6 +528,36 @@ function labelById(id: string | null) {
           </div>
           <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <BookmarkGroupCard v-for="group in filteredGroups" :key="group.id" :group="group" @unbookmarked="onGroupUnbookmarked" />
+          </div>
+        </template>
+
+        <!-- ── DEALERS' DEN LISTINGS ──────────────────────────────────── -->
+        <template v-else-if="activeTab === 'listings'">
+          <div v-if="isListingsLoading" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div v-for="n in 6" :key="n" class="bg-brand-card border border-brand-border rounded-2xl h-56 animate-pulse" />
+          </div>
+          <div v-else-if="filteredListings.length === 0"
+            class="text-center py-20 bg-brand-card border border-brand-border rounded-3xl shadow-xl">
+            <div class="w-20 h-20 bg-brand-border rounded-full flex items-center justify-center mx-auto mb-5">
+              <BIcon :name="searchQuery ? 'SearchX' : 'ShoppingBag'" class="w-10 h-10 text-white/55" />
+            </div>
+            <h3 class="text-2xl font-bold text-white mb-2">
+              {{ searchQuery ? 'Ничего не найдено' : langStore.t.bookmarkedListingsEmpty }}
+            </h3>
+            <p class="text-white/55 text-sm mb-6 max-w-xs mx-auto">
+              {{ searchQuery ? 'Попробуйте другой запрос' : langStore.t.bookmarkedListingsHint }}
+            </p>
+            <button v-if="!searchQuery" @click="router.push({ name: 'dealers-den' })"
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all">
+              <BIcon name="ShoppingBag" class="w-4 h-4" /> {{ langStore.t.goToDealersDen }}
+            </button>
+            <button v-else @click="searchQuery = ''"
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-card border border-brand-border text-white text-sm font-bold rounded-xl hover:border-brand-accent/40 transition-all">
+              <BIcon name="X" class="w-4 h-4" /> Очистить поиск
+            </button>
+          </div>
+          <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <BookmarkListingCard v-for="item in filteredListings" :key="item.id" :listing="item" @unbookmarked="onListingUnbookmarked" />
           </div>
         </template>
 

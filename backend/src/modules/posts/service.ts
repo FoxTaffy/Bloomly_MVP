@@ -1413,9 +1413,18 @@ export const postService = {
           .filter((c) => analyzeContent(c.content).category !== 'spam')
           .map((c) => ({ ...c, replies: c.replies.filter((r) => analyzeContent(r.content).category !== 'spam') }))
       : topLevel;
+    const commentIds = filtered.flatMap((c) => [c.id, ...c.replies.map((r) => r.id)]);
+    const viewerVotes = viewerId && commentIds.length
+      ? await prisma.commentVote.findMany({
+          where: { user_id: viewerId, comment_id: { in: commentIds }, deleted_at: null },
+          select: { comment_id: true, value: true },
+        })
+      : [];
+    const voteMap = new Map(viewerVotes.map((vote) => [vote.comment_id, vote.value]));
     return filtered.map((c) => ({
       ...maskGroupCommentAuthor(c),
-      replies: c.replies.map(maskGroupCommentAuthor),
+      user_vote: voteMap.get(c.id) ?? 0,
+      replies: c.replies.map((r) => ({ ...maskGroupCommentAuthor(r), user_vote: voteMap.get(r.id) ?? 0 })),
     }));
   },
 
@@ -1424,6 +1433,8 @@ export const postService = {
     if (!comment) throw Object.assign(new Error('Comment not found'), { statusCode: 404 });
     await assertPostReadable(comment.post_id, userId);
     return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Comment" WHERE id = ${commentId}::uuid FOR UPDATE`;
+
       const existing = await tx.commentVote.findUnique({
         where: { user_id_comment_id: { user_id: userId, comment_id: commentId } },
       });

@@ -24,6 +24,8 @@ export const DEN_NOTIFICATION_ICONS: Record<string, string> = {
   den_order_coloring: 'Palette',
   den_order_finished: 'PartyPopper',
   den_order_paid: 'CreditCard',
+  den_order_released: 'Wallet',
+  den_order_progress: 'Image',
   den_queue_moved: 'ListOrdered',
   den_dispute_auto_resolved: 'AlertTriangle',
   den_dispute_resolved: 'AlertTriangle',

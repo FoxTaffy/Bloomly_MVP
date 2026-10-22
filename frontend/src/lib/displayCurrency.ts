@@ -6,7 +6,43 @@ import { ref } from 'vue'
  * Регион «Другое» (GLOBAL) и гости — цены как есть.
  */
 export const REGION_CURRENCY: Record<string, string> = {
-  RU: 'RUB', US: 'USD', EU: 'EUR', CN: 'CNY', IN: 'INR', BR: 'BRL',
+  RU: 'RUB', US: 'USD', EU: 'EUR', CN: 'CNY', IN: 'INR', BR: 'BRL', KZ: 'KZT',
+}
+
+/** Страны еврозоны и соседей, которым показываем евро. */
+const EURO_COUNTRIES = new Set([
+  'AT', 'BE', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PT', 'SI', 'SK',
+])
+/** Страна из языкового тега (ru-RU → RU) → регион оплаты. */
+const COUNTRY_REGION: Record<string, string> = { RU: 'RU', US: 'US', CN: 'CN', IN: 'IN', BR: 'BR', KZ: 'KZ' }
+/** Язык без страны (ru, kk, de…) → регион оплаты. */
+const LANGUAGE_REGION: Record<string, string> = {
+  ru: 'RU', kk: 'KZ', en: 'US', zh: 'CN', hi: 'IN', pt: 'BR',
+  de: 'EU', fr: 'EU', es: 'EU', it: 'EU', nl: 'EU', fi: 'EU', el: 'EU',
+}
+
+/**
+ * Регион оплаты по языкам браузера, пока пользователь не выбрал его сам. Теги идут в порядке предпочтений.
+ * Страна важнее языка (pt-PT → EU, en-GB не угадываем и идём к следующему тегу); нет совпадений — null.
+ */
+export function detectRegionFromLocale(languages: readonly string[]): string | null {
+  for (const tag of languages) {
+    const [lang, ...rest] = tag.replace(/_/g, '-').split('-')
+    const country = rest.find(p => /^[A-Za-z]{2}$/.test(p))?.toUpperCase()
+    if (country) {
+      if (COUNTRY_REGION[country]) return COUNTRY_REGION[country]
+      if (EURO_COUNTRIES.has(country)) return 'EU'
+      continue
+    }
+    const byLang = LANGUAGE_REGION[lang.toLowerCase()]
+    if (byLang) return byLang
+  }
+  return null
+}
+
+function browserLanguages(): readonly string[] {
+  if (typeof navigator === 'undefined') return []
+  return navigator.languages?.length ? navigator.languages : navigator.language ? [navigator.language] : []
 }
 
 /** Валюта показа или null, если конвертация выключена. Ref — чтобы шаблоны перерисовывались. */
@@ -24,17 +60,28 @@ export async function loadRates() {
   await loading
 }
 
+/** Явный регион из настроек главнее; без него (гости, не выбравшие регион) — по языку браузера. */
 export function setDisplayRegion(region?: string | null) {
-  const cur = region ? REGION_CURRENCY[region] ?? null : null
+  const effective = region || detectRegionFromLocale(browserLanguages())
+  const cur = effective ? REGION_CURRENCY[effective] ?? null : null
   displayCurrency.value = cur
   if (cur) void loadRates()
 }
 
-/** Сумма в валюте показа или null, если конвертировать нельзя. */
+/** Сумма в валюте показа или null, если конвертировать нельзя. BLM считается как USD (1 BLM = 1 $). */
 export function convertForDisplay(amount: number, from: string): { amount: number; currency: string } | null {
   const to = displayCurrency.value
-  if (!to || to === from) return null
+  const src = from === 'BLM' ? 'USD' : from
+  if (!to || to === src) return null
   const r = displayRates.value
-  if (!r[from] || !r[to]) return null
-  return { amount: (amount * r[from]) / r[to], currency: to }
+  if (!r[src] || !r[to]) return null
+  return { amount: (amount * r[src]) / r[to], currency: to }
+}
+
+/** BLM в валюте показа; для долларового региона — 1:1, без курсов. null, если валюта показа не выбрана или курсов ещё нет. */
+export function blmToDisplay(amount: number): { amount: number; currency: string } | null {
+  const to = displayCurrency.value
+  if (!to) return null
+  if (to === 'USD') return { amount, currency: 'USD' }
+  return convertForDisplay(amount, 'BLM')
 }

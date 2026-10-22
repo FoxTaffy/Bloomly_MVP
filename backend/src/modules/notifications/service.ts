@@ -3,6 +3,9 @@ import { pushService } from '../push/service.js';
 import { notificationPushContent } from '../push/texts.js';
 import { logError } from '../../lib/logger.js';
 
+// Превью в списке — <img>, поэтому видео (mp4/webm…) в качестве превью не годятся
+const VIDEO_URL = /\.(?:mp4|webm|mov|m4v|mkv|ogv|avi)$/i;
+
 // In-memory subscriber map for real-time push: receiverId → Set of send functions
 type PushFn = (data: string) => void;
 const subscribers = new Map<string, Set<PushFn>>();
@@ -70,6 +73,16 @@ export const notificationService = {
         quietFrom    = (prefs as any).quiet_hours_from;
         quietTo      = (prefs as any).quiet_hours_to;
       }
+    }
+
+    // Повтор того же события по тому же заказу/заявке, пока предыдущее не прочитано, не плодит новые строки и тосты
+    // (например, художник выкладывает подряд несколько скетчей — заказчику хватит одного уведомления)
+    if (refId && type.startsWith('den_')) {
+      const unread = await prisma.notification.findFirst({
+        where: { receiver_id: receiverId, type, ref_id: refId, sender_id: senderId ?? null, sender_group_id: senderGroupId ?? null, read: false, deleted_at: null },
+        select: { id: true },
+      });
+      if (unread) return null;
     }
 
     const notif = await prisma.notification.create({
@@ -141,7 +154,7 @@ export const notificationService = {
       title: p.title,
       text:  p.content.slice(0, 120),
       // Never leak a thumbnail of gated or NSFW media into the list.
-      thumb: p.is_nsfw || p.is_paid || p.subscriber_only ? null : (p.media_urls[0] ?? null),
+      thumb: p.is_nsfw || p.is_paid || p.subscriber_only ? null : (p.media_urls.find(u => !VIDEO_URL.test(u)) ?? null),
     }]));
 
     return notifs.map(n => (n.type === 'LIKE' && n.post_id ? { ...n, post: previewById.get(n.post_id) ?? null } : n));

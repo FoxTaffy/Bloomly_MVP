@@ -270,6 +270,10 @@ export const voteCommentHandler = async (
     const { id: userId } = request.user as JwtUser;
     const { commentId } = request.params;
     const { value } = request.body;
+    if (value !== 1 && value !== -1) {
+      return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_VOTE', message: 'Vote must be 1 or -1' } });
+    }
+
     const result = await postService.voteComment(userId, commentId, value);
     return reply.send({ success: true, data: result, error: null });
   } catch (error: unknown) {

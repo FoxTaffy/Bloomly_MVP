@@ -4,6 +4,7 @@ import { useLangStore } from '@/stores/lang'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
+import BugReportDetails from '@/components/BugReportDetails.vue'
 import { formatDate } from './adminHelpers'
 import { useAdminContext } from './adminContext'
 
@@ -123,6 +124,7 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
                 <span v-if="ticket.source === 'email'" class="text-[10px] text-[#8fa0ec] font-bold">· {{ langStore.t.adminTicketSourceEmail }}</span>
               </div>
               <p class="text-sm text-white/80 font-bold">{{ ticket.subject }}</p>
+              <BugReportDetails v-if="ticket.type === 'bug'" :ticket="ticket" />
               <p class="text-xs text-white/30 mt-1.5">
                 <template v-if="ticket.user?.username">{{ langStore.t.adminFromPrefix }} @{{ ticket.user.username }}</template>
                 <template v-else-if="ticket.external_email">{{ langStore.t.adminFromPrefix }} {{ ticket.external_email }}</template>

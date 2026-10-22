@@ -30,7 +30,7 @@ import type {
   OrderStatus,
 } from './types.js';
 import { logError } from '../../lib/logger.js';
-import { debitWallet } from '../wallet/ledger.js';
+import { debitWallet, creditWallet } from '../wallet/ledger.js';
 import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -2021,13 +2021,34 @@ export const groupService = {
     return clean;
   },
 
-  async getTodoItems(groupId: string) {
-    return prisma.groupTodoItem.findMany({
+  async getTodoItems(groupId: string, viewerId?: string) {
+    // Очередь видна всем, у кого есть доступ к группе, а оплата и ход работы — только персоналу и самому заказчику
+    const isStaff = viewerId ? await groupService.isOwnerOrAdmin(groupId, viewerId) : false;
+    const items = await prisma.groupTodoItem.findMany({
       where: { group_id: groupId, deleted_at: null },
       orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
       include: {
-        order: { select: { id: true, deadline_at: true, customer: { select: ORDER_CUSTOMER_SELECT } } },
+        order: { select: { id: true, deadline_at: true, started_at: true, payment_status: true, escrow_status: true, customer_id: true, customer: { select: ORDER_CUSTOMER_SELECT } } },
       },
+    });
+    const canSee = (i: (typeof items)[number]) => !!i.order && (isStaff || i.order.customer_id === viewerId);
+    // Блок прогресса в карточке заказа: сколько этапов выложено и что последнее (полная лента — по запросу)
+    const orderIds = items.filter(canSee).map(i => i.order_id).filter((id): id is string => !!id);
+    const entries = orderIds.length
+      ? await prisma.orderProgress.findMany({
+        where: { order_id: { in: orderIds }, deleted_at: null },
+        orderBy: { created_at: 'desc' },
+        select: { id: true, order_id: true, stage: true, text: true, image_urls: true, created_at: true },
+      })
+      : [];
+    const byOrder = new Map<string, typeof entries>();
+    for (const e of entries) byOrder.set(e.order_id, [...(byOrder.get(e.order_id) ?? []), e]);
+    return items.map(i => {
+      if (!i.order) return { ...i, progress: null };
+      const { payment_status, escrow_status, customer_id: _c, ...publicOrder } = i.order;
+      if (!canSee(i)) return { ...i, order: publicOrder, progress: null };
+      const list = byOrder.get(i.order.id) ?? [];
+      return { ...i, order: { ...publicOrder, payment_status, escrow_status }, progress: { count: list.length, latest: list[0] ?? null } };
     });
   },
 
@@ -2146,12 +2167,14 @@ export const groupService = {
         : null,
       resolveCharacters(fd.characters),
     ]);
+    const progress = await groupService.listOrderProgress(orderId);
     const { form_data: _fd, ...rest } = order;
     return {
       ...rest,
       group,
       listing,
       application,
+      progress,
       characters,
       references: Array.isArray(fd.references) ? fd.references : [],
       fromApplication: fd.source === 'listing_application',
@@ -2264,6 +2287,9 @@ export const groupService = {
     if (opts.paymentConfirmed) changes.push('Оплата подтверждена, работа началась');
     if (status !== order.status) changes.push(`Этап: ${ORDER_STAGE_LABEL[order.status]} → ${ORDER_STAGE_LABEL[status]}`);
     if (!order.started_at && data.started_at) changes.push('Взято в работу');
+    if (status === 'FINISHED' && order.status !== 'FINISHED' && order.escrow_status === 'held') {
+      changes.push('Заказчику: проверьте работу и подтвердите получение — тогда оплата перейдёт художнику');
+    }
     if (data.deadline_at && (!order.deadline_at || (data.deadline_at as Date).getTime() !== order.deadline_at.getTime())) {
       changes.push(`Срок: ${formatDay(data.deadline_at as Date)}`);
     }
@@ -2373,9 +2399,124 @@ export const groupService = {
     if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
       throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
     }
-    // Удалённый заказ уходит и из очереди работ
-    await prisma.groupTodoItem.updateMany({ where: { order_id: orderId, deleted_at: null }, data: { deleted_at: new Date() } });
-    return prisma.order.update({ where: { id: orderId }, data: { deleted_at: new Date() } });
+    // Удалённый заказ уходит и из очереди работ; удержанные деньги возвращаются заказчику в той же транзакции —
+    // иначе они навсегда останутся «в удержании» у несуществующего заказа
+    const refunded = await prisma.$transaction(async (tx) => {
+      let refund = 0;
+      if (order.escrow_status === 'held' && order.escrow_blm) {
+        const claimed = await tx.order.updateMany({ where: { id: orderId, escrow_status: 'held' }, data: { escrow_status: 'refunded', escrow_released_at: new Date() } });
+        if (claimed.count > 0) {
+          refund = Number(order.escrow_blm);
+          await creditWallet(tx, order.customer_id, refund, { kind: 'order_refund', refId: orderId });
+        }
+      }
+      await tx.groupTodoItem.updateMany({ where: { order_id: orderId, deleted_at: null }, data: { deleted_at: new Date() } });
+      await tx.order.update({ where: { id: orderId }, data: { deleted_at: new Date() } });
+      return refund;
+    });
+    if (refunded > 0 && order.conversation_id) {
+      const owner = await prisma.group.findUnique({ where: { id: order.group_id }, select: { owner_id: true } });
+      await messageService.sendMessage({
+        conversationId: order.conversation_id,
+        senderId: owner!.owner_id,
+        content: `Заказ «${order.title}» отменён — оплата (${refunded} BLM) возвращена на ваш кошелёк`,
+      }).catch(logError('[order] refund message'));
+    }
+    return { ...order, deleted_at: new Date() };
+  },
+
+  /**
+   * Заказчик подтверждает готовую работу — только теперь удержанная оплата уходит художнику (владельцу группы).
+   * Перевод атомарный: статус удержания меняется условным UPDATE, поэтому двойной клик не заплатит дважды.
+   */
+  async confirmOrderCompletion(orderId: string, requesterId: string) {
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { group: { select: { owner_id: true, slug: true } } } });
+    if (!order || order.deleted_at) throw httpError('Order not found', 404);
+    if (order.customer_id !== requesterId) throw httpError('Подтвердить получение может только заказчик', 403);
+    if (order.status !== 'FINISHED') throw httpError('Работа ещё не отмечена готовой', 400);
+    if (order.escrow_status !== 'held' || !order.escrow_blm) throw httpError('По заказу нет удержанной оплаты', 400);
+    const amount = Number(order.escrow_blm);
+
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.order.updateMany({ where: { id: orderId, escrow_status: 'held' }, data: { escrow_status: 'released', escrow_released_at: new Date() } });
+      if (claimed.count === 0) throw httpError('Оплата по заказу уже переведена', 400);
+      await creditWallet(tx, order.group.owner_id, amount, { kind: 'order_payout', refId: orderId });
+    });
+
+    if (order.invoice_message_id) {
+      await messageService.patchCardMetadata(order.invoice_message_id, { released: true }).catch(logError('[order] invoice patch'));
+    }
+    await groupService.announceOrderChange(order, ['Заказчик подтвердил получение работы — оплата переведена художнику']);
+    await notificationService.create({
+      receiverId: order.group.owner_id,
+      senderId: requesterId,
+      type: 'den_order_released',
+      refId: order.id,
+      meta: { groupSlug: order.group.slug, orderId: order.id, orderTitle: order.title, amount },
+    });
+    const fresh = await prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: { customer: { select: ORDER_CUSTOMER_SELECT } } });
+    return enrichOrder(fresh);
+  },
+
+  // ── Прогресс заказа: скетчи, WIP и комментарии художника ───────────────────
+  async listOrderProgress(orderId: string) {
+    return prisma.orderProgress.findMany({
+      where: { order_id: orderId, deleted_at: null },
+      orderBy: { created_at: 'asc' },
+      select: {
+        id: true, stage: true, text: true, image_urls: true, created_at: true,
+        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+      },
+    });
+  },
+
+  /** Лента этапов: видят художник (персонал группы) и сам заказчик. */
+  async getOrderProgress(groupId: string, orderId: string, requesterId: string) {
+    const order = await prisma.order.findFirst({ where: { id: orderId, group_id: groupId, deleted_at: null }, select: { customer_id: true } });
+    if (!order) throw httpError('Order not found', 404);
+    if (order.customer_id !== requesterId && !(await groupService.isOwnerOrAdmin(groupId, requesterId))) throw httpError('Forbidden', 403);
+    return groupService.listOrderProgress(orderId);
+  },
+
+  /** Художник выкладывает этап работы; заказчик получает одно уведомление, пока предыдущее не прочитано. */
+  async addOrderProgress(groupId: string, orderId: string, requesterId: string, input: { text?: string; imageUrls?: string[]; stage?: string }) {
+    const order = await prisma.order.findFirst({ where: { id: orderId, group_id: groupId, deleted_at: null }, include: { group: { select: { slug: true } } } });
+    if (!order) throw httpError('Order not found', 404);
+    if (!(await groupService.isOwnerOrAdmin(groupId, requesterId))) throw httpError('Admin access required', 403);
+
+    const text = input.text ? sanitizeDisplayText(input.text, 1000) : '';
+    const imageUrls = Array.isArray(input.imageUrls) ? input.imageUrls.filter((u): u is string => typeof u === 'string' && !!u) : [];
+    if (!text && imageUrls.length === 0) throw httpError('Добавьте картинку или комментарий', 400);
+    if (imageUrls.length > 6) throw httpError('Не больше 6 картинок в одном этапе', 400);
+    for (const url of imageUrls) await assertOwnedMedia(url, requesterId);
+    const stage = input.stage && (ORDER_STAGES as readonly string[]).includes(input.stage) ? (input.stage as OrderStatus) : order.status;
+
+    const created = await prisma.orderProgress.create({
+      data: { order_id: orderId, author_id: requesterId, stage, text: text || null, image_urls: imageUrls },
+      select: {
+        id: true, stage: true, text: true, image_urls: true, created_at: true,
+        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+      },
+    });
+    await notificationService.create({
+      receiverId: order.customer_id,
+      senderId: requesterId,
+      senderGroupId: groupId,
+      type: 'den_order_progress',
+      refId: order.id,
+      meta: { groupSlug: order.group.slug, orderId: order.id, orderTitle: order.title },
+    });
+    return created;
+  },
+
+  async deleteOrderProgress(groupId: string, orderId: string, progressId: string, requesterId: string) {
+    if (!(await groupService.isOwnerOrAdmin(groupId, requesterId))) throw httpError('Admin access required', 403);
+    const result = await prisma.orderProgress.updateMany({
+      where: { id: progressId, order_id: orderId, deleted_at: null, order: { group_id: groupId } },
+      data: { deleted_at: new Date() },
+    });
+    if (result.count === 0) throw httpError('Progress entry not found', 404);
+    return { id: progressId };
   },
 
   /**

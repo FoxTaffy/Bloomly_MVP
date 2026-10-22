@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { messageService } from './service.js';
 import { moderateMessage } from '../automod/service.js';
 import type { JwtUser, GetMessagesQuery } from './types.js';
-import { errMessage, errStatus } from '../../lib/httpErrors.js';
+import { errCode, errMessage, errStatus } from '../../lib/httpErrors.js';
 import { logError } from '../../lib/logger.js';
 
 // ── Conversations ─────────────────────────────────────────────────────────────
@@ -125,6 +125,10 @@ export async function payMessageHandler(
     const result = await messageService.payPaymentRequest(req.params.msgId, userId);
     return reply.send({ success: true, data: result, error: null });
   } catch (e) {
+    // Не хватило денег: клиенту нужен код и сколько не хватает, чтобы отправить на пополнение
+    if (errCode(e) === 'INSUFFICIENT_FUNDS') {
+      return reply.code(402).send({ success: false, data: null, error: { code: 'INSUFFICIENT_FUNDS', message: errMessage(e), details: (e as { details?: unknown }).details } });
+    }
     return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }

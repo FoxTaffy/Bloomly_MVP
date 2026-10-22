@@ -5,6 +5,7 @@ import api from '@/api'
 import { wsClient } from '@/lib/wsClient'
 import { useAuthStore } from '@/stores/auth'
 import { useNotifToast } from '@/composables/useNotifToast'
+import { formatPriceNative } from '@/lib/format'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface MsgSender {
@@ -102,6 +103,27 @@ function playNotificationSound() {
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
+/** Короткий текст сообщения для всплывающего тоста: у карточек (счёт, заказ…) своего текста нет. */
+function messageToastPreview(msg: Message): string {
+  if (msg.type === 'payment_request') {
+    const m = msg.metadata as { amount?: number; currency?: string } | null
+    return m?.amount != null ? `💳 Счёт на оплату · ${m.currency ? formatPriceNative(m.amount, m.currency) : `${m.amount} ₽`}` : '💳 Счёт на оплату'
+  }
+  if (msg.type === 'payment_confirmation') return '✅ Оплата получена'
+  if (msg.type === 'tip') return '🎉 Чаевые'
+  if (msg.type === 'post_share') return '📎 Поделился(-ась) постом'
+  if (msg.type === 'group_share') return '👥 Приглашение в группу'
+  if (msg.type === 'order_update') return msg.text || '📝 Заказ обновлён'
+  return msg.text
+    ? msg.text
+    : msg.type === 'sticker' ? '🎭 Стикер'
+    : msg.type === 'voice' ? '🎤 Голосовое сообщение'
+    : msg.type === 'audio' ? '🎵 Аудио'
+    : msg.type === 'album' ? '📎 Альбом'
+    : msg.file_url ? '📎 Медиафайл'
+    : '...'
+}
+
 export const useMessagesStore = defineStore('messages', () => {
   const conversations    = ref<Conversation[]>([])
   const activeId         = ref<string | null>(null)
@@ -285,20 +307,15 @@ export const useMessagesStore = defineStore('messages', () => {
         if (!isConvSoundMuted(conv)) playNotificationSound()
         // Only pop a toast for conversations the user isn't currently looking at, and
         // never for a fully muted one (sound-only mute still shows the toast).
-        if (!isViewing(convId) && !isConvMuted(conv)) {
-          const preview = msg.text
-            ? msg.text
-            : msg.type === 'sticker' ? '🎭 Стикер'
-            : msg.type === 'voice' ? '🎤 Голосовое сообщение'
-            : msg.type === 'audio' ? '🎵 Аудио'
-            : msg.type === 'album' ? '📎 Альбом'
-            : msg.file_url ? '📎 Медиафайл'
-            : '...'
+        if (!isViewing(convId) && !isConvMuted(conv) && msg.type !== 'order_card') {
+          // Карточку «заказ принят» не дублируем тостом: о принятии заявки уже говорит уведомление.
+          // В переписке с группой ответ персонала приходит от имени группы, а не личного аккаунта владельца.
+          const asGroup = !!groupDm && (isStaffSide || msg.sender_id !== groupDm.customerId)
           useNotifToast().addMessageToast({
-            senderName: isStaffSide ? (groupDm!.groupName || msg.sender.display_name || msg.sender.username) : (msg.sender.display_name || msg.sender.username),
-            senderAvatar: isStaffSide ? (groupDm!.groupAvatarUrl ?? msg.sender.avatar_url) : msg.sender.avatar_url,
+            senderName: asGroup ? (groupDm!.groupName || msg.sender.display_name || msg.sender.username) : (msg.sender.display_name || msg.sender.username),
+            senderAvatar: asGroup ? (groupDm!.groupAvatarUrl ?? msg.sender.avatar_url) : msg.sender.avatar_url,
             senderUsername: msg.sender.username,
-            text: preview,
+            text: messageToastPreview(msg),
             convId,
             isGroupDm: isStaffSide,
             groupSlug: isStaffSide ? groupDm!.groupSlug : undefined,

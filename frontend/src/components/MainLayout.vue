@@ -1320,8 +1320,8 @@ onDeactivated(() => {
         </div>
 
         <!-- Плашка «Новые посты» -->
-        <button v-if="newPostsCount > 0 && activeNav === 'home'" @click="showNewPosts"
-            class="fixed top-20 md:top-24 left-1/2 -translate-x-1/2 z-[400] flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-accent text-white text-sm font-bold shadow-xl hover:brightness-110 transition-all">
+        <button v-if="newPostsCount > 0 && activeNav === 'home' && !lightboxOpen" @click="showNewPosts"
+            class="fixed top-20 md:top-24 left-1/2 -translate-x-1/2 z-[40] flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-accent text-white text-sm font-bold shadow-xl hover:brightness-110 transition-all">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/></svg>
             {{ langStore.t.feedNewPosts }}
         </button>

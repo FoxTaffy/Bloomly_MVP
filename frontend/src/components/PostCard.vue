@@ -7,7 +7,8 @@
     </div>
   </div>
 
-  <div v-else ref="cardRootRef" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group">
+  <div v-else ref="cardRootRef" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group"
+    :class="{ 'cursor-pointer': !adMode && !isEditing }" @click="onCardClick">
     <!-- Announcement banner -->
     <div v-if="post.is_announcement" class="flex items-center gap-2 px-5 py-2.5 bg-brand-yellow/10 border-b border-brand-yellow/25">
       <BIcon name="Megaphone" class="w-3.5 h-3.5 text-brand-yellow shrink-0" />
@@ -325,6 +326,7 @@
         <!-- ── Media carousel ────────────────────────────────────── -->
         <div
           v-if="post.media_urls && post.media_urls.length"
+          data-post-interactive
           class="relative mt-3 rounded-2xl overflow-hidden group/carousel"
           :class="adMode ? 'select-none' : ''"
           @contextmenu="adMode ? ($event as Event).preventDefault() : null"
@@ -490,33 +492,6 @@
         </div>
       </div>
 
-      <!-- ── Top comment preview ──────────────────────────────────────── -->
-      <div
-        v-if="topComment && !isExpanded"
-        @click="isExpanded = true"
-        class="mt-3 flex items-start gap-2 cursor-pointer group/tc"
-      >
-        <img
-          v-if="topComment.author?.avatar_url"
-          :src="topComment.author.avatar_url"
-          class="w-6 h-6 rounded-full object-cover border border-brand-border shrink-0 mt-0.5"
-          @error="onAvatarError"
-        />
-        <div v-else class="w-6 h-6 rounded-full bg-brand-accent/20 flex items-center justify-center shrink-0 mt-0.5 text-[9px] font-bold text-brand-accent">
-          {{ (topComment.author?.username ?? '?')[0].toUpperCase() }}
-        </div>
-        <div class="flex-1 min-w-0 bg-brand-bg/60 rounded-xl px-3 py-2 border border-brand-border/50 group-hover/tc:border-brand-accent/30 transition-colors">
-          <div class="flex items-center gap-1.5 mb-0.5">
-            <span class="text-white/80 text-xs font-bold">{{ topComment.author?.display_name || topComment.author?.username }}</span>
-            <span class="text-white/35 text-[10px] flex items-center gap-0.5">
-              <BIcon name="ArrowBigUp" class="w-2.5 h-2.5 text-emerald-400" fill="currentColor" />
-              {{ topComment.rating }}
-            </span>
-          </div>
-          <p class="text-white/60 text-xs truncate">{{ topComment.content }}</p>
-        </div>
-      </div>
-
       <!-- ── Actions ───────────────────────────────────────────────────── -->
       <div class="flex items-center justify-between pt-4 mt-4 border-t border-brand-border max-md:gap-1.5">
         <div class="flex items-center gap-2 max-md:gap-1.5 max-md:min-w-0">
@@ -558,13 +533,13 @@
           </button>
 
           <!-- Comments toggle -->
-          <button @click="isExpanded = !isExpanded"
+          <button @click="openComments" aria-label="Открыть комментарии" aria-haspopup="dialog"
             class="flex items-center h-8 gap-1 px-2.5 max-md:px-2 rounded-full border text-xs transition-all"
-            :class="isExpanded
+            :class="lightboxOpen || isExpanded
               ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
               : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'">
             <BIcon name="MessageSquare" class="w-4 h-4" />
-            <span>{{ post._count?.comments ?? 0 }}</span>
+            <span>{{ localCommentsCount }}</span>
           </button>
         </div>
 
@@ -591,6 +566,9 @@
           </div>
         </div>
       </div>
+
+      <!-- ── Quick comment: send without opening the full discussion ───── -->
+
     </div>
 
     <!-- ── Report modal ──────────────────────────────────────────────────── -->
@@ -603,32 +581,120 @@
     <SharePostModal v-if="showShareModal" :post-id="post.id" :post-url="postUrl" @close="showShareModal = false" />
 
     <!-- ── Comments section ──────────────────────────────────────────────── -->
-    <Transition name="slide">
-      <div v-if="isExpanded" class="border-t border-brand-border px-5 pb-5 pt-4">
-        <PostComments :post-id="post.id" :comments-disabled="!!post.comments_disabled && !isOwn" />
+      <div v-if="!adMode && !lightboxOpen" class="border-t border-brand-border px-5 pb-5 pt-4">
+        <PostComments :preview-limit="isExpanded ? undefined : 3" :post-id="post.id" :comments-disabled="!!post.comments_disabled && !isOwn" />
       </div>
-    </Transition>
 
     <!-- ── Media lightbox ────────────────────────────────────────────────── -->
     <PostLightbox
       v-if="lightboxOpen"
-      :images="lightboxUrls"
+      :images="canShowModalMedia ? lightboxUrls : []"
       :original-images="lightboxOriginalUrls"
       :start-index="lightboxIndex"
       :post-id="post.id"
+      :author="post.author"
+      :group="effectiveGroupContext"
+      :content="isPaywalled && !paidRevealed ? '' : post.content"
+      :tags="post.tags"
+      :category="post.category"
+      :created-at="post.created_at"
+      :comments-disabled="!!post.comments_disabled && !isOwn"
+      :focus-comments="lightboxFocusComments"
       :author-id="post.author?.id"
       :rating="localRating"
       :initial-vote="localVote"
       :initial-repawed="localRepawed"
       :initial-favourited="localFavourited"
       :repaw-count="localRepaws"
-      :comments-count="post._count?.comments ?? 0"
+      :comments-count="localCommentsCount"
       :views-count="post.views_count ?? 0"
       @voted="({ vote, rating }) => { localVote = vote; localRating = rating }"
       @repaw-toggled="({ repawed, count }) => { localRepawed = repawed; localRepaws = count }"
       @favourite-changed="({ favourited }) => { localFavourited = favourited; emit('favouriteChanged', post.id, favourited) }"
       @close="lightboxOpen = false"
-    />
+    >
+      <template #post-content>
+        <div class="post-body" v-if="!isPaywalled || paidRevealed">
+        <!-- Post text with mention highlighting -->
+        <div v-if="!isEditing && (post.content || '').trim()">
+          <p class="text-white/95 text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
+            <template v-if="postShowTranslation && postTranslating">
+              <span class="inline-flex items-center gap-1.5 text-white/40 text-sm">
+                <span class="w-3.5 h-3.5 border-2 border-brand-accent/60 border-t-transparent rounded-full animate-spin inline-block" />
+                {{ langStore.t.translating }}
+              </span>
+            </template>
+            <template v-else>
+              <template v-for="seg in displayContent" :key="seg.key">
+                <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+                <a v-else-if="seg.type === 'url'" :href="seg.href" target="_blank" rel="noopener noreferrer nofollow ugc"
+                  class="text-brand-accent hover:underline break-all" @click.stop>{{ seg.text }}</a>
+                <!-- ── MENTION PILL ── -->
+                <router-link v-else
+                  :to="mentionHref(seg.username)"
+                  class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
+                  :class="mentionGroups[seg.username!] ? 'rounded-xl' : 'rounded-full'"
+                  style="vertical-align: middle; white-space: nowrap;"
+                  @click.stop="onMentionLeave()"
+                  @mouseenter="onMentionEnter(seg.username!, $event)"
+                  @touchstart.passive="resolveMention(seg.username!)"
+                  @focus="resolveMention(seg.username!)"
+                  @mouseleave="onMentionLeave()"
+                >
+                  <!-- Avatar or initials -->
+                  <span
+                    class="shrink-0 w-5 h-5 overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center"
+                    :class="mentionGroups[seg.username!] ? 'rounded-md' : 'rounded-full'"
+                  >
+                    <img
+                      v-if="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])?.avatar_url"
+                      :src="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])!.avatar_url!"
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                      @error="onAvatarError"
+                    />
+                    <span v-else class="text-[8px] font-bold text-brand-accent leading-none">
+                      {{ (seg.username ?? '?')[0].toUpperCase() }}
+                    </span>
+                  </span>
+                  <!-- Label: group name or @username -->
+                  <span class="leading-none">{{ mentionGroups[seg.username!] ? mentionGroups[seg.username!]!.name : seg.username }}</span>
+                </router-link>
+              </template>
+            </template>
+          </p>
+          <!-- Translate button -->
+          <button
+            v-if="!isEditing && postCanTranslate"
+            @click.stop="togglePostTranslate"
+            class="mt-1.5 flex items-center gap-1 text-[11px] text-white/35 hover:text-brand-accent transition-colors"
+          >
+            <BIcon v-if="!postTranslating" name="Languages" class="w-3 h-3" />
+            <span v-if="postTranslating" class="w-3 h-3 border border-brand-accent/60 border-t-transparent rounded-full animate-spin" />
+            {{ postShowTranslation ? langStore.t.showOriginal : langStore.t.autoTranslate }}
+          </button>
+        </div>
+
+        <!-- Category + tags -->
+        <div v-if="post.category || (post.tags && post.tags.length)" class="flex flex-wrap items-center gap-1.5 mt-1">
+          <span v-if="post.category"
+            class="px-3 py-1 bg-brand-accent/20 text-brand-accent text-xs font-bold rounded-full border border-brand-accent/30">
+            {{ post.category }}
+          </span>
+          <router-link
+            v-for="tag in post.tags" :key="tag.tag?.id ?? tag.id"
+            v-slot="{ navigate, href }"
+            :to="{ path: '/search', query: { q: tag.tag?.name ?? tag.name } }"
+            custom
+          >
+            <a :href="href" @click="onTagClick($event, navigate)"
+              class="select-text px-3 py-1 bg-brand-bg text-white/55 text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer transition-colors"
+            >#{{ tag.tag?.name ?? tag.name }}</a>
+          </router-link>
+        </div>
+        </div>
+      </template>
+    </PostLightbox>
   </div>
 
   <!-- ── Mention hover popup (teleported to body, escapes overflow:hidden) ── -->
@@ -705,6 +771,7 @@ import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import PostComments from '@/components/PostComments.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
+import { usePostDiscussion } from '@/composables/usePostDiscussion'
 import ReportModal from '@/components/ReportModal.vue'
 import PostStatsModal from '@/components/PostStatsModal.vue'
 import SharePostModal from '@/components/SharePostModal.vue'
@@ -895,6 +962,26 @@ let repawCountdownTimer: ReturnType<typeof setInterval> | null = null
 const repawPending = ref(false)
 const votePending = ref(false)
 
+const discussion = usePostDiscussion(() => props.post.id, () => authStore.user?.id)
+const localCommentsCount = discussion.count
+watch(() => props.post._count?.comments, count => discussion.seedCount(count ?? 0), { immediate: true })
+const canShowModalMedia = computed(() => (!props.post.is_nsfw || nsfwEnabled.value) && (!isPaywalled.value || paidRevealed.value))
+const lightboxFocusComments = ref(false)
+function openComments() {
+  pauseInlinePlayer(carouselIndex.value)
+  lightboxFocusComments.value = true
+  lightboxIndex.value = carouselIndex.value
+  lightboxOpen.value = true
+}
+function onCardClick(event: MouseEvent) {
+  if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey
+    || props.adMode || isEditing.value || lightboxOpen.value) return
+  const target = event.target
+  if (!(target instanceof Element)) return
+  if (target.closest('a, button, input, textarea, select, label, summary, video, audio, [role="button"], [role="link"], [role="menu"], [role="slider"], [role="dialog"], [contenteditable]:not([contenteditable="false"]), [data-post-interactive], .comments-root')) return
+  if (window.getSelection()?.toString()) return
+  openComments()
+}
 const lightboxOpen  = ref(false)
 const lightboxIndex = ref(0)
 
@@ -1184,6 +1271,7 @@ function mentionHref(username: string): string {
 }
 
 function openLightbox(index: number) {
+  lightboxFocusComments.value = false
   pauseInlinePlayer(carouselIndex.value)
   lightboxIndex.value = index
   carouselIndex.value = index
@@ -1197,8 +1285,7 @@ function openLightboxByUrl(url: string) {
 
 function openFullscreen() {
   showMenu.value = false
-  if (props.post.media_urls?.length) openLightbox(0)
-  else router.push(`/post/${props.post.id}`)
+  openComments()
 }
 
 function startEdit() {

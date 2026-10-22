@@ -7,6 +7,8 @@ import type { SendMessageInput, GetMessagesQuery } from './types.js';
 import { logError } from '../../lib/logger.js';
 import { pushService } from '../push/service.js';
 import { notificationService } from '../notifications/service.js';
+import { debitWallet } from '../wallet/ledger.js';
+import { amountToBlm } from '../payments/rate.js';
 
 // Group roles that answer the group's inbox (group DMs) on its behalf.
 import { ensureGroupThread } from '../../lib/groupThread.js';
@@ -642,8 +644,11 @@ export const messageService = {
   },
 
   /**
-   * Mark a pending payment_request message as paid, and post a payment_confirmation
-   * card in reply. Chat-only — no real payment processor or Dealers' Den linkage.
+   * Оплата карточки payment_request.
+   * Счёт по заказу — настоящая оплата с кошелька: сумма пересчитывается из валюты счёта в BLM и списывается
+   * с заказчика сразу, но художнику не уходит — деньги удерживаются на заказе (безопасная сделка) и переводятся
+   * только когда заказчик подтвердит готовую работу. Нет денег — 402 и ничего не меняется.
+   * Обычный запрос в чате — по-прежнему только отметка «оплачено» (платёжной системы за ним нет).
    */
   async payPaymentRequest(messageId: string, userId: string) {
     const request = await prisma.message.findUnique({ where: { id: messageId } });
@@ -660,17 +665,36 @@ export const messageService = {
       throw Object.assign(new Error('Оплату в групповой беседе может отметить только плательщик'), { statusCode: 403 });
     }
 
+    // Сколько BLM спишется за счёт заказа; курс берём до транзакции — сетевой запрос не должен держать блокировки
+    const orderId = typeof rawMeta.orderId === 'string' ? rawMeta.orderId : null;
+    const rawDue = rawMeta.prepaymentPercent ? (rawMeta.amount * rawMeta.prepaymentPercent) / 100 : rawMeta.amount;
+    const blmCharge = orderId ? await amountToBlm(rawDue, rawMeta.currency ?? 'USD') : null;
+
     // Проверку статуса и смену на «оплачено» делаем под блокировкой строки: два параллельных
-    // подтверждения не создадут два подтверждения оплаты
-    const { updatedRequest, confirmation, dueAmount, meta } = await prisma.$transaction(async (tx) => {
+    // подтверждения не спишут деньги дважды и не создадут два подтверждения оплаты
+    const { updatedRequest, confirmation } = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Message" WHERE id = ${messageId}::uuid FOR UPDATE`;
       const locked = await tx.message.findUnique({ where: { id: messageId }, select: { metadata: true } });
       const currentMeta = (locked?.metadata as Record<string, any>) ?? {};
       if (currentMeta.status === 'paid') throw Object.assign(new Error('Already paid'), { statusCode: 400 });
 
-      const nextMeta = { ...currentMeta, status: 'paid', paid_at: new Date().toISOString() };
       // Оплата закрывает предоплату, если она была запрошена, а не полную сумму заказа
       const due = currentMeta.prepaymentPercent ? (currentMeta.amount * currentMeta.prepaymentPercent) / 100 : currentMeta.amount;
+      const escrow: Record<string, unknown> = {};
+      if (orderId && blmCharge != null) {
+        // Счёт должен быть именно этого заказа и именно этого плательщика: чужой заказ или повторная оплата — отказ
+        const now = new Date();
+        const claimed = await tx.order.updateMany({
+          where: { id: orderId, invoice_message_id: messageId, customer_id: userId, payment_status: 'unpaid', deleted_at: null },
+          data: { payment_status: 'reported', paid_reported_at: now, escrow_status: 'held', escrow_blm: blmCharge, escrow_held_at: now },
+        });
+        if (claimed.count === 0) throw Object.assign(new Error('Счёт по заказу уже оплачен или недействителен'), { statusCode: 400 });
+        await debitWallet(tx, userId, blmCharge, { kind: 'order_escrow', refId: orderId }, 'INSUFFICIENT_FUNDS');
+        escrow.escrow = true;
+        escrow.blm = blmCharge;
+      }
+
+      const nextMeta = { ...currentMeta, status: 'paid', paid_at: new Date().toISOString(), ...escrow };
       const updated = await tx.message.update({
         where: { id: messageId },
         data: { metadata: nextMeta as any },
@@ -682,11 +706,21 @@ export const messageService = {
           sender_id: userId,
           type: 'payment_confirmation',
           reply_to_id: messageId,
-          metadata: { amount: due, description: currentMeta.description } as any,
+          // Валюта едет в подтверждение: иначе счёт в $ превращается в «10 ₽»
+          metadata: { amount: due, description: currentMeta.description, ...(currentMeta.currency ? { currency: currentMeta.currency } : {}), ...escrow } as any,
         },
         include: messageInclude,
       });
-      return { updatedRequest: updated, confirmation: created, dueAmount: due, meta: currentMeta };
+      return { updatedRequest: updated, confirmation: created };
+    }).catch(async (e) => {
+      if ((e as { statusCode?: number })?.statusCode === 402 && blmCharge != null) {
+        const wallet = await prisma.wallet.findUnique({ where: { user_id: userId }, select: { balance: true } });
+        throw Object.assign(new Error('Недостаточно средств'), {
+          statusCode: 402, code: 'INSUFFICIENT_FUNDS',
+          details: { needed: blmCharge, balance: Number(wallet?.balance ?? 0) },
+        });
+      }
+      throw e;
     });
 
     const parts = await prisma.conversationParticipant.findMany({
@@ -698,22 +732,17 @@ export const messageService = {
     }
     await this._broadcastNewMessage(request.conversation_id, confirmation);
 
-    // Счёт по заказу: оплату отметил заказчик — художник увидит и подтвердит начало работы
-    if (typeof meta.orderId === 'string') await this._reportOrderPaid(meta.orderId, messageId, userId).catch(logError('[order] paid report'));
+    // Счёт по заказу: деньги удержаны — художник увидит и подтвердит начало работы
+    if (orderId) await this._notifyOrderPaid(orderId, userId).catch(logError('[order] paid notify'));
 
     return { request: updatedRequest, confirmation };
   },
 
-  /** Отмечает оплату на заказе и зовёт владельца группы подтвердить начало работы. Только для счёта, который выставил сам заказ. */
-  async _reportOrderPaid(orderId: string, invoiceMessageId: string, payerId: string) {
-    const claimed = await prisma.order.updateMany({
-      where: { id: orderId, invoice_message_id: invoiceMessageId, customer_id: payerId, payment_status: 'unpaid', deleted_at: null },
-      data: { payment_status: 'reported', paid_reported_at: new Date() },
-    });
-    if (claimed.count === 0) return;
+  /** Зовёт владельца группы подтвердить начало работы: заказчик оплатил, деньги удержаны. */
+  async _notifyOrderPaid(orderId: string, payerId: string) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { id: true, title: true, group: { select: { slug: true, owner_id: true } } },
+      select: { id: true, title: true, group: { select: { id: true, slug: true, owner_id: true } } },
     });
     if (!order) return;
     await notificationService.create({

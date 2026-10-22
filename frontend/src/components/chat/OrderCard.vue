@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type OrderDetail } from '@/stores/groups'
+import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
+import { apiErrorMessage } from '@/lib/apiError'
 import { ORDER_STAGES, ORDER_STAGE_LABEL, ORDER_STAGE_COLOR, deadlineText, DEADLINE_TONE_CLASS, orderStatePill } from '@/lib/orderStages'
 
 // Карточка заказа в переписке группы: живой статус, открывается на странице заказа
@@ -10,6 +13,8 @@ const props = defineProps<{ orderId: string; groupId?: string; isMine?: boolean 
 
 const router = useRouter()
 const groupsStore = useGroupsStore()
+const auth = useAuthStore()
+const { confirmDialog } = useConfirm()
 const order = ref<OrderDetail | null>(null)
 const loading = ref(true)
 const failed = ref(false)
@@ -29,6 +34,26 @@ onMounted(async () => {
 const stageIndex = computed(() => order.value ? ORDER_STAGES.indexOf(order.value.status) : 0)
 const statePill = computed(() => order.value ? orderStatePill(order.value) : null)
 const deadline = computed(() => order.value ? deadlineText(order.value.deadline_at, order.value.status === 'FINISHED') : null)
+
+// Работа готова, оплата удержана: заказчик подтверждает получение прямо из чата — и деньги уходят художнику
+const canConfirm = computed(() => !!order.value && order.value.customer_id === auth.user?.id
+  && order.value.status === 'FINISHED' && order.value.escrow_status === 'held')
+const confirming = ref(false)
+const confirmError = ref('')
+async function confirmCompletion() {
+  if (!order.value?.group || confirming.value) return
+  if (!(await confirmDialog('Работа получена и вас всё устраивает? Оплата будет переведена художнику — отменить это нельзя.'))) return
+  confirming.value = true
+  confirmError.value = ''
+  try {
+    await groupsStore.confirmOrderCompletion(order.value.group.id, order.value.id)
+    order.value = await groupsStore.fetchOrderDetail(order.value.group.id, order.value.id)
+  } catch (e) {
+    confirmError.value = apiErrorMessage(e) ?? 'Не удалось подтвердить получение'
+  } finally {
+    confirming.value = false
+  }
+}
 
 function open() {
   if (!order.value?.group) return
@@ -82,6 +107,15 @@ function open() {
             :src="c.images[0]?.url || c.extraImages[0] || c.user.avatar_url || ''"
             class="w-6 h-6 rounded-full object-cover border-2 border-brand-bg bg-brand-card" />
         </div>
+      </div>
+
+      <!-- Подтверждение готовой работы -->
+      <div v-if="canConfirm" class="px-3.5 pt-3" @click.stop>
+        <button type="button" :disabled="confirming" @click="confirmCompletion"
+          class="w-full py-2 rounded-xl border border-brand-success/40 bg-brand-success/10 text-brand-success text-xs font-extrabold hover:bg-brand-success/15 disabled:opacity-40 transition-all">
+          {{ confirming ? 'Подтверждаем…' : 'Подтвердить получение работы' }}
+        </button>
+        <p v-if="confirmError" class="text-[10px] text-brand-error mt-1">{{ confirmError }}</p>
       </div>
 
       <!-- Открыть -->

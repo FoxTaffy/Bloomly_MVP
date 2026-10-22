@@ -31,6 +31,7 @@ export async function refreshBlmRate(): Promise<number | null> {
     if (!Number.isFinite(rate) || rate < 10 || rate > 1000) throw new Error('bad rate in response');
     await prisma.blmRate.create({ data: { usd_rub: rate } });
     cache = { rate, at: Date.now() };
+    displayCache = null; // USD в курсах показа берётся отсюда — не держим старое значение до часа
     logger.info({ rate }, '[BLM] rate updated');
     return rate;
   } catch (err) {
@@ -41,11 +42,11 @@ export async function refreshBlmRate(): Promise<number | null> {
 
 // ── Курсы для отображения цен в валюте региона пользователя ──────────────────
 // Только показ: списание идёт в валюте самого товара. Источник тот же — ЦБ РФ.
-const DISPLAY_CURRENCIES = ['USD', 'EUR', 'CNY', 'INR', 'BRL'] as const;
+const DISPLAY_CURRENCIES = ['USD', 'EUR', 'CNY', 'INR', 'BRL', 'KZT'] as const;
 const DISPLAY_CACHE_MS = 60 * 60_000;
 let displayCache: { rates: Record<string, number>; at: number } | null = null;
 
-/** ₽ за 1 единицу каждой валюты (RUB = 1). */
+/** ₽ за 1 единицу каждой валюты (RUB = 1). USD всегда равен курсу BLM (1 BLM = 1 $) — единый источник, расхождений нет. */
 export async function getDisplayRates(): Promise<Record<string, number>> {
   if (displayCache && Date.now() - displayCache.at < DISPLAY_CACHE_MS) return displayCache.rates;
   try {
@@ -58,6 +59,7 @@ export async function getDisplayRates(): Promise<Record<string, number>> {
       if (v?.Value && v.Nominal) rates[code] = v.Value / v.Nominal;
     }
     if (!rates.USD) throw new Error('no USD in response');
+    rates.USD = await getBlmRate();
     displayCache = { rates, at: Date.now() };
     return rates;
   } catch (err) {
@@ -65,4 +67,19 @@ export async function getDisplayRates(): Promise<Record<string, number>> {
     if (displayCache) return displayCache.rates;
     return { RUB: 1, USD: await getBlmRate() };
   }
+}
+
+/**
+ * Сколько BLM стоит сумма в валюте счёта (1 BLM = 1 $, сумма в BLM возвращается как есть). Округление вверх до сотых — так же, как у товаров в рублях.
+ * Валюта без курса — ошибка: списать «примерно» нельзя.
+ */
+export async function amountToBlm(amount: number, currency: string): Promise<number> {
+  if (!Number.isFinite(amount) || amount <= 0) throw Object.assign(new Error('INVALID_AMOUNT'), { statusCode: 400 });
+  const code = (currency || 'USD').toUpperCase();
+  if (code === 'USD' || code === 'BLM') return Math.ceil(amount * 100 - 1e-6) / 100;
+  const rate = await getBlmRate();
+  if (code === 'RUB') return Math.ceil((amount / rate) * 100 - 1e-6) / 100;
+  const rubPerUnit = (await getDisplayRates())[code];
+  if (!rubPerUnit) throw Object.assign(new Error(`Валюта ${code} не поддерживается для оплаты с кошелька`), { statusCode: 400 });
+  return Math.ceil(((amount * rubPerUnit) / rate) * 100 - 1e-6) / 100;
 }

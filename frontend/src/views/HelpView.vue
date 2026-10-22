@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
+import BugReportForm from '@/components/BugReportForm.vue'
+import BugReportDetails from '@/components/BugReportDetails.vue'
 import TicketAttachments from '@/components/TicketAttachments.vue'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useAuthStore } from '@/stores/auth'
@@ -14,6 +17,7 @@ import * as fmt from '@/lib/format'
 const nsfwMode = useNsfwMode().nsfwEnabled
 const auth = useAuthStore()
 const langStore = useLangStore()
+const route = useRoute()
 
 type SectionKey = 'faq' | 'report' | 'tickets' | 'contacts'
 const section = ref<SectionKey>('faq')
@@ -92,6 +96,14 @@ function onAttachmentsUploaded(urls: string[]) {
 
 onMounted(() => {
   form.contact_email = auth.user?.email ?? ''
+  // Ссылка из чата («Написать в поддержку» у платежа): сразу открывается форма с заполненной темой и деталями
+  const q = route.query
+  if (q.subject || q.message) {
+    section.value = 'report'
+    form.type = 'question'
+    if (typeof q.subject === 'string') form.subject = q.subject.slice(0, 120)
+    if (typeof q.message === 'string') form.message = q.message.slice(0, 2000)
+  }
 })
 
 const canSubmit = computed(() => form.subject.trim().length >= 3 && form.message.trim().length >= 10)
@@ -115,6 +127,12 @@ async function submitTicket() {
   } finally {
     isSubmitting.value = false
   }
+}
+
+function onBugSubmitted(ticket: any) {
+  tickets.value.unshift(ticket)
+  showToast('success', langStore.t.helpToastSuccess)
+  section.value = 'tickets'
 }
 
 // ── My tickets ────────────────────────────────────────────────────────
@@ -231,50 +249,56 @@ async function sendReply(ticketId: string) {
         </section>
 
         <!-- ── Report a problem ───────────────────────────────────────── -->
-        <section v-else-if="section === 'report'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-5 md:p-6">
-          <p class="text-xs text-white/40 mb-5">{{ langStore.t.helpReportIntro }}</p>
+        <section v-else-if="section === 'report'" class="stack-y-4">
+          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-5 md:p-6">
+            <p class="text-xs text-white/40 mb-5">{{ langStore.t.helpReportIntro }}</p>
 
-          <div class="mb-5">
-            <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpTypeLabel }}</label>
-            <div class="flex gap-2 flex-wrap">
-              <button v-for="t in TYPE_OPTIONS" :key="t.value" @click="form.type = t.value"
-                class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all"
-                :class="form.type === t.value
-                  ? 'bg-brand-accent/15 border-brand-accent/30 text-brand-accent'
-                  : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
-                <BIcon :name="t.icon" class="w-3.5 h-3.5" />
-                {{ t.label }}
-              </button>
+            <div>
+              <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpTypeLabel }}</label>
+              <div class="flex gap-2 flex-wrap">
+                <button v-for="t in TYPE_OPTIONS" :key="t.value" @click="form.type = t.value"
+                  class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all"
+                  :class="form.type === t.value
+                    ? 'bg-brand-accent/15 border-brand-accent/30 text-brand-accent'
+                    : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
+                  <BIcon :name="t.icon" class="w-3.5 h-3.5" />
+                  {{ t.label }}
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="mb-4">
-            <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpSubjectLabel }}</label>
-            <input v-model="form.subject" type="text" maxlength="150" :placeholder="langStore.t.helpSubjectPlaceholder"
-              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
-          </div>
+          <BugReportForm v-if="form.type === 'bug'" @submitted="onBugSubmitted" @cancel="section = 'faq'" @error="showToast('error', langStore.t.helpToastError)" />
 
-          <div class="mb-4">
-            <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpMessageLabel }}</label>
-            <textarea v-model="form.message" rows="5" maxlength="3000" :placeholder="langStore.t.helpMessagePlaceholder"
-              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40 resize-none"></textarea>
-          </div>
+          <div v-else class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-5 md:p-6">
+            <div class="mb-4">
+              <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpSubjectLabel }}</label>
+              <input v-model="form.subject" type="text" maxlength="150" :placeholder="langStore.t.helpSubjectPlaceholder"
+                class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
+            </div>
 
-          <div class="mb-5">
-            <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpAttachmentsLabel }}</label>
-            <MediaUpload ref="mediaUploadRef" folder="reports" accept="image/*,video/*" :multiple="true" :max-files="MAX_ATTACHMENT_FILES" :max-size-mb="50" @uploaded="onAttachmentsUploaded" />
-          </div>
+            <div class="mb-4">
+              <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpMessageLabel }}</label>
+              <textarea v-model="form.message" rows="5" maxlength="3000" :placeholder="langStore.t.helpMessagePlaceholder"
+                class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40 resize-none"></textarea>
+            </div>
 
-          <div class="mb-5">
-            <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpEmailLabel }}</label>
-            <input v-model="form.contact_email" type="email" placeholder="you@example.com"
-              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
-          </div>
+            <div class="mb-5">
+              <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpAttachmentsLabel }}</label>
+              <MediaUpload ref="mediaUploadRef" folder="reports" accept="image/*,video/*" :multiple="true" :max-files="MAX_ATTACHMENT_FILES" :max-size-mb="50" @uploaded="onAttachmentsUploaded" />
+            </div>
 
-          <button @click="submitTicket" :disabled="!canSubmit || isSubmitting"
-            class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold bg-brand-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all">
-            {{ isSubmitting ? langStore.t.helpSubmitting : langStore.t.helpSubmitBtn }}
-          </button>
+            <div class="mb-5">
+              <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpEmailLabel }}</label>
+              <input v-model="form.contact_email" type="email" placeholder="you@example.com"
+                class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
+            </div>
+
+            <button @click="submitTicket" :disabled="!canSubmit || isSubmitting"
+              class="w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold bg-brand-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all">
+              {{ isSubmitting ? langStore.t.helpSubmitting : langStore.t.helpSubmitBtn }}
+            </button>
+          </div>
         </section>
 
         <!-- ── My tickets ──────────────────────────────────────────────── -->
@@ -303,6 +327,7 @@ async function sendReply(ticketId: string) {
                 <span v-if="t.source === 'email'" class="text-[10px] text-brand-accent/70 font-bold">· {{ langStore.t.helpTicketSourceEmail }}</span>
               </div>
               <p class="text-sm font-bold text-white/85">{{ t.subject }}</p>
+              <BugReportDetails v-if="t.type === 'bug'" :ticket="t" />
 
               <div class="mt-3 stack-y-2">
                 <div v-for="m in t.messages" :key="m.id"

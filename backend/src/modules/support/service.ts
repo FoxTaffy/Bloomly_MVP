@@ -8,6 +8,8 @@ const MAX_ATTACHMENT_FILES = 5;
 export const SUPPORT_TICKET_TYPES = ['bug', 'feedback', 'question', 'other'] as const;
 export type SupportTicketType = (typeof SUPPORT_TICKET_TYPES)[number];
 
+export const SUPPORT_DEVICES = ['desktop', 'mobile', 'tablet'] as const;
+
 export const SUPPORT_TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
 export type SupportTicketStatus = (typeof SUPPORT_TICKET_STATUSES)[number];
 
@@ -31,16 +33,29 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function createTicket(userId: string, input: {
   type: string; subject: string; message: string; contactEmail?: string;
   attachmentUrls?: string[];
+  stepsToReproduce?: string; expectedResult?: string; device?: string; browser?: string;
 }) {
   // Адрес для ответа должен быть настоящим email: иначе поле использовалось для рассылки
   const contactEmail = input.contactEmail?.trim().slice(0, 254) || null;
   if (contactEmail && !EMAIL_RE.test(contactEmail)) {
     throw Object.assign(new Error('Некорректный email для ответа'), { statusCode: 400 });
   }
+  const type = SUPPORT_TICKET_TYPES.includes(input.type as SupportTicketType) ? input.type : 'question';
+  // Поля баг-репорта сохраняем только у багов: у вопросов и отзывов они не нужны
+  const bug = type === 'bug' ? {
+    steps_to_reproduce: input.stepsToReproduce?.trim().slice(0, 2000) || null,
+    expected_result: input.expectedResult?.trim().slice(0, 1000) || null,
+    device: SUPPORT_DEVICES.includes(input.device as typeof SUPPORT_DEVICES[number]) ? input.device : null,
+    browser: input.browser?.trim().slice(0, 60) || null,
+  } : {};
+  if (type === 'bug' && (!bug.steps_to_reproduce || !bug.expected_result)) {
+    throw Object.assign(new Error('Для бага укажите шаги воспроизведения и ожидаемый результат'), { statusCode: 400 });
+  }
   const ticket = await prisma.supportTicket.create({
     data: {
       user_id: userId,
-      type: SUPPORT_TICKET_TYPES.includes(input.type as SupportTicketType) ? input.type : 'question',
+      type,
+      ...bug,
       subject: input.subject.trim().slice(0, 150),
       contact_email: contactEmail,
       messages: {

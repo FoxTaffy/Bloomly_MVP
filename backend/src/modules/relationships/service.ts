@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
+import { followsService } from '../follows/service.js';
 
 export const relationshipsService = {
   // ── Send a relationship request ───────────────────────────────────────────
@@ -13,6 +14,17 @@ export const relationshipsService = {
     const sender = await prisma.user.findUnique({ where: { id: fromId }, select: { relationship_with: true } });
     if (sender?.relationship_with) {
       throw Object.assign(new Error('Вы уже состоите в отношениях'), { statusCode: 400 });
+    }
+
+    // Заявку нельзя отправить тому, кто уже состоит в отношениях — у него нечего
+    // принимать, а accept всё равно упал бы с 409 уже после уведомления.
+    const target = await prisma.user.findFirst({
+      where: { id: toId, deleted_at: null },
+      select: { relationship_with: true },
+    });
+    if (!target) throw Object.assign(new Error('Пользователь не найден'), { statusCode: 404 });
+    if (target.relationship_with) {
+      throw Object.assign(new Error('Пользователь уже состоит в отношениях'), { statusCode: 400 });
     }
 
     // Cancel any old declined/accepted request before creating a new one
@@ -138,5 +150,28 @@ export const relationshipsService = {
       include: { from: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
       orderBy: { created_at: 'desc' },
     });
+  },
+
+  // ── Outgoing pending requests (видит только отправитель) ─────────────────
+  async getOutgoing(userId: string) {
+    return prisma.relationshipRequest.findMany({
+      where:   { from_id: userId, status: 'pending' },
+      include: { to: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+      orderBy: { created_at: 'desc' },
+    });
+  },
+
+  // ── Друзья, которых можно позвать в пару ──────────────────────────────────
+  // Флаг in_relationship отдаётся только здесь (а не в публичном списке друзей),
+  // чтобы пикер мог заглушить занятых, не раскрывая партнёра.
+  async getCandidates(userId: string) {
+    const friends = await followsService.getFriends(userId, userId);
+    if (!friends.length) return [];
+    const taken = await prisma.user.findMany({
+      where:  { id: { in: friends.map((f) => f.id) }, relationship_with: { not: null } },
+      select: { id: true },
+    });
+    const takenIds = new Set(taken.map((u) => u.id));
+    return friends.map((f) => ({ ...f, in_relationship: takenIds.has(f.id) }));
   },
 };

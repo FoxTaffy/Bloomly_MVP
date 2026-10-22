@@ -542,18 +542,40 @@
                 </template>
               </div>
               <div class="relative px-3.5 py-2.5 border-t border-white/10">
-                <div v-if="msg.metadata?.status === 'paid'" class="flex items-center gap-1.5 text-brand-success text-xs font-bold">
-                  <BIcon name="CheckCircle2" class="w-3.5 h-3.5" />
-                  <!-- Счёт по заказу: оплату отмечает заказчик, а начало работы подтверждает художник -->
-                  <template v-if="msg.metadata?.orderId && !msg.metadata?.confirmed">Оплата отмечена · ждём подтверждения художника</template>
-                  <template v-else-if="msg.metadata?.orderId">Оплата подтверждена, работа началась</template>
-                  <template v-else>{{ langStore.t.chatPaidLabel }}</template>
+                <div v-if="msg.metadata?.status === 'paid'" class="flex items-start gap-1.5 text-brand-success text-xs font-bold leading-snug">
+                  <BIcon name="CheckCircle2" class="w-3.5 h-3.5 mt-px shrink-0" />
+                  <!-- Счёт по заказу: деньги удерживаются (безопасная сделка), художнику уходят после подтверждения заказчика -->
+                  <span v-if="msg.metadata?.orderId && msg.metadata?.released">Работа принята · оплата передана художнику</span>
+                  <span v-else-if="msg.metadata?.orderId && msg.metadata?.confirmed">Оплачено · работа идёт, деньги удержаны до вашего подтверждения</span>
+                  <span v-else-if="msg.metadata?.orderId">Оплачено · деньги удержаны, ждём подтверждения художника</span>
+                  <span v-else>{{ langStore.t.chatPaidLabel }}</span>
                 </div>
-                <button v-else-if="!isMine(msg)" type="button" @click="payOrder(msg)" :disabled="payingId === msg.id"
-                  class="w-full py-1.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-xs">
-                  {{ payingId === msg.id ? langStore.t.chatPayingLabel : langStore.t.chatPayBtn }}
-                </button>
+                <template v-else-if="!isMine(msg)">
+                  <!-- Оплата не прошла: что случилось и что делать дальше -->
+                  <div v-if="payFailure[msg.id]" class="mb-2 rounded-xl border border-brand-error/30 bg-brand-error/10 px-2.5 py-2 stack-y-1.5">
+                    <p class="flex items-center gap-1.5 text-[11px] font-extrabold text-brand-error">
+                      <BIcon name="AlertTriangle" class="w-3.5 h-3.5 shrink-0" /> Оплата не прошла
+                    </p>
+                    <p class="text-[11px] text-white/70 leading-snug">{{ payFailure[msg.id].message }}</p>
+                    <div class="flex flex-wrap gap-1.5 pt-0.5">
+                      <button v-if="payFailure[msg.id].insufficient" type="button" @click="openWalletTopup"
+                        class="px-2.5 py-1 rounded-lg bg-brand-accent text-white text-[11px] font-bold hover:bg-brand-accent-plus active:scale-95 transition-all">Пополнить кошелёк</button>
+                      <button type="button" @click="delete payFailure[msg.id]"
+                        class="px-2.5 py-1 rounded-lg bg-white/10 text-white/80 text-[11px] font-bold hover:bg-white/15 active:scale-95 transition-all">Отменить</button>
+                    </div>
+                  </div>
+                  <button type="button" @click="payOrder(msg)" :disabled="payingId === msg.id"
+                    class="w-full py-1.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-xs">
+                    {{ payingId === msg.id ? langStore.t.chatPayingLabel : langStore.t.chatPayBtn }}
+                  </button>
+                  <p v-if="msg.metadata?.orderId" class="text-[10px] text-white/45 mt-1.5 leading-snug">Оплата с кошелька Bloom. Деньги удерживаются и уходят художнику после вашего подтверждения работы.</p>
+                </template>
                 <span v-else class="text-[11px] text-white/45">{{ langStore.t.chatAwaitingPaymentLabel }}</span>
+                <!-- Заказчику всегда доступна связь с поддержкой по этому платежу -->
+                <button v-if="msg.metadata?.orderId && !isMine(msg)" type="button" @click="contactSupport(msg)"
+                  class="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-white/45 hover:text-white transition-colors">
+                  <BIcon name="LifeBuoy" class="w-3 h-3" /> Написать в поддержку
+                </button>
               </div>
             </div>
 
@@ -565,7 +587,7 @@
                 <BIcon name="Check" class="w-4 h-4 text-brand-success" />
               </div>
               <div class="min-w-0">
-                <p class="text-sm font-bold text-brand-success">{{ langStore.t.chatPaidLabel }} · {{ formatMoney(msg.metadata?.amount) }}</p>
+                <p class="text-sm font-bold text-brand-success">{{ langStore.t.chatPaidLabel }} · {{ money(msg.metadata) }}</p>
                 <p v-if="msg.metadata?.description" class="text-[11px] text-white/55 truncate">{{ msg.metadata.description }}</p>
               </div>
             </div>
@@ -1342,6 +1364,9 @@
 
   <ChatStoryViewer :card="activeStoryCard" @close="activeStoryCard = null" />
 
+  <!-- Форма пополнения кошелька для оплаты заказа: сама карточка скрыта, открывается модалка -->
+  <div v-if="walletCardMounted" class="hidden"><WalletCard ref="walletCardRef" /></div>
+
   <!-- ── Reaction burst flourish (flying emoji on pick) ────────────────────── -->
   <Teleport to="body">
     <div v-for="b in reactionBursts" :key="b.id"
@@ -1369,6 +1394,8 @@ import GroupShareCard from '@/components/GroupShareCard.vue'
 import OrderCard from '@/components/chat/OrderCard.vue'
 import OrderUpdateCard from '@/components/chat/OrderUpdateCard.vue'
 import { formatPriceNative } from '@/lib/format'
+import WalletCard from '@/components/WalletCard.vue'
+import { apiErrorCode, apiErrorDetails, apiErrorMessage } from '@/lib/apiError'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
 import UserBadges from '@/components/UserBadges.vue'
@@ -1805,13 +1832,48 @@ function formatMsgTime(iso: string) {
 // ── Order cards (chat-only payment request / tip) ──────────────────────────────
 const formatDeadline = (deadline: string | undefined) => deadline ? fmt.formatDate(deadline, 'dayMonth', LANG_TO_LOCALE[langStore.currentLang]) : ''
 const payingId = ref<string | null>(null)
+const payFailure = ref<Record<string, { message: string; insufficient: boolean }>>({})
+const walletCardRef = ref<InstanceType<typeof WalletCard> | null>(null)
+const walletCardMounted = ref(false)
+
+// Форма пополнения живёт в карточке кошелька; монтируем её только когда она понадобилась
+async function openWalletTopup() {
+  walletCardMounted.value = true
+  await nextTick()
+  walletCardRef.value?.openModal()
+  walletCardRef.value?.startTopupPicker()
+}
+
 async function payOrder(msg: Message) {
   if (payingId.value) return
   payingId.value = msg.id
+  delete payFailure.value[msg.id]
   try {
     await store.payRequest(msg.id)
-  } catch { /* silent */ }
+  } catch (e) {
+    const insufficient = apiErrorCode(e) === 'INSUFFICIENT_FUNDS'
+    const d = apiErrorDetails<{ needed?: number; balance?: number }>(e)
+    payFailure.value[msg.id] = {
+      insufficient,
+      message: insufficient && d?.needed != null
+        ? `Недостаточно средств: нужно ${d.needed} BLM, на балансе ${d.balance ?? 0} BLM. Пополните кошелёк и повторите оплату.`
+        : apiErrorMessage(e) ?? 'Не удалось провести оплату. Попробуйте ещё раз или напишите в поддержку.',
+    }
+    // Денег нет — сразу ведём на пополнение, а не оставляем пользователя с ошибкой
+    if (insufficient) void openWalletTopup()
+  }
   payingId.value = null
+}
+
+function contactSupport(msg: Message) {
+  const orderTitle = (msg.metadata?.description as string | undefined) ?? 'заказ'
+  router.push({
+    name: 'help',
+    query: {
+      subject: 'Проблема с оплатой заказа',
+      message: `${orderTitle}\nСумма: ${money(msg.metadata)}\nID сообщения со счётом: ${msg.id}\n\nОпишите, что пошло не так:`,
+    },
+  })
 }
 
 async function sendQuickTip(amount: number) {

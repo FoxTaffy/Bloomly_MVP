@@ -37,7 +37,7 @@ export async function canViewMedia(key: string, viewer: MediaViewer): Promise<bo
   if (folder === 'messages') return messageAllows(url, viewer);
   if (folder === 'comments') return commentAllows(url, viewer);
   // posts/ — общая папка: посты, отложенные посты, лоты Dealers Den, альбомы, истории, персонажи, фурсьюты, история аватаров
-  for (const check of [postAllows, albumAllows, storyAllows, profileMediaAllows, scheduledAllows, dealerListingAllows]) {
+  for (const check of [postAllows, albumAllows, storyAllows, profileMediaAllows, scheduledAllows, dealerListingAllows, orderMediaAllows]) {
     if (await check(url, viewer)) return true;
   }
   return false;
@@ -132,6 +132,18 @@ async function dealerListingAllows(url: string, viewer: MediaViewer) {
     if (l.status !== 'active' && l.status !== 'sold') return false;
     return !l.is_nsfw || viewer?.is_adult === true;
   });
+}
+
+/** Этапы работы и референсы заказа: видят заказчик и персонал группы (владелец/админы) — больше никто. */
+async function orderMediaAllows(url: string, viewer: MediaViewer) {
+  if (!viewer) return false;
+  const staff = { group: { members: { some: { user_id: viewer.id, role: { in: ['owner', 'admin'] } } } } };
+  const who = { OR: [{ customer_id: viewer.id }, staff] };
+  const [stage, ref] = await Promise.all([
+    prisma.orderProgress.count({ where: { image_urls: { has: url }, deleted_at: null, order: { deleted_at: null, ...who } } }),
+    prisma.order.count({ where: { deleted_at: null, form_data: { path: ['references'], array_contains: url }, ...who } }),
+  ]);
+  return stage > 0 || ref > 0;
 }
 
 async function profileReadable(userId: string, viewer: MediaViewer) {

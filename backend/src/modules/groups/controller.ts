@@ -915,7 +915,7 @@ export const getGroupTodoHandler = async (
 ) => {
   try {
     if (!(await requireContentAccess(request, reply, request.params.id))) return;
-    const items = await groupService.getTodoItems(request.params.id);
+    const items = await groupService.getTodoItems(request.params.id, (request.user as JwtUser | undefined)?.id);
     return ok(reply, { items });
   } catch (e) {
     return fail(reply, errStatus(e) ?? 500, 'GET_TODO_ERROR', errMessage(e));
@@ -1045,6 +1045,58 @@ export const confirmOrderPaymentHandler = async (
     return ok(reply, { order });
   } catch (e) {
     return fail(reply, errStatus(e) ?? 400, 'CONFIRM_PAYMENT_ERROR', errMessage(e));
+  }
+};
+
+export const confirmOrderCompletionHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const order = await groupService.confirmOrderCompletion(request.params.orderId, userId);
+    return ok(reply, { order });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'CONFIRM_COMPLETION_ERROR', errMessage(e));
+  }
+};
+
+export const getOrderProgressHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const progress = await groupService.getOrderProgress(request.params.id, request.params.orderId, userId);
+    return ok(reply, { progress });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'ORDER_PROGRESS_ERROR', errMessage(e));
+  }
+};
+
+export const addOrderProgressHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { text?: string; imageUrls?: string[]; stage?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const entry = await groupService.addOrderProgress(request.params.id, request.params.orderId, userId, request.body ?? {});
+    return reply.code(201).send({ success: true, data: { entry }, error: null });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'ORDER_PROGRESS_ERROR', errMessage(e));
+  }
+};
+
+export const deleteOrderProgressHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string; progressId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    await groupService.deleteOrderProgress(request.params.id, request.params.orderId, request.params.progressId, userId);
+    return ok(reply, { id: request.params.progressId });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'ORDER_PROGRESS_ERROR', errMessage(e));
   }
 };
 
