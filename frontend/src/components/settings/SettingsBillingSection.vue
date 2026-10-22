@@ -179,10 +179,11 @@ onMounted(() => {
             type="button"
             @click="deletePaymentMethod(m.id)"
             :disabled="deletingMethodId === m.id"
-            class="w-8 h-8 rounded-lg flex items-center justify-center text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50 shrink-0"
+            class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 transition-all disabled:opacity-50 flex-shrink-0 flex items-center gap-1.5 whitespace-nowrap"
           >
-            <span v-if="deletingMethodId === m.id" class="w-3.5 h-3.5 border border-t-transparent border-red-400 rounded-full animate-spin"></span>
-            <BIcon v-else name="Trash2" class="w-4 h-4" />
+            <span v-if="deletingMethodId === m.id" class="w-3 h-3 border border-t-transparent border-red-400 rounded-full animate-spin"></span>
+            <BIcon v-else name="Trash2" class="w-3.5 h-3.5" />
+            {{ langStore.t.billingUnbind }}
           </button>
         </div>
       </div>

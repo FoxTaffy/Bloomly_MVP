@@ -432,6 +432,21 @@ describe('payments: ЮKassa', () => {
       expect((await userOf(user.id)).subscription_auto_renew).toBe(false);
     });
 
+    it('отвязка карты удаляет токен из БД; чужую карту отвязать нельзя', async () => {
+      const { user, auth } = await subscribedWithCard();
+      const [m] = await methodsOf(user.id);
+      expect(m.provider_method_id).toBeTruthy();
+
+      const { auth: stranger } = await createUser();
+      expect((await api('DELETE', `/api/users/me/payment-methods/${m.id}`, { headers: stranger })).status).toBe(404);
+      expect(await methodsOf(user.id)).toHaveLength(1);
+
+      expect((await api('DELETE', `/api/users/me/payment-methods/${m.id}`, { headers: auth })).status).toBe(200);
+      expect(await prisma.paymentMethod.count({ where: { id: m.id } })).toBe(0);
+      expect(await prisma.paymentMethod.count({ where: { provider_method_id: m.provider_method_id } })).toBe(0);
+      expect((await api('GET', '/api/users/me/payment-methods', { headers: auth })).json.data).toEqual([]);
+    });
+
     it('номер карты на наш сервер больше не принимается', async () => {
       const { auth } = await createUser();
       const res = await api('POST', '/api/users/me/payment-methods', {

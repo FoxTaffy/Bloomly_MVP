@@ -1068,19 +1068,26 @@ export const usersService = {
     });
   },
 
+  /** Отвязка: строка с токеном ЮKassa удаляется из БД физически (требование ЮKassa), без неё автосписаний нет. */
   async deletePaymentMethod(userId: string, id: string) {
     const existing = await prisma.paymentMethod.findFirst({ where: { id, user_id: userId } });
     if (!existing) throw Object.assign(new Error('Payment method not found'), { statusCode: 404 });
 
-    await prisma.paymentMethod.delete({ where: { id } });
-
-    const next = await prisma.paymentMethod.findFirst({
-      where: { user_id: userId, provider_method_id: { not: null } },
-      orderBy: { created_at: 'desc' },
+    await prisma.$transaction(async tx => {
+      await tx.paymentMethod.delete({ where: { id } });
+      const next = await tx.paymentMethod.findFirst({
+        where: { user_id: userId, provider_method_id: { not: null } },
+        orderBy: { created_at: 'desc' },
+      });
+      if (existing.is_default && next) await tx.paymentMethod.update({ where: { id: next.id }, data: { is_default: true } });
+      // Списывать больше не с чего — автопродление выключается
+      if (!next) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { subscription_auto_renew: false, subscription_renew_attempts: 0, subscription_next_renew_at: null },
+        });
+      }
     });
-    if (existing.is_default && next) await prisma.paymentMethod.update({ where: { id: next.id }, data: { is_default: true } });
-    // Списывать больше не с чего — автопродление выключается
-    if (!next) await prisma.user.update({ where: { id: userId }, data: { subscription_auto_renew: false, subscription_next_renew_at: null } });
     return { id };
   },
 
