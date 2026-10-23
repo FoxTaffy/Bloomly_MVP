@@ -57,6 +57,7 @@ export const updateGroupSchema = {
         },
       },
       businessEnabled:    { type: 'boolean' },
+      safeDealsEnabled:   { type: 'boolean' },
       welcomeMsgEnabled:  { type: 'boolean' },
       welcomeMsgText:     { type: 'string', maxLength: 300 },
     },

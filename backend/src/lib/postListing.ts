@@ -16,6 +16,7 @@ export const LISTING_PREVIEW_SELECT = {
   is_nsfw: true,
   current_bid: true,
   deleted_at: true,
+  group: { select: { safe_deals_enabled: true } },
 } as const;
 
 export const POST_LISTING_INCLUDE = { select: LISTING_PREVIEW_SELECT } as const;

@@ -10,4 +10,5 @@ export interface PostListingPreview {
   status?: string
   is_nsfw?: boolean
   current_bid?: string | number | null
+  group?: { safe_deals_enabled?: boolean } | null
 }

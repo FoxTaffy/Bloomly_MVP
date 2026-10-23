@@ -56,6 +56,7 @@ export interface UpdateGroupInput {
   bankCardMasked?: string | null;
   supportTiers?: Array<{ emoji: string; name: string; price: string; currency?: string; desc: string }>;
   businessEnabled?: boolean;
+  safeDealsEnabled?: boolean;
   welcomeMsgEnabled?: boolean;
   welcomeMsgText?: string;
 }

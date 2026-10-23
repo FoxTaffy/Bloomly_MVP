@@ -68,7 +68,7 @@ const LISTING_SELECT = {
       commissions_status: true,
     },
   },
-  group: { select: { id: true, slug: true, name: true, avatar_url: true } },
+  group: { select: { id: true, slug: true, name: true, avatar_url: true, safe_deals_enabled: true } },
   avatarFrame: {
     select: {
       id: true, status: true, rejection_reason: true,

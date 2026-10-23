@@ -33,7 +33,7 @@
     <section class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl stack-y-3">
       <h3 class="text-[10px] font-bold text-white/35 uppercase tracking-widest">Как проходит заказ</h3>
       <p class="text-sm text-white/55">Ты одобряешь каждый этап — художник не идёт дальше без твоего «ок».</p>
-      <span class="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full border bg-brand-success/10 border-brand-success/25 text-brand-success">
+      <span v-if="listing.group?.safe_deals_enabled !== false" class="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full border bg-brand-success/10 border-brand-success/25 text-brand-success">
         <BIcon name="ShieldCheck" class="w-3.5 h-3.5" /> Безопасная сделка
       </span>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">

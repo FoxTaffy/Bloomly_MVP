@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
+import SafeDealsWarning from '@/components/SafeDealsWarning.vue'
 import OrderStartModal from '@/components/groups/OrderStartModal.vue'
 import OrderEditModal from '@/components/groups/OrderEditModal.vue'
 import OrderProgressFeed from '@/components/groups/OrderProgressFeed.vue'
@@ -361,6 +362,7 @@ onMounted(load)
 
             <!-- Правая колонка: хронология, лот, контакты -->
             <aside class="stack-y-5 min-w-0">
+              <SafeDealsWarning v-if="groupsStore.currentGroup?.safe_deals_enabled === false && !escrowHeld" />
               <!-- Оплата: счёт выставляется при принятии заявки -->
               <section v-if="hasInvoice" class="rounded-3xl border p-5"
                 :class="order.payment_status === 'confirmed' ? 'border-brand-success/30 bg-brand-success/5' : 'border-brand-accent/30 bg-brand-card'">

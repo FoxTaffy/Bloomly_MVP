@@ -1042,6 +1042,8 @@ model Group {
   hide_admins       Boolean @default(false)
   hidden_member_ids String  @default("[]")
 
+  /// Принимает ли группа заказы через безопасную сделку (оплата со счёта удерживается до подтверждения заказчика). false — жёлтая плашка у лотов и заказов
+  safe_deals_enabled Boolean @default(true)
   // Donations & support tiers
   donations_enabled Boolean @default(false)
   bank_card_masked  String? @db.VarChar(25) // e.g. "**** **** **** 4242"

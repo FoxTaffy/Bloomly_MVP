@@ -80,6 +80,8 @@ export interface Group {
   hidden_member_ids: string
   business_enabled: boolean
   den_enabled?: boolean
+  /** false — группа не принимает безопасные сделки (жёлтая плашка у лотов и заказов) */
+  safe_deals_enabled?: boolean
   created_at: string
   owner: GroupOwner
   _count: { members: number; events: number; posts: number }

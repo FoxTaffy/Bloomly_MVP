@@ -101,7 +101,7 @@ export const updateGroupHandler = async (
       }
     }
     // Finance and member-visibility fields are sensitive — only the owner may change them.
-    const OWNER_ONLY_FIELDS: (keyof UpdateGroupInput)[] = ['donationsEnabled', 'bankCardMasked', 'hideAdmins', 'hiddenMemberIds', 'businessEnabled'];
+    const OWNER_ONLY_FIELDS: (keyof UpdateGroupInput)[] = ['donationsEnabled', 'bankCardMasked', 'hideAdmins', 'hiddenMemberIds', 'businessEnabled', 'safeDealsEnabled'];
     const touchesOwnerOnlyField = OWNER_ONLY_FIELDS.some((f) => request.body[f] !== undefined);
     if (touchesOwnerOnlyField) {
       const { id: userId } = request.user as JwtUser;

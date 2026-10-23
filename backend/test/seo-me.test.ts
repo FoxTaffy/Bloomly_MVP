@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { createUser, prisma, resetDb, api } from './helpers.js';
 
 describe('sitemap, OG-превью и /auth/me', () => {
@@ -26,6 +27,37 @@ describe('sitemap, OG-превью и /auth/me', () => {
     expect((await api('GET', `/og/profile/${user.username}`)).res.body).toContain('Hello bio');
     expect((await api('GET', `/og/group/${group.id}`)).res.body).toContain('Seo Group');
     expect((await api('GET', '/og/profile/nobody-here')).status).toBe(404);
+  });
+
+  it('OG-превью лота: название, цена и текст в описании, картинка лота, og:url на страницу лота', async () => {
+    const { user } = await createUser({ display_name: 'Fox Taffy' });
+    const lot = await prisma.dealerListing.create({
+      data: {
+        seller_id: user.id,
+        title: 'BoyKisser YCH',
+        description: 'Рисую фурри, всех типов',
+        price: 5,
+        currency: 'USD',
+        images: ['https://cdn.example.com/ych.png'],
+        listing_kind: 'ych',
+        status: 'active',
+      },
+    });
+    const html = (await api('GET', `/og/listing/${lot.id}`)).res.body;
+    expect(html).toContain('<meta property="og:title" content="BoyKisser YCH"/>');
+    expect(html).toContain('5 USD — Рисую фурри, всех типов');
+    expect(html).toContain('<meta property="og:image" content="https://cdn.example.com/ych.png"/>');
+    expect(html).toContain(`<meta property="og:url" content="https://bloomly.fun/dealers-den/${lot.id}"/>`);
+
+    await prisma.dealerListing.update({ where: { id: lot.id }, data: { is_nsfw: true } });
+    expect((await api('GET', `/og/listing/${lot.id}`)).status).toBe(404);
+    expect((await api('GET', `/og/listing/${randomUUID()}`)).status).toBe(404);
+  });
+
+  it('OG-превью главной Dealers\' Den отдаётся без данных из базы', async () => {
+    const html = (await api('GET', '/og/dealers-den')).res.body;
+    expect(html).toContain('<meta property="og:title" content="Dealers\' Den"/>');
+    expect(html).toContain('<meta property="og:url" content="https://bloomly.fun/dealers-den"/>');
   });
 
   it('/auth/me отдаёт профиль с is_adult и без birth_date', async () => {

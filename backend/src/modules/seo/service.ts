@@ -80,6 +80,27 @@ export const seoService = {
     })
   },
 
+  // Лот виден гостю только активным или проданным и не NSFW — те же правила, что у страницы лота.
+  listingForOg(id: string) {
+    if (!UUID_PATTERN.test(id)) return null
+    return prisma.dealerListing.findFirst({
+      where: { id, deleted_at: null, status: { in: ['active', 'sold'] }, is_nsfw: false },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        price: true,
+        currency: true,
+        images: true,
+        status: true,
+        listing_kind: true,
+        commission_slots_total: true,
+        commission_slots_taken: true,
+        seller: { select: { display_name: true, username: true } },
+      },
+    })
+  },
+
   groupForOg(slugOrId: string) {
     return prisma.group.findFirst({
       where: {

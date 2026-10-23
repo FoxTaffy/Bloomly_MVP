@@ -15,6 +15,7 @@ import AppSidebar         from '@/components/AppSidebar.vue'
 import BIcon              from '@/components/BIcon.vue'
 import CommissionOrderPanel from '@/components/CommissionOrderPanel.vue'
 import CommissionInfoBlocks from '@/components/CommissionInfoBlocks.vue'
+import SafeDealsWarning from '@/components/SafeDealsWarning.vue'
 import CommissionReviews   from '@/components/CommissionReviews.vue'
 import ListingPanelHead    from '@/components/ListingPanelHead.vue'
 import ListingApplicationModal from '@/components/ListingApplicationModal.vue'
@@ -625,6 +626,7 @@ async function submitReport() {
               </div>
 
               <!-- Description -->
+              <SafeDealsWarning v-if="listing.group?.safe_deals_enabled === false" />
               <CommissionInfoBlocks v-if="isCommission" :listing="listing" @tag="goToTag" />
               <div v-if="(listing.description || listing.tags.length) && !isCommission"
                 class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl stack-y-3">

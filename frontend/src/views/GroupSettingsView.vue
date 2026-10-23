@@ -115,6 +115,33 @@ const sections = computed(() => {
 // ── Active section ──────────────────────────────────────────────────────────
 const openSection = ref<string>('sec-general')
 
+// ── Финансы события: билеты из событий группы + пожертвования из /balance ──
+const financeBalance = ref<{ balance: number | string; transactions: any[] } | null>(null)
+async function loadFinance() {
+  if (!group.value) return
+  try {
+    const r = await api.get(`/groups/${group.value.id}/balance`)
+    financeBalance.value = r.data?.data ?? null
+  } catch { /* раздел покажет «Нет данных» */ }
+}
+watch(openSection, (id) => { if (id === 'sec-finance' && !financeBalance.value) loadFinance() })
+const formatTierMoney = (amount: number, currency: string) =>
+  currency === 'RUB' ? `${amount.toLocaleString(LANG_TO_LOCALE[langStore.currentLang])} ₽` : `${amount.toLocaleString(LANG_TO_LOCALE[langStore.currentLang])} ${currency}`
+const financeTiers = computed(() =>
+  (group.value?.events ?? []).flatMap((ev: any) => ev.tickets ?? []).map((t: any) => ({
+    ...t,
+    pct: t.total_count ? Math.min(100, Math.round(((t.sold_count ?? 0) / t.total_count) * 100)) : 0,
+    revenueLabel: formatTierMoney(Number(t.price) * (t.sold_count ?? 0), t.currency),
+  })))
+const financeTicketsSold = computed(() => financeTiers.value.reduce((n: number, t: any) => n + (t.sold_count ?? 0), 0))
+// Валюты билетов могут различаться — выручку показываем по каждой отдельно
+const financeRevenueLabel = computed(() => {
+  const byCur: Record<string, number> = {}
+  for (const t of financeTiers.value) byCur[t.currency] = (byCur[t.currency] ?? 0) + Number(t.price) * (t.sold_count ?? 0)
+  const parts = Object.entries(byCur).map(([cur, sum]) => formatTierMoney(sum, cur))
+  return parts.length ? parts.join(' + ') : '—'
+})
+
 // ── Members management ──────────────────────────────────────────────────────
 const MEMBER_ROLES = computed((): { value: MemberRole; label: string; color: string; iconPath: string }[] => [
   { value: 'admin',         label: langStore.t.roleAdmin,  color: '#3b82f6',  iconPath: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
@@ -586,6 +613,7 @@ const form = reactive({
   bankCardMasked: '',
   supportTiers: [] as Array<{ emoji: string; name: string; price: string; currency?: string; desc: string }>,
   businessEnabled: false,
+  safeDealsEnabled: true,
   welcomeMsgEnabled: false,
   welcomeMsgText: '',
 })
@@ -628,6 +656,7 @@ const savedForm = reactive({
   bankCardMasked: '',
   supportTiers: [] as Array<{ emoji: string; name: string; price: string; currency?: string; desc: string }>,
   businessEnabled: false,
+  safeDealsEnabled: true,
   welcomeMsgEnabled: false,
   welcomeMsgText: '',
 })
@@ -655,6 +684,7 @@ function snapshotToSaved() {
     bankCardMasked: form.bankCardMasked,
     supportTiers: JSON.parse(JSON.stringify(form.supportTiers)),
     businessEnabled: form.businessEnabled,
+    safeDealsEnabled: form.safeDealsEnabled,
     welcomeMsgEnabled: form.welcomeMsgEnabled,
     welcomeMsgText: form.welcomeMsgText,
   })
@@ -684,6 +714,7 @@ function resetForm() {
     bankCardMasked: savedForm.bankCardMasked,
     supportTiers: JSON.parse(JSON.stringify(savedForm.supportTiers)),
     businessEnabled: savedForm.businessEnabled,
+    safeDealsEnabled: savedForm.safeDealsEnabled,
     welcomeMsgEnabled: savedForm.welcomeMsgEnabled,
     welcomeMsgText: savedForm.welcomeMsgText,
   })
@@ -714,6 +745,7 @@ const isDirty = computed(() => {
     form.bankCardMasked !== savedForm.bankCardMasked ||
     JSON.stringify(form.supportTiers) !== JSON.stringify(savedForm.supportTiers) ||
     form.businessEnabled !== savedForm.businessEnabled ||
+    form.safeDealsEnabled !== savedForm.safeDealsEnabled ||
     form.welcomeMsgEnabled !== savedForm.welcomeMsgEnabled ||
     form.welcomeMsgText !== savedForm.welcomeMsgText ||
     ((group.value?.type === 'creative' || group.value?.type === 'shop') && JSON.stringify(commForm.value) !== savedCommission.value)
@@ -1000,6 +1032,7 @@ async function load() {
   form.bankCardMasked = g.bank_card_masked || ''
   form.supportTiers = Array.isArray(g.support_tiers) ? g.support_tiers : []
   form.businessEnabled = g.business_enabled ?? false
+  form.safeDealsEnabled = g.safe_deals_enabled ?? true
   form.welcomeMsgEnabled = g.welcome_msg_enabled ?? false
   form.welcomeMsgText = g.welcome_msg_text || ''
   commForm.value = defaultCommissionForm()
@@ -1125,6 +1158,7 @@ async function save() {
         donationsEnabled: form.donationsEnabled,
         bankCardMasked: form.bankCardMasked || null,
         businessEnabled: form.businessEnabled,
+        safeDealsEnabled: form.safeDealsEnabled,
       } : {}),
       supportTiers: form.supportTiers.filter((t: { name: string }) => t.name.trim()),
     })
@@ -2252,145 +2286,64 @@ async function deleteGroup() {
                     </div>
                     <div>
                       <h2 class="font-bold text-white text-sm">{{ langStore.t.groupSettingsSecFinance }}</h2>
-                      <p class="text-white/40 text-xs">{{ langStore.t.groupSettingsFinanceMockupHint }}</p>
+                      <p class="text-white/40 text-xs">{{ langStore.t.groupSettingsSecTickets }} · {{ langStore.t.groupSettingsSecDonations }}</p>
                     </div>
-                    <span class="ml-auto text-[10px] font-bold px-2.5 py-1 rounded-full" style="background:#10b98120;color:#10b981;border:1px solid #10b98130">MOCKUP</span>
                   </div>
 
                   <div class="p-6 stack-y-6">
 
-                    <!-- Сводка -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
-                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">{{ langStore.t.groupSettingsTotalRevenue }}</p>
-                        <p class="text-2xl font-black text-emerald-400">124 800 ₽</p>
-                        <p class="text-[10px] text-emerald-400/60 flex items-center gap-1">
-                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7 7 7M5 19l7-7 7 7"/></svg>
-                          {{ langStore.t.groupSettingsVsPrevious }}
-                        </p>
-                      </div>
+                    <!-- Сводка: только реальные данные -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
                         <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">{{ langStore.t.groupSettingsSecTickets }}</p>
-                        <p class="text-2xl font-black text-white">98 400 ₽</p>
-                        <p class="text-[10px] text-white/40">164 {{ langStore.t.groupSettingsSold }}</p>
+                        <p class="text-2xl font-black text-white">{{ financeTicketsSold }}</p>
+                        <p class="text-[10px] text-white/40">{{ langStore.t.groupSettingsSold }}</p>
+                      </div>
+                      <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">{{ langStore.t.groupSettingsTotalRevenue }}</p>
+                        <p class="text-2xl font-black text-emerald-400">{{ financeRevenueLabel }}</p>
+                        <p class="text-[10px] text-white/40">{{ langStore.t.groupSettingsSecTickets }}</p>
                       </div>
                       <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
                         <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">{{ langStore.t.groupSettingsSecDonations }}</p>
-                        <p class="text-2xl font-black text-purple-400">26 400 ₽</p>
-                        <p class="text-[10px] text-purple-400/60">{{ langStore.t.groupSettingsFromPeopleCount }}</p>
-                      </div>
-                      <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
-                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">{{ langStore.t.groupSettingsPending }}</p>
-                        <p class="text-2xl font-black text-amber-400">14 200 ₽</p>
-                        <p class="text-[10px] text-amber-400/60">{{ langStore.t.groupSettingsAwaitingPayment }}</p>
-                      </div>
-                    </div>
-
-                    <!-- График доходов -->
-                    <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
-                      <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-bold text-white">{{ langStore.t.groupSettingsSalesDynamics }}</h3>
-                        <span class="text-[10px] text-white/30 bg-white/5 px-2.5 py-1 rounded-full">{{ langStore.t.groupSettingsLast30Days }}</span>
-                      </div>
-                      <div class="flex items-end gap-1.5 h-24">
-                        <div v-for="(bar, i) in [18,25,32,28,40,55,48,60,72,65,80,74,90,84,78,96,88,100,92,84,76,88,95,80,70,62,74,85,90,78]"
-                          :key="i"
-                          class="flex-1 rounded-t-sm transition-all"
-                          :style="`height:${bar}%;background:linear-gradient(to top,#10b981${i>=20?'99':'44'},#10b981${i>=20?'cc':'66'})`"
-                          :title="`${langStore.t.groupSettingsDay} ${i+1}`"
-                        />
-                      </div>
-                      <div class="flex justify-between mt-2 text-[9px] text-white/25">
-                        <span>1 {{ langStore.t.groupSettingsMonFeb }}</span><span>8 {{ langStore.t.groupSettingsMonFeb }}</span><span>15 {{ langStore.t.groupSettingsMonFeb }}</span><span>22 {{ langStore.t.groupSettingsMonFeb }}</span><span>1 {{ langStore.t.groupSettingsMonMar }}</span>
+                        <p class="text-2xl font-black text-brand-accent">{{ financeBalance ? Number(financeBalance.balance).toLocaleString(LANG_TO_LOCALE[langStore.currentLang]) : '—' }}</p>
+                        <p class="text-[10px] text-white/40">BLM</p>
                       </div>
                     </div>
 
                     <!-- Разбивка по типам билетов -->
                     <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
                       <h3 class="text-sm font-bold text-white mb-4">{{ langStore.t.groupSettingsSalesByCategory }}</h3>
-                      <div class="stack-y-3">
-                        <div v-for="(tier, i) in [
-                          { name: langStore.t.groupSettingsTierStandard, sold: 100, total: 150, revenue: '60 000 ₽', pct: 67, color: '#34d399' },
-                          { name: langStore.t.groupSettingsTierSponsor, sold: 40, total: 50, revenue: '28 000 ₽', pct: 80, color: '#a78bfa' },
-                          { name: 'VIP', sold: 24, total: 30, revenue: '36 000 ₽', pct: 80, color: '#fbbf24' },
-                        ]" :key="i" class="flex items-center gap-3">
+                      <div v-if="financeTiers.length" class="stack-y-3">
+                        <div v-for="tier in financeTiers" :key="tier.id" class="flex items-center gap-3">
                           <div class="w-24 text-xs text-white/70 truncate font-medium">{{ tier.name }}</div>
                           <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full transition-all" :style="`width:${tier.pct}%;background:${tier.color}`" />
+                            <div class="h-full rounded-full bg-emerald-400 transition-all" :style="`width:${tier.pct}%`" />
                           </div>
-                          <div class="text-xs font-bold text-white/60 w-16 text-right">{{ tier.sold }}/{{ tier.total }}</div>
-                          <div class="text-xs font-bold w-24 text-right" :style="`color:${tier.color}`">{{ tier.revenue }}</div>
+                          <div class="text-xs font-bold text-white/60 w-16 text-right">{{ tier.sold_count }}/{{ tier.total_count }}</div>
+                          <div class="text-xs font-bold w-24 text-right text-emerald-400">{{ tier.revenueLabel }}</div>
                         </div>
                       </div>
+                      <p v-else class="text-xs text-white/30 text-center py-4">{{ langStore.t.adminNoDataLabel }}</p>
                     </div>
 
-                    <!-- Последние транзакции -->
+                    <!-- Последние транзакции (пожертвования группе) -->
                     <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
-                      <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-bold text-white">{{ langStore.t.groupSettingsRecentTransactions }}</h3>
-                        <button class="text-[11px] text-emerald-400/70 hover:text-emerald-400 transition-colors">{{ langStore.t.seeAllBtn }}</button>
-                      </div>
-                      <div class="stack-y-1">
-                        <div v-for="(tx, i) in [
-                          { user: 'Taffy', type: `${langStore.t.groupSettingsSecTickets}: VIP`, amount: '+1 500 ₽', time: `2 ${langStore.t.groupSettingsMinAgo}`, color: '#34d399', icon: '🎟️' },
-                          { user: 'FoxDev', type: langStore.t.groupSettingsSecDonations, amount: '+500 ₽', time: `15 ${langStore.t.groupSettingsMinAgo}`, color: '#a78bfa', icon: '💜' },
-                          { user: 'Wolfy', type: `${langStore.t.groupSettingsSecTickets}: ${langStore.t.groupSettingsTierStandard}`, amount: '+600 ₽', time: `1 ${langStore.t.groupSettingsHourAgo}`, color: '#34d399', icon: '🎟️' },
-                          { user: 'DragonX', type: `${langStore.t.groupSettingsSecTickets}: ${langStore.t.groupSettingsTierSponsor}`, amount: '+700 ₽', time: `3 ${langStore.t.groupSettingsHourAgo}`, color: '#34d399', icon: '🎟️' },
-                          { user: 'SnowPaw', type: langStore.t.groupSettingsSecDonations, amount: '+200 ₽', time: langStore.t.groupSettingsYesterday, color: '#a78bfa', icon: '💜' },
-                        ]" :key="i"
+                      <h3 class="text-sm font-bold text-white mb-4">{{ langStore.t.groupSettingsRecentTransactions }}</h3>
+                      <div v-if="financeBalance?.transactions?.length" class="stack-y-1">
+                        <div v-for="tx in financeBalance.transactions.slice(0, 10)" :key="tx.id"
                           class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors cursor-default">
-                          <span class="text-base">{{ tx.icon }}</span>
                           <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-white truncate">{{ tx.user }}</p>
-                            <p class="text-[10px] text-white/40">{{ tx.type }}</p>
+                            <p class="text-xs font-bold text-white truncate">{{ tx.user?.display_name || tx.user?.username || '—' }}</p>
+                            <p class="text-[10px] text-white/40 truncate">{{ tx.message || langStore.t.groupSettingsSecDonations }}</p>
                           </div>
                           <div class="text-right shrink-0">
-                            <p class="text-sm font-black" :style="`color:${tx.color}`">{{ tx.amount }}</p>
-                            <p class="text-[9px] text-white/25">{{ tx.time }}</p>
+                            <p class="text-sm font-black text-emerald-400">{{ Number(tx.amount) > 0 ? '+' : '' }}{{ Number(tx.amount).toLocaleString(LANG_TO_LOCALE[langStore.currentLang]) }} BLM</p>
+                            <p class="text-[9px] text-white/25">{{ new Date(tx.created_at).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang]) }}</p>
                           </div>
                         </div>
                       </div>
-                    </div>
-
-                    <!-- Взаиморасчёты -->
-                    <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
-                      <h3 class="text-sm font-bold text-white mb-1">{{ langStore.t.groupSettingsSettlements }}</h3>
-                      <p class="text-[11px] text-white/35 mb-4">{{ langStore.t.groupSettingsSettlementsHint }}</p>
-                      <div class="stack-y-2">
-                        <div v-for="(item, i) in [
-                          { user: 'Wolfy', status: langStore.t.groupSettingsPayPending, amount: '1 200 ₽', due: `15 ${langStore.t.groupSettingsMonMar}`, statusColor: '#fbbf24' },
-                          { user: 'KitsuFox', status: langStore.t.groupSettingsPayPending, amount: '700 ₽', due: `20 ${langStore.t.groupSettingsMonMar}`, statusColor: '#fbbf24' },
-                          { user: 'SnowPaw', status: langStore.t.groupSettingsPayOverdue, amount: '600 ₽', due: `1 ${langStore.t.groupSettingsMonMar}`, statusColor: '#f87171' },
-                          { user: 'BluePaw', status: langStore.t.groupSettingsPayPaid, amount: '2 000 ₽', due: `28 ${langStore.t.groupSettingsMonFeb}`, statusColor: '#34d399' },
-                          { user: 'NeonDeer', status: langStore.t.groupSettingsPayPaid, amount: '1 500 ₽', due: `1 ${langStore.t.groupSettingsMonMar}`, statusColor: '#34d399' },
-                        ]" :key="i"
-                          class="flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all"
-                          :style="`border-color: ${item.statusColor}25; background: ${item.statusColor}08`">
-                          <div class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
-                            :style="`background:${item.statusColor}20;color:${item.statusColor}`">
-                            {{ item.user[0] }}
-                          </div>
-                          <div class="flex-1 min-w-0">
-                            <p class="text-xs font-bold text-white">{{ item.user }}</p>
-                            <p class="text-[10px] text-white/40">{{ langStore.t.groupSettingsToDate }} {{ item.due }}</p>
-                          </div>
-                          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                            :style="`background:${item.statusColor}20;color:${item.statusColor}`">
-                            {{ item.status }}
-                          </span>
-                          <p class="text-sm font-black text-white/80 w-20 text-right">{{ item.amount }}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Заглушка про реальные данные -->
-                    <div class="rounded-2xl p-4 flex items-start gap-3" style="background:rgba(16,185,129,0.06);border:1px dashed rgba(16,185,129,0.25)">
-                      <svg class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
-                      <p class="text-[11px] text-emerald-400/70 leading-relaxed">
-                        {{ langStore.t.groupSettingsFinanceMockupFooter }}
-                      </p>
+                      <p v-else class="text-xs text-white/30 text-center py-4">{{ langStore.t.adminNoDataLabel }}</p>
                     </div>
 
                   </div>
@@ -2681,6 +2634,27 @@ async function deleteGroup() {
                         class="inline-flex items-center gap-1 text-xs text-brand-accent hover:underline">
                         {{ langStore.t.groupSettingsOpenBusinessTab }} <BIcon name="ArrowRight" class="w-3 h-3" />
                       </router-link>
+                    </div>
+
+                    <!-- Safe deals toggle -->
+                    <div class="stack-y-2">
+                      <div class="flex items-center gap-2">
+                        <BIcon name="ShieldCheck" class="w-4 h-4 text-white/40" />
+                        <p class="text-sm font-bold text-white">Безопасная сделка</p>
+                      </div>
+                      <div class="flex items-center justify-between px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl transition-all">
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-semibold text-white">{{ form.safeDealsEnabled ? 'Заказы через счёт включены' : 'Заказы через счёт отключены' }}</p>
+                          <p class="text-xs mt-0.5 text-white/40">Оплата удерживается до подтверждения заказчика. Если отключить, у ваших лотов и заказов появится жёлтое предупреждение.</p>
+                        </div>
+                        <button
+                          @click="form.safeDealsEnabled = !form.safeDealsEnabled"
+                          class="relative w-12 h-6 rounded-full transition-all shrink-0"
+                          :style="form.safeDealsEnabled ? 'background: #10b981' : 'background: rgba(255,255,255,0.08)'">
+                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-xs transition-all"
+                            :class="form.safeDealsEnabled ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'" />
+                        </button>
+                      </div>
                     </div>
 
                     <!-- Support tiers -->

@@ -9,6 +9,7 @@
  *  GET /og/profile/:username     nginx направляет их сюда по User-Agent)
  *  GET /og/group/:slugOrId     — то же для группы
  *  GET /og/listing/:id         — то же для лота Dealers' Den
+ *  GET /og/dealers-den         — то же для главной страницы Dealers' Den
  *  Несуществующий / закрытый объект → настоящий 404 (а не soft-404 с оболочкой SPA).
  */
 
@@ -215,6 +216,18 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
         '@type': 'ProfilePage',
         mainEntity: { '@type': 'Person', name, alternateName: user.username, url, ...(user.avatar_url ? { image: user.avatar_url } : {}) },
       },
+    }))
+  })
+
+  // Превью главной Dealers' Den: статичный текст раздела, без данных из базы.
+  fastify.get('/og/dealers-den', async (_req, reply) => {
+    const url = `${BASE_URL}/dealers-den`
+    const description = 'Marketplace of creators on Bloomly: art, commissions, YCH, auctions, fursuits and merch from independent artists with safe deals.'
+    reply.header('Content-Type', 'text/html; charset=utf-8')
+    reply.header('Cache-Control', 'public, max-age=3600')
+    return reply.send(buildOgHtml({
+      title: "Dealers' Den", description, url,
+      jsonLd: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: "Dealers' Den", description, url },
     }))
   })
 

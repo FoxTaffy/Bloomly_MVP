@@ -164,7 +164,7 @@ export interface DealerListing {
   id: string
   seller_id: string
   group_id: string | null
-  group?: { id: string; slug: string; name: string; avatar_url: string | null } | null
+  group?: { id: string; slug: string; name: string; avatar_url: string | null; safe_deals_enabled?: boolean } | null
   title: string
   description: string | null
   price: string

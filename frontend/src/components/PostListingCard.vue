@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import SafeDealsWarning from '@/components/SafeDealsWarning.vue'
 import BIcon from '@/components/BIcon.vue'
 import DenDiscountPrice from '@/components/DenDiscountPrice.vue'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -47,7 +48,7 @@ const priceView = computed(() => {
   <component
     :is="interactive ? 'router-link' : 'div'"
     :to="interactive ? { name: 'dealer-listing', params: { id: listing.id } } : undefined"
-    class="flex items-center gap-3 rounded-xl border border-brand-border bg-brand-bg p-2 transition-colors"
+    class="flex flex-wrap items-center gap-3 rounded-xl border border-brand-border bg-brand-bg p-2 transition-colors"
     :class="interactive ? 'hover:border-brand-accent/50 hover:bg-brand-card cursor-pointer' : ''"
     :data-testid="interactive ? 'post-listing-card' : 'post-listing-preview'"
     @click="interactive && $event.stopPropagation()"
@@ -78,6 +79,7 @@ const priceView = computed(() => {
       <BIcon name="ChevronRight" class="w-3.5 h-3.5" />
     </span>
     <BIcon v-else-if="interactive" name="ChevronRight" class="w-4 h-4 shrink-0 text-white/30" />
+    <SafeDealsWarning v-if="listing.group?.safe_deals_enabled === false" compact class="basis-full" />
     <slot name="actions" />
   </component>
 </template>
