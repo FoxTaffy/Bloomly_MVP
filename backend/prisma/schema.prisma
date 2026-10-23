@@ -120,6 +120,8 @@ model User {
   receivedFriendRequests         Friendship[]              @relation("FriendshipAddressee")
   is_verified                    Boolean                   @default(false)
   is_sponsor                     Boolean                   @default(false)
+  // Баг-репорты, подтверждённые или исправленные админом (достижение «Охота на баги»); считается один раз на тикет.
+  bugs_confirmed                 Int                       @default(0)
   verified_at                    DateTime?
   ownedGroups                    Group[]                   @relation("GroupOwner")
   groupMemberships               GroupMember[]
@@ -2185,7 +2187,9 @@ model SupportTicket {
   type             String   @default("question") @db.VarChar(20) // bug, feedback, question, other
   subject          String   @db.VarChar(150)
   contact_email    String?  @db.VarChar(255)
-  status           String   @default("open") @db.VarChar(20) // open, in_progress, resolved, closed
+  status           String   @default("open") @db.VarChar(20) // open, in_progress, resolved, closed, confirmed, fixed
+  // Когда за этот баг засчитано достижение; не даёт начислить повторно при смене статуса туда-обратно.
+  bug_rewarded_at  DateTime?
   // 'app' = created from the in-app Help form; 'email' = created from an inbound message to the support mailbox.
   source           String   @default("app") @db.VarChar(10)
   // Raw sender address for email-origin tickets (used as the reply-to target); distinct from contact_email.

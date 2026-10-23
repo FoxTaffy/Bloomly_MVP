@@ -94,7 +94,7 @@ const markAllRead = async () => {
   } catch {}
 }
 
-const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'automod_appeal_accepted', 'automod_appeal_rejected', 'admin_broadcast', 'avatar_frame_approved', 'avatar_frame_rejected']
+const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'automod_appeal_accepted', 'automod_appeal_rejected', 'admin_broadcast', 'avatar_frame_approved', 'avatar_frame_rejected', 'bug_report_confirmed', 'bug_hunter_level']
 const isAutomodNotif = (n: any) => AUTOMOD_TYPES.includes(n.type)
 
 const automodMessage = (n: any) => {
@@ -109,6 +109,8 @@ const automodMessage = (n: any) => {
     case 'automod_appeal_rejected': return '❌ Апелляция отклонена'
     case 'admin_broadcast': return `📣 ${meta.title ?? ''}${meta.body ? ' — ' + meta.body : ''}`
     case 'avatar_frame_approved': return `🖼️ Рамка «${meta.name ?? ''}» одобрена и доступна в Ярмарке`
+    case 'bug_report_confirmed': return '🐞 Ваш баг-репорт подтвержден! Счетчик достижения обновлен.'
+    case 'bug_hunter_level': return `🏆 Поздравляем! Вы достигли нового уровня в Охоте на баги: ${meta.level ?? ''}`
     case 'avatar_frame_rejected': return `🖼️ Рамка «${meta.name ?? ''}» отклонена${meta.reason ? ' — ' + meta.reason : ''}`
     default: return ''
   }

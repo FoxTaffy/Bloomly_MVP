@@ -47,6 +47,10 @@ const AUTOMOD: Record<string, string> = {
   automod_appeal_rejected: 'Ваша апелляция отклонена',
 };
 
+const BUG_HUNT: Record<string, string> = {
+  bug_report_confirmed: 'Ваш баг-репорт подтвержден! Счетчик достижения обновлен.',
+};
+
 export type PushKind = 'message' | 'event' | 'critical';
 
 export interface NotifPush { title?: string; body: string; kind: PushKind }
@@ -58,6 +62,8 @@ export function notificationPushContent(type: string, meta: unknown): NotifPush 
   if (SOCIAL[key]) return { body: SOCIAL[key], kind: 'event' };
   if (DEN[type]) return { body: DEN[type], kind: 'event' };
   if (type === 'admin_broadcast') return { title: m.title || undefined, body: m.body || 'Сообщение от администрации', kind: 'critical' };
+  if (BUG_HUNT[type]) return { body: BUG_HUNT[type], kind: 'event' };
+  if (type === 'bug_hunter_level') return { body: `Поздравляем! Вы достигли нового уровня в Охоте на баги: ${(m as { level?: string }).level ?? ''} 🏆`, kind: 'event' };
   if (AUTOMOD[type]) return { body: m.reason ? `${AUTOMOD[type]}: ${m.reason}` : AUTOMOD[type], kind: 'critical' };
   return { body: 'Новое уведомление', kind: 'event' };
 }

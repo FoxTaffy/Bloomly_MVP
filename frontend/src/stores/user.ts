@@ -162,6 +162,7 @@ export interface UserProfile {
   onboarding_done: boolean
   _count?: { followers: number; following: number; posts: number }
   likes_count?: number
+  bug_hunter?: { count: number; level: 0 | 1 | 2 | 3; levelKey: 'none' | 'lvl1' | 'lvl2' | 'hacker'; nextTarget: number | null; currentMin: number }
   pinnedPost?: any | null
   badge_level?: string
   messages_privacy?: string

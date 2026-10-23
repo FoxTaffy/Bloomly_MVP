@@ -10,6 +10,7 @@ import sharp from 'sharp';
 import { freeDeletedUsername } from '../auth/unverifiedRelease.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
 import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
+import { bugHunterProgress } from '../../lib/bugHunter.js';
 
 const MUSIC_MAX_BYTES = 15 * 1024 * 1024;
 
@@ -122,6 +123,7 @@ const PUBLIC_SELECT = {
   verified_at:          true,
   verification_type:    true,
   deceased_at:          true,
+  bugs_confirmed:       true,
   frozen_at:            true,
   artist_since:         true,
   onboarding_done:      true,
@@ -257,6 +259,7 @@ export const usersService = {
 
     if (viewerId === raw.id) {
       return { ...raw, badge_level: getUserBadgeLevel(raw.artist_since) };
+    (raw as any).bug_hunter = bugHunterProgress(raw.bugs_confirmed);
     }
 
     // Wallet balance is private financial data — never expose it to anyone but the owner.

@@ -149,8 +149,10 @@ const STATUS_LABEL = computed<Record<string, string>>(() => ({
   in_progress: langStore.t.helpStatusInProgress,
   resolved: langStore.t.helpStatusResolved,
   closed: langStore.t.helpStatusClosed,
+  confirmed: langStore.t.helpStatusConfirmed,
+  fixed: langStore.t.helpStatusFixed,
 }))
-const STATUS_COLOR: Record<string, string> = { open: '#f59e0b', in_progress: '#38bdf8', resolved: '#10b981', closed: '#6b7280' }
+const STATUS_COLOR: Record<string, string> = { open: '#f59e0b', in_progress: '#38bdf8', resolved: '#10b981', closed: '#6b7280', confirmed: '#a78bfa', fixed: '#22d3ee' }
 const formatDate = (d: string) => fmt.formatDate(d, 'numeric')
 
 async function fetchTickets() {

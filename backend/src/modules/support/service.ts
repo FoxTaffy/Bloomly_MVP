@@ -2,15 +2,20 @@ import prisma from '../../config/prisma.js';
 import { isTrustedMediaUrl } from '../media/service.js';
 import { sendSupportEmail } from './mail.service.js';
 import { logger, logError } from '../../lib/logger.js';
+import { notificationService } from '../notifications/service.js';
+import { bugHunterProgress, BUG_HUNTER_LEVEL_NAMES } from '../../lib/bugHunter.js';
 
 const MAX_ATTACHMENT_FILES = 5;
+
+// Эти статусы у бага означают «репорт оказался полезным» и дают очко в достижении «Охота на баги»
+const BUG_REWARD_STATUSES: readonly string[] = ['confirmed', 'fixed'];
 
 export const SUPPORT_TICKET_TYPES = ['bug', 'feedback', 'question', 'other'] as const;
 export type SupportTicketType = (typeof SUPPORT_TICKET_TYPES)[number];
 
 export const SUPPORT_DEVICES = ['desktop', 'mobile', 'tablet'] as const;
 
-export const SUPPORT_TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
+export const SUPPORT_TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed', 'confirmed', 'fixed'] as const;
 export type SupportTicketStatus = (typeof SUPPORT_TICKET_STATUSES)[number];
 
 const ticketAuthorSelect = {
@@ -106,7 +111,7 @@ export async function addUserMessage(userId: string, ticketId: string, body: str
     }),
     prisma.supportTicket.update({
       where: { id: ticket.id },
-      data: (ticket.status === 'resolved' || ticket.status === 'closed') ? { status: 'open' } : {},
+      data: (ticket.status === 'resolved' || ticket.status === 'closed' || ticket.status === 'fixed') ? { status: 'open' } : {},
     }),
   ]);
   return message;
@@ -128,6 +133,37 @@ export async function adminGetTickets(status?: string, type?: string, page = 1, 
     prisma.supportTicket.count({ where }),
   ]);
   return { tickets, total, page, pages: Math.ceil(total / limit) };
+}
+
+/**
+ * Засчитывает баг автору один раз за тикет: метка bug_rewarded_at ставится условным updateMany,
+ * поэтому повторный клик по статусу или гонка двух админов не удвоят счётчик.
+ */
+async function awardBugReport(ticketId: string, userId: string) {
+  const total = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.supportTicket.updateMany({
+      where: { id: ticketId, bug_rewarded_at: null },
+      data: { bug_rewarded_at: new Date() },
+    });
+    if (claimed.count !== 1) return null;
+    const user = await tx.user.update({ where: { id: userId }, data: { bugs_confirmed: { increment: 1 } }, select: { bugs_confirmed: true } });
+    return user.bugs_confirmed;
+  });
+  if (total === null) return;
+
+  // Уведомления — побочный эффект: сбой доставки не должен откатывать уже засчитанный баг
+  try {
+    await notificationService.create({ receiverId: userId, type: 'bug_report_confirmed', refId: ticketId });
+    const reached = bugHunterProgress(total);
+    if (reached.level > bugHunterProgress(total - 1).level) {
+      await notificationService.create({
+        receiverId: userId, type: 'bug_hunter_level', refId: ticketId,
+        meta: { level: BUG_HUNTER_LEVEL_NAMES[reached.levelKey], levelKey: reached.levelKey },
+      });
+    }
+  } catch (err) {
+    logger.error({ err }, '[SUPPORT] Failed to send bug hunter notification');
+  }
 }
 
 export async function adminReplyTicket(ticketId: string, adminId: string, input: {
@@ -168,6 +204,10 @@ export async function adminReplyTicket(ticketId: string, adminId: string, input:
     ]);
   } else if (Object.keys(statusUpdate).length > 1) {
     await prisma.supportTicket.update({ where: { id: ticket.id }, data: statusUpdate });
+  }
+
+  if (ticket.type === 'bug' && ticket.user_id && statusUpdate.status && BUG_REWARD_STATUSES.includes(statusUpdate.status)) {
+    await awardBugReport(ticket.id, ticket.user_id);
   }
 
   return prisma.supportTicket.findUnique({ where: { id: ticket.id }, include: messagesOrder });

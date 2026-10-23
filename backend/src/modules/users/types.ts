@@ -46,6 +46,7 @@ export interface UserPublicProfile {
   profile_frame: string | null;
   is_verified: boolean;
   is_sponsor: boolean;
+  bugs_confirmed: number;
   verified_at: Date | null;
   verification_type: string | null;
   deceased_at: Date | null;

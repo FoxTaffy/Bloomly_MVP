@@ -13,13 +13,13 @@ const { badges, reportAdminError } = useAdminContext()
 
 // ── Support tickets ──────────────────────────────────────────────────
 const supportTickets = ref<any[]>([])
-const supportFilter = ref<'' | 'open' | 'in_progress' | 'resolved' | 'closed'>('')
+const supportFilter = ref<'' | 'open' | 'in_progress' | 'resolved' | 'closed' | 'confirmed' | 'fixed'>('')
 const isLoadingSupport = ref(false)
 const supportReplyDrafts = ref<Record<string, string>>({})
 
 const SUPPORT_TYPE_LABEL = computed<Record<string, string>>(() => ({ bug: langStore.t.helpTypeShortBug, feedback: langStore.t.helpTypeShortFeedback, question: langStore.t.helpTypeShortQuestion, other: langStore.t.other }))
-const SUPPORT_STATUS_LABEL = computed<Record<string, string>>(() => ({ open: langStore.t.helpStatusOpen, in_progress: langStore.t.helpStatusInProgress, resolved: langStore.t.helpStatusResolved, closed: langStore.t.helpStatusClosed }))
-const SUPPORT_STATUS_COLOR: Record<string, string> = { open: '#f59e0b', in_progress: '#38bdf8', resolved: '#10b981', closed: '#6b7280' }
+const SUPPORT_STATUS_LABEL = computed<Record<string, string>>(() => ({ open: langStore.t.helpStatusOpen, in_progress: langStore.t.helpStatusInProgress, resolved: langStore.t.helpStatusResolved, closed: langStore.t.helpStatusClosed, confirmed: langStore.t.helpStatusConfirmed, fixed: langStore.t.helpStatusFixed }))
+const SUPPORT_STATUS_COLOR: Record<string, string> = { open: '#f59e0b', in_progress: '#38bdf8', resolved: '#10b981', closed: '#6b7280', confirmed: '#a78bfa', fixed: '#22d3ee' }
 
 const supportSenderLabel = (m: any) => {
   if (m.sender_type === 'admin') return `${langStore.t.adminSenderAdmin}${m.sender?.username ? ` (@${m.sender.username})` : ''}`
@@ -80,7 +80,7 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
   <div>
     <!-- Filter pills -->
     <div class="flex gap-2 mb-5 flex-wrap">
-      <button v-for="s in (['', 'open', 'in_progress', 'resolved', 'closed'] as const)" :key="s"
+      <button v-for="s in (['', 'open', 'in_progress', 'resolved', 'closed', 'confirmed', 'fixed'] as const)" :key="s"
         @click="supportFilter = s; fetchSupportTickets()"
         class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
         :class="supportFilter === s
@@ -151,6 +151,16 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
                     class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-all">
                     {{ langStore.t.adminMarkInProgressBtn }}
                   </button>
+                  <template v-if="ticket.type === 'bug' && ticket.user">
+                    <button @click="replySupportTicket(ticket.id, 'confirmed')" :disabled="supportBusy[ticket.id]"
+                      class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-violet-500/10 border border-violet-500/20 text-violet-300 hover:bg-violet-500/20 transition-all">
+                      {{ langStore.t.adminMarkConfirmedBtn }}
+                    </button>
+                    <button @click="replySupportTicket(ticket.id, 'fixed')" :disabled="supportBusy[ticket.id]"
+                      class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/20 transition-all">
+                      {{ langStore.t.adminMarkFixedBtn }}
+                    </button>
+                  </template>
                   <button @click="replySupportTicket(ticket.id, 'resolved')" :disabled="supportBusy[ticket.id]"
                     class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
                     ✓ {{ langStore.t.adminMarkResolvedBtn }}
