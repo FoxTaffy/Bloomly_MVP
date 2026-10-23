@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, type Component } from 'vue'
+import { onMounted, onBeforeUnmount, computed, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLangStore } from '@/stores/lang'
 import { useAuthStore } from '../stores/auth'
@@ -15,13 +15,12 @@ import AdminReportsTab from '@/components/admin/AdminReportsTab.vue'
 import AdminSupportTab from '@/components/admin/AdminSupportTab.vue'
 import AdminAdsTab from '@/components/admin/AdminAdsTab.vue'
 import AdminVerificationTab from '@/components/admin/AdminVerificationTab.vue'
-import AdminAutoModTab from '@/components/admin/AdminAutoModTab.vue'
+import AdminSystemTab from '@/components/admin/AdminSystemTab.vue'
 import AdminUpdatesTab from '@/components/admin/AdminUpdatesTab.vue'
 import AdminShopTab from '@/components/admin/AdminShopTab.vue'
 import AdminDenTab from '@/components/admin/AdminDenTab.vue'
 import AdminGroupsTab from '@/components/admin/AdminGroupsTab.vue'
 import AdminFinanceTab from '@/components/admin/AdminFinanceTab.vue'
-import AdminSettingsTab from '@/components/admin/AdminSettingsTab.vue'
 import AdminTrafficTab from '@/components/admin/AdminTrafficTab.vue'
 import AdminNavList from '@/components/admin/AdminNavList.vue'
 
@@ -65,14 +64,14 @@ const TAB_COMPONENTS: Record<AdminTab, Component> = {
   support: AdminSupportTab,
   ads: AdminAdsTab,
   verification: AdminVerificationTab,
-  automod: AdminAutoModTab,
+  automod: AdminSystemTab,
   updates: AdminUpdatesTab,
   groups: AdminGroupsTab,
   shop: AdminShopTab,
   den: AdminDenTab,
   traffic: AdminTrafficTab,
   finance: AdminFinanceTab,
-  settings: AdminSettingsTab,
+  settings: AdminSystemTab,
 }
 
 const navItems = computed(() => [
@@ -80,7 +79,7 @@ const navItems = computed(() => [
   { tab: 'users'        as const, label: langStore.t.adminNavUsers,          icon: 'Users',           color: '#94a3b8', group: langStore.t.adminGroupModeration, badge: badges.users > 0 ? formatNum(badges.users) : null, minRole: 'moderator' },
   { tab: 'reports'      as const, label: langStore.t.adminNavReports,        icon: 'Flag',            color: '#f59e0b', group: langStore.t.adminGroupModeration, badge: badges.reports || null, minRole: 'moderator' },
   { tab: 'support'      as const, label: langStore.t.adminNavSupport,        icon: 'LifeBuoy',        color: '#4C67CF', group: langStore.t.adminGroupModeration, badge: badges.support || null, minRole: 'moderator' },
-  { tab: 'automod'      as const, label: 'AutoMod',                          icon: 'ShieldAlert',     color: '#ef4444', group: langStore.t.adminGroupModeration, badge: badges.automod > 0 ? formatNum(badges.automod) : null, minRole: 'moderator' },
+  { tab: 'automod'      as const, label: 'AutoMod и система',                       icon: 'ShieldAlert',     color: '#ef4444', group: langStore.t.adminGroupModeration, badge: badges.automod > 0 ? formatNum(badges.automod) : null, minRole: 'moderator' },
   { tab: 'posts'        as const, label: langStore.t.posts,                 icon: 'FileText',        color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
   { tab: 'tags'         as const, label: 'Синонимы тегов',                    icon: 'Hash',            color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
   { tab: 'verification' as const, label: langStore.t.secVerification,        icon: 'BadgeCheck',      color: '#2dd4bf', group: langStore.t.adminGroupContent,    badge: badges.verification || null, minRole: 'moderator' },
@@ -91,7 +90,6 @@ const navItems = computed(() => [
   { tab: 'shop'         as const, label: 'Bloomly Shop',                      icon: 'ShoppingBag',     color: '#f59e0b', group: langStore.t.adminGroupPlatform,   badge: badges.shop || null, minRole: 'admin' },
   { tab: 'den'          as const, label: "Dealers' Den",                      icon: 'Store',           color: '#f97316', group: langStore.t.adminGroupPlatform,   badge: badges.den || null, minRole: 'admin' },
   { tab: 'finance'      as const, label: langStore.t.adminNavFinancePremium, icon: 'Wallet',          color: '#a78bfa', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
-  { tab: 'settings'     as const, label: langStore.t.adminNavLogsSettings,   icon: 'Settings',        color: '#94a3b8', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
 ].filter(item => myRoleRank.value >= ROLE_RANK[item.minRole]))
 
 const navGroups = computed(() => {
@@ -106,7 +104,7 @@ const navGroups = computed(() => {
 
 const tabTitle = computed<Record<string, string>>(() => ({
   overview: langStore.t.adminTabTitleOverview,
-  settings: langStore.t.adminTabTitleSettings,
+  automod: 'AutoMod и система',
 }))
 
 const tabSubtitle = computed<Record<string, string>>(() => ({
@@ -117,7 +115,7 @@ const tabSubtitle = computed<Record<string, string>>(() => ({
   support: langStore.t.adminTabSubSupport,
   ads: langStore.t.adminTabSubAds,
   verification: langStore.t.adminTabSubVerification,
-  automod: langStore.t.adminTabSubAutomod,
+  automod: myRoleRank.value >= ROLE_RANK.admin ? 'Автомодерация, журнал действий и настройки платформы' : langStore.t.adminTabSubAutomod,
   updates: langStore.t.adminTabSubBroadcasts,
   groups: langStore.t.adminTabSubGroups,
   shop: 'Каталог товаров, паки стикеров, покупки и заявки на доступ',
@@ -136,12 +134,40 @@ const runHeaderSearch = () => {
   switchTab('users')
 }
 
+// Выход из админки: назад по истории, а если пришли по прямой ссылке — на главную
+const leaveAdmin = () => {
+  if (window.history.state?.back) router.back()
+  else router.push({ name: 'home' })
+}
+
+// ── Колокольчик: выпадающий список очередей ────────────────────────────
+const bellOpen = ref(false)
+const bellRoot = ref<HTMLElement | null>(null)
+const bellItems = computed(() => {
+  const m = stats.value?.moderation
+  const t = langStore.t
+  const items: { tab: AdminTab; label: string; icon: string; color: string; count: number }[] = [
+    { tab: 'reports',      label: t.adminStatReportsQueue, icon: 'Flag',       color: '#f59e0b', count: m?.pendingReports ?? 0 },
+    { tab: 'support',      label: t.adminNavSupport,       icon: 'LifeBuoy',   color: '#4C67CF', count: badges.support },
+    { tab: 'verification', label: t.secVerification,       icon: 'BadgeCheck', color: '#2dd4bf', count: m?.pendingVerification ?? 0 },
+  ]
+  if (myRoleRank.value >= ROLE_RANK.admin) items.push({ tab: 'ads', label: t.adLabel, icon: 'Megaphone', color: '#f97316', count: m?.pendingAds ?? 0 })
+  return items
+})
+const openFromBell = (tab: AdminTab) => { bellOpen.value = false; switchTab(tab) }
+const onDocPointer = (e: Event) => {
+  if (bellOpen.value && bellRoot.value && !bellRoot.value.contains(e.target as Node)) bellOpen.value = false
+}
+const onDocKey = (e: KeyboardEvent) => { if (e.key === 'Escape') bellOpen.value = false }
+onMounted(() => { document.addEventListener('pointerdown', onDocPointer); document.addEventListener('keydown', onDocKey) })
+onBeforeUnmount(() => { document.removeEventListener('pointerdown', onDocPointer); document.removeEventListener('keydown', onDocKey) })
+
 // ── Bell badge — total items actually waiting on staff review ──────────
 const totalPendingBadge = computed(() => {
   if (!stats.value) return 0
   return stats.value.moderation.pendingReports
     + stats.value.moderation.pendingVerification
-    + stats.value.moderation.pendingAds
+    + (myRoleRank.value >= ROLE_RANK.admin ? stats.value.moderation.pendingAds : 0)
     + badges.support
 })
 </script>
@@ -182,29 +208,60 @@ const totalPendingBadge = computed(() => {
     <div class="flex-1 md:ml-64 min-h-screen flex flex-col">
 
       <!-- Top bar -->
-      <header class="adm-header sticky top-0 z-20 bg-brand-bg/95 backdrop-blur-xl border-b border-brand-border px-4 md:px-6 py-3 md:py-3.5 flex items-center gap-2 md:gap-4">
+      <header class="adm-header sticky top-0 z-20 bg-brand-bg/95 backdrop-blur-xl border-b border-brand-border px-3 sm:px-4 md:px-6 py-2.5 md:py-3.5 flex items-center gap-2 md:gap-4">
         <!-- Menu button: телефон -->
         <button @click="mobileNavOpen = true" :aria-label="langStore.t.adminMenuOpen"
           class="md:hidden w-10 h-10 rounded-xl bg-brand-bg border border-brand-border flex items-center justify-center text-white/60 hover:text-white transition-all shrink-0">
           <BIcon name="Menu" class="w-5 h-5" />
         </button>
 
+        <!-- Выход из админ-панели: туда, откуда пришли (или на главную) -->
+        <button @click="leaveAdmin" :aria-label="langStore.t.backBtn" :title="langStore.t.backBtn"
+          class="h-10 md:h-9 px-3 rounded-xl bg-brand-bg border border-brand-border flex items-center gap-1.5 text-white/60 hover:text-white transition-all shrink-0 group">
+          <BIcon name="ArrowLeft" class="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+          <span class="hidden sm:inline text-xs font-bold">{{ langStore.t.backBtn }}</span>
+        </button>
+
         <!-- Search -->
         <div class="relative flex-1 min-w-0 max-w-xl">
-          <BIcon name="Search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+          <BIcon name="Search" class="absolute left-3.5 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
           <input v-model="headerSearch" @keyup.enter="runHeaderSearch" type="search" enterkeyhint="search"
             :placeholder="langStore.t.adminSearchPlaceholderGlobal"
-            class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-2.5 text-base md:text-sm text-white placeholder-white/25
+            class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-10 md:pl-11 pr-3 md:pr-4 py-2.5 text-base md:text-sm text-white placeholder-white/25
               outline-hidden focus:border-brand-accent/50 transition-all" />
         </div>
 
-        <!-- Bell -->
-        <button :title="langStore.t.adminBellPendingReview" class="relative flex w-10 h-10 md:w-9 md:h-9 rounded-xl bg-brand-bg border border-brand-border items-center justify-center text-white/50 hover:text-white transition-all shrink-0">
-          <BIcon name="Bell" class="w-4 h-4" />
-          <span v-if="totalPendingBadge > 0" class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-error text-white text-[9px] font-extrabold flex items-center justify-center">
-            {{ totalPendingBadge > 99 ? '99+' : totalPendingBadge }}
-          </span>
-        </button>
+        <!-- Bell: очереди, которые ждут команду -->
+        <div class="relative shrink-0" ref="bellRoot">
+          <button @click="bellOpen = !bellOpen" :aria-expanded="bellOpen" aria-haspopup="true" :title="langStore.t.adminBellPendingReview"
+            class="relative flex w-10 h-10 md:w-9 md:h-9 rounded-xl bg-brand-bg border items-center justify-center transition-all"
+            :class="bellOpen ? 'border-brand-accent/50 text-white' : 'border-brand-border text-white/50 hover:text-white'">
+            <BIcon name="Bell" class="w-4 h-4" />
+            <span v-if="totalPendingBadge > 0" class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-error text-white text-[9px] font-extrabold flex items-center justify-center">
+              {{ totalPendingBadge > 99 ? '99+' : totalPendingBadge }}
+            </span>
+          </button>
+          <Transition name="tab-fade">
+            <div v-if="bellOpen"
+              class="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-brand-border bg-brand-card shadow-2xl shadow-black/50 overflow-hidden z-40">
+              <p class="px-4 pt-3 pb-2 text-[10px] font-extrabold text-white/40 uppercase tracking-wider">{{ langStore.t.adminBellPendingReview }}</p>
+              <button v-for="item in bellItems" :key="item.tab" @click="openFromBell(item.tab)"
+                class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left">
+                <span class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${item.color}20`">
+                  <BIcon :name="item.icon" class="w-4 h-4" :style="`color:${item.color}`" />
+                </span>
+                <span class="flex-1 text-sm font-semibold text-white/80">{{ item.label }}</span>
+                <span class="min-w-[22px] h-5 px-1.5 rounded-full text-[11px] font-extrabold flex items-center justify-center"
+                  :class="item.count > 0 ? 'bg-brand-error/90 text-white' : 'bg-white/8 text-white/30'">{{ item.count }}</span>
+              </button>
+              <p v-if="!totalPendingBadge" class="px-4 pb-2 text-xs text-white/35">Всё разобрано — очереди пусты.</p>
+              <button @click="bellOpen = false; router.push('/notifications')"
+                class="w-full flex items-center justify-center gap-2 px-4 py-3 border-t border-brand-border text-xs font-bold text-brand-accent hover:bg-white/5 transition-colors">
+                <BIcon name="Bell" class="w-3.5 h-3.5" /> Мои уведомления
+              </button>
+            </div>
+          </Transition>
+        </div>
 
         <!-- My identity -->
         <div class="hidden lg:flex items-center gap-2.5 pl-3 border-l border-brand-border shrink-0">
@@ -221,14 +278,14 @@ const totalPendingBadge = computed(() => {
       </header>
 
       <!-- Page content -->
-      <main class="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full min-w-0">
+      <main class="flex-1 p-3 sm:p-4 md:p-6 max-w-5xl 2xl:max-w-6xl mx-auto w-full min-w-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div v-if="adminActionError" role="alert"
-          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 shadow-lg shadow-black/40">
+          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 shadow-lg shadow-black/40">
           {{ adminActionError }}
         </div>
       <div class="mb-5 md:mb-6">
-        <h1 class="text-xl md:text-2xl font-black text-white">{{ tabTitle[activeTab] ?? navItems.find(i=>i.tab===activeTab)?.label }}</h1>
-        <p class="text-sm text-white/40 mt-0.5">{{ tabSubtitle[activeTab] }}</p>
+        <h1 class="text-lg sm:text-xl md:text-2xl font-black text-white leading-tight">{{ tabTitle[activeTab] ?? navItems.find(i=>i.tab===activeTab)?.label }}</h1>
+        <p class="text-xs sm:text-sm text-white/40 mt-0.5">{{ tabSubtitle[activeTab] }}</p>
       </div>
       <Transition name="tab-fade" mode="out-in">
         <KeepAlive>

@@ -152,12 +152,20 @@ describe('визит и привязка регистрации', () => {
     const touch = { code: link.code, at: new Date().toISOString() };
     const free = await createUser({ email_verified: false, onboarding_done: false });
     const paid = await createUser({ subscription_tier: 'pro' });
-    for (const u of [free, paid]) {
+    // «Оплатили» — по успешным платежам, а не по текущему тарифу (тариф сгорает, пополнения его не меняют)
+    await prisma.payment.create({
+      data: { user_id: paid.user.id, provider: 'yookassa', purpose: 'wallet_topup', status: 'succeeded', amount: 100, paid_at: new Date() } as any,
+    });
+    const boundCard = await createUser({ subscription_tier: 'pro' });
+    await prisma.payment.create({
+      data: { user_id: boundCard.user.id, provider: 'yookassa', purpose: 'card_binding', status: 'succeeded', amount: 1, paid_at: new Date() } as any,
+    });
+    for (const u of [free, paid, boundCard]) {
       await api('POST', '/api/track/claim', { headers: u.auth, body: { visitor_id: VISITOR + u.user.id.slice(0, 4), first: touch, last: touch } });
     }
     const { auth } = await admin();
     const stats = (await api('GET', '/api/admin/tracking/overview', { headers: auth })).json.data.links[0].stats;
-    expect(stats).toMatchObject({ signups: 2, verified: 1, onboarded: 1, paid: 1 });
+    expect(stats).toMatchObject({ signups: 3, verified: 2, onboarded: 2, paid: 1 });
   });
 
   it('удаление ссылки убирает клики и отвязывает регистрации', async () => {

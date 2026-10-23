@@ -3,9 +3,10 @@ import { adminService } from './service.js';
 import { moderationService } from './moderation.service.js';
 import { autoModLogs, logStaffAction } from '../automod/logs.service.js';
 import { purchaseAd, getAdPricing } from '../ads/ads.service.js';
+import { isPlacement } from '../ads/ads.config.js';
 import { getFinanceReport } from './finance.service.js';
 import { requireModerator, requireAdmin, requireOwner } from '../../lib/authHooks.js';
-import { ROLE_RANK, canModerateTarget } from '../../lib/roles.js';
+import { ROLE_RANK, canModerateTarget, isAdmin } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
 import { usersService } from '../users/service.js';
 import { applyAction, getPendingAppeals, decideAppeal } from '../automod/service.js';
@@ -36,7 +37,7 @@ const logAdminAction = (actorId: string, targetUserId: string, action: string, r
 
 export const getStatsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
   if (!requireModerator(req, reply)) return;
-  const stats = await adminService.getStats();
+  const stats = await adminService.getStats({ includeFinance: isAdmin(req.user.role) });
   return reply.send({ success: true, data: stats, error: null });
 };
 
@@ -198,9 +199,17 @@ export const sendBroadcastHandler = async (
   if (!title?.trim() || !body?.trim() || !['all', 'premium', 'new', 'staff'].includes(audience)) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID', message: 'title, body и audience обязательны' } });
   }
+  if (title.trim().length > 200 || body.trim().length > 2000) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'TOO_LONG', message: 'Заголовок — до 200 символов, текст — до 2000' } });
+  }
   const actor = req.user;
   const broadcast = await adminService.sendBroadcast(actor.id, title.trim(), body.trim(), audience);
   return reply.send({ success: true, data: { broadcast }, error: null });
+};
+
+export const getBroadcastAudienceHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!requireAdmin(req, reply)) return;
+  return reply.send({ success: true, data: { counts: await adminService.broadcastAudienceCounts(req.user.id) }, error: null });
 };
 
 export const getBroadcastsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -448,6 +457,28 @@ export const submitAdHandler = async (
     }
     req.log.error(e);
     return reply.code(500).send({ success: false, data: null, error: { code: 'AD_ERROR', message: 'Failed to place ad' } });
+  }
+};
+
+export const createStaffAdHandler = async (
+  req: FastifyRequest<{ Body: { title?: string; description?: string; imageUrl?: string; linkUrl?: string; placement?: string; days?: number } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireAdmin(req, reply)) return;
+  const b = req.body ?? {};
+  const days = Number(b.days);
+  if (!b.title?.trim() || !b.linkUrl?.trim() || !isPlacement(b.placement) || !Number.isInteger(days) || days < 1 || days > 365) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'BAD_REQUEST', message: 'Укажите название, ссылку, место и срок (1–365 суток)' } });
+  }
+  try {
+    const ad = await adminService.createStaffAd({
+      staffId: req.user.id, title: b.title.trim(), description: b.description?.trim() || undefined,
+      imageUrl: b.imageUrl || undefined, linkUrl: b.linkUrl.trim(), placement: b.placement, days,
+    });
+    await logAdminAction(req.user.id, req.user.id, 'create_ad', `Служебная реклама "${ad.title}" на ${days} сут.`);
+    return reply.code(201).send({ success: true, data: { ad }, error: null });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'AD_ERROR', message: errMessage(e) } });
   }
 };
 

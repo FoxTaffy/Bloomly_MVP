@@ -180,3 +180,23 @@ describe('баннеры: модерация, возврат и показ', () 
     expect((await prisma.advertisement.findUniqueOrThrow({ where: { id: ad.id } })).status).toBe('pending');
   });
 });
+
+describe('служебная реклама админа', () => {
+  beforeAll(() => getApp());
+  beforeEach(resetDb);
+
+  it('создаётся бесплатно, сразу активна на выбранный срок; обычному пользователю недоступна', async () => {
+    const staff = await createUser({ role: 'admin' });
+    const body = { title: 'От команды', linkUrl: 'https://example.com/news', placement: 'left_menu', days: 3 };
+    const res = await api('POST', '/api/admin/ads/staff', { headers: staff.auth, body });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    const ad = res.json.data.ad;
+    expect(ad).toMatchObject({ status: 'active', placement: 'left_menu', duration_days: 3, price_blm: null });
+    expect(new Date(ad.ends_at).getTime() - new Date(ad.starts_at).getTime()).toBe(3 * DAY);
+
+    const bad = await api('POST', '/api/admin/ads/staff', { headers: staff.auth, body: { ...body, placement: 'nowhere' } });
+    expect(bad.status).toBe(400);
+    const user = await createUser();
+    expect((await api('POST', '/api/admin/ads/staff', { headers: user.auth, body })).status).toBe(403);
+  });
+});

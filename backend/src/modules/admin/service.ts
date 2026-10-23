@@ -61,7 +61,7 @@ function fillDays(rows: PeriodRow[], days: number, now: Date) {
 
 export const adminService = {
   // ── Overview stats ────────────────────────────────────────────────────────
-  async getStats() {
+  async getStats(opts: { includeFinance?: boolean } = {}) {
     const now = new Date();
     const dayAgo   = new Date(now.getTime() - 86_400_000);
     // Начало суток 6 дней назад (UTC): то же окно, что у недельного графика (fillDays), чтобы итоги сходились
@@ -77,6 +77,7 @@ export const adminService = {
       frozenUsers, pendingVerification, autoModFlags24h,
       premiumSubscribers,
       supportOpen, groupsTotal, shopPendingAccess, denActiveListings, denOpenDisputes, tagsTotal, broadcastsTotal,
+      activeDay, activeWeek, activeMonth, verifiedEmails, onboardedUsers,
     ] = await Promise.all([
       prisma.user.count({ where: { deleted_at: null } }),
       prisma.user.count({ where: { deleted_at: null, created_at: { gte: dayAgo } } }),
@@ -102,7 +103,21 @@ export const adminService = {
       prisma.denDispute.count({ where: { status: 'open' } }),
       prisma.tag.count(),
       prisma.adminBroadcast.count(),
+      // Активность по last_seen_at: сутки / неделя / месяц
+      prisma.user.count({ where: { deleted_at: null, last_seen_at: { gte: dayAgo } } }),
+      prisma.user.count({ where: { deleted_at: null, last_seen_at: { gte: weekAgo } } }),
+      prisma.user.count({ where: { deleted_at: null, last_seen_at: { gte: monthAgo } } }),
+      prisma.user.count({ where: { deleted_at: null, email_verified: true } }),
+      prisma.user.count({ where: { deleted_at: null, onboarding_done: true } }),
     ]);
+
+    // Деньги видят только администраторы: поступления за 30 дней (подписки и пополнения, без привязки карты)
+    const finance = opts.includeFinance
+      ? await prisma.payment.aggregate({
+        where: { status: 'succeeded', purpose: { not: 'card_binding' }, paid_at: { gte: monthAgo } },
+        _sum: { amount: true }, _count: true,
+      }).then((r) => ({ rub30d: Number(r._sum.amount ?? 0), payments30d: r._count }))
+      : null;
 
     // Posts per day for last 14 days
     const postsHistory = await countByPeriod('Post', 'day', new Date(now.getTime() - 14 * 86_400_000));
@@ -145,6 +160,9 @@ export const adminService = {
       moderation: { pendingReports, pendingAds, frozenUsers, pendingVerification, autoModFlags24h },
       ads: { active: activeAds },
       premiumSubscribers,
+      activity: { day: activeDay, week: activeWeek, month: activeMonth },
+      onboarding: { verifiedEmails, onboarded: onboardedUsers },
+      finance,
       online: presence.onlineCount(),
       sections: { supportOpen, groupsTotal, shopPendingAccess, denActiveListings, denOpenDisputes, tagsTotal, broadcastsTotal },
       postsHistory: postsHistory.map((r) => ({ day: r.bucket, count: Number(r.count) })),
@@ -269,11 +287,24 @@ export const adminService = {
   },
 
   // ── Broadcast notifications ──────────────────────────────────────────────
-  async sendBroadcast(actorId: string, title: string, body: string, audience: 'all' | 'premium' | 'new' | 'staff') {
-    const where: any = { deleted_at: null };
+  broadcastAudienceWhere(audience: 'all' | 'premium' | 'new' | 'staff') {
+    const where: Prisma.UserWhereInput = { deleted_at: null };
     if (audience === 'premium') where.subscription_tier = { not: 'free' };
     if (audience === 'new')     where.created_at = { gte: new Date(Date.now() - 7 * 86_400_000) };
     if (audience === 'staff')   where.role = { not: 'user' };
+    return where;
+  },
+
+  /** Сколько человек получит рассылку по каждой аудитории (без самого автора). */
+  async broadcastAudienceCounts(actorId: string) {
+    const count = (a: 'all' | 'premium' | 'new' | 'staff') =>
+      prisma.user.count({ where: { ...this.broadcastAudienceWhere(a), id: { not: actorId } } });
+    const [all, premium, fresh, staff] = await Promise.all([count('all'), count('premium'), count('new'), count('staff')]);
+    return { all, premium, new: fresh, staff };
+  },
+
+  async sendBroadcast(actorId: string, title: string, body: string, audience: 'all' | 'premium' | 'new' | 'staff') {
+    const where = this.broadcastAudienceWhere(audience);
 
     const targets = (await prisma.user.findMany({ where, select: { id: true } })).filter(t => t.id !== actorId);
 
@@ -293,7 +324,7 @@ export const adminService = {
   async getBroadcasts() {
     const broadcasts = await prisma.adminBroadcast.findMany({
       orderBy: { created_at: 'desc' },
-      take: 30,
+      take: 50,
       include: { actor: { select: { username: true, display_name: true } } },
     });
     const opensByBroadcast = await prisma.notification.groupBy({
@@ -677,6 +708,22 @@ export const adminService = {
       description:  input.description, image_url: input.imageUrl,
       link_url: linkUrl, contact_info: input.contactInfo,
       price_label: input.priceLabel,
+    }});
+  },
+
+  /** Служебная реклама от команды: без оплаты, сразу активна на выбранное число суток. */
+  async createStaffAd(input: {
+    staffId: string; title: string; description?: string; imageUrl?: string; linkUrl: string;
+    placement: string; days: number;
+  }) {
+    const linkUrl = normalizeSafeLink(input.linkUrl);
+    if (!linkUrl) throw new Error('Недопустимая ссылка рекламы: разрешены только http(s), mailto и tel');
+    const now = new Date();
+    return prisma.advertisement.create({ data: {
+      requester_id: input.staffId, reviewed_by: input.staffId, title: input.title,
+      description: input.description, image_url: input.imageUrl, link_url: linkUrl,
+      placement: input.placement, status: 'active', duration_days: input.days,
+      starts_at: now, ends_at: new Date(now.getTime() + input.days * 86_400_000),
     }});
   },
 

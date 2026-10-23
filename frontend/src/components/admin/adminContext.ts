@@ -30,7 +30,12 @@ export function createAdminContext() {
   const statsSubTab = ref<StatsSubTab>('network')
   // Header search: AdminView puts the query here, the Users tab consumes it
   const userSearchRequest = ref('')
+  // Раздел «AutoMod и система»: AutoMod или логи и настройки
+  const systemView = ref<'automod' | 'settings'>('automod')
   const switchTab = (tab: AdminTab, opts?: { usersView?: UsersView }) => {
+    // Логи и настройки живут внутри раздела AutoMod
+    if (tab === 'settings') { systemView.value = 'settings'; tab = 'automod' }
+    else if (tab === 'automod') systemView.value = 'automod'
     activeTab.value = tab
     if (opts?.usersView) usersView.value = opts.usersView
   }
@@ -84,7 +89,7 @@ export function createAdminContext() {
 
   return {
     myRole, myRoleRank, isOwnerRole, isAdminPlus,
-    activeTab, usersView, userSearchRequest, switchTab,
+    activeTab, usersView, systemView, userSearchRequest, switchTab,
     badges, automodVersion, adminActionError, reportAdminError,
     statsSubTab,
     stats, isLoadingStats, statsError, fetchStats,

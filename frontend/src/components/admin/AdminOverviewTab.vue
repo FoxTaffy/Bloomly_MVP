@@ -1,42 +1,19 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import BIcon from '@/components/BIcon.vue'
 import AdminStatisticsTab from './AdminStatisticsTab.vue'
 import AdminAgentsCard from './AdminAgentsCard.vue'
+import AdminGrowthChart from './AdminGrowthChart.vue'
 import { roleLabel, roleColor, formatNum, formatMonthShort, ROLE_RANK } from './adminHelpers'
 import { useAdminContext, type AdminTab, type StatsSubTab, type UsersView } from './adminContext'
 
 const langStore = useLangStore()
-const { usersView, switchTab, myRoleRank, statsSubTab, stats, isLoadingStats, statsError, fetchStats, networkStats } = useAdminContext()
+const { switchTab, myRoleRank, statsSubTab, stats, isLoadingStats, statsError, fetchStats, badges } = useAdminContext()
+const isAdminPlus = computed(() => myRoleRank.value >= ROLE_RANK.admin)
 
-// Каждая карточка ведёт в раздел админки, откуда взято число; minRole — как у пункта меню
-type CardTarget = { tab: AdminTab; usersView?: UsersView; statsSubTab?: StatsSubTab; minRole: 'moderator' | 'admin' }
-const statCards = computed(() => {
-  const st = stats.value
-  if (!st) return []
-  const sec = st.sections ?? {}
-  const t = langStore.t
-  const cards: (CardTarget & { label: string; icon: string; color: string; value: string; sub: string })[] = [
-    { tab: 'users',   minRole: 'moderator', label: t.adminStatTotalUsers,   icon: 'Users',       color: '#4C67CF', value: formatNum(st.users.total),          sub: `+${st.users.today} ${t.adminSubToday}` },
-    { tab: 'users',   minRole: 'moderator', label: t.adminStatNewToday,     icon: 'UserPlus',    color: '#10b981', value: formatNum(st.users.today),          sub: `+${st.users.week} ${t.adminSubThisWeek}` },
-    { tab: 'finance', minRole: 'admin',     label: t.adminStatWithSub,      icon: 'Sparkles',    color: '#a78bfa', value: formatNum(st.premiumSubscribers),   sub: `${t.adminSubOutOf} ${formatNum(st.users.total)} ${t.adminSubUsersGenitive}` },
-    { tab: 'posts',   minRole: 'moderator', label: t.adminStatTotalPosts,   icon: 'FileText',    color: '#22d3ee', value: formatNum(st.posts.total),          sub: `+${st.posts.week} ${t.adminSubThisWeek}` },
-    { tab: 'posts',   minRole: 'moderator', label: t.adminStatPostsToday,   icon: 'FilePlus2',   color: '#f59e0b', value: formatNum(st.posts.today),          sub: t.adminSubPublications },
-    { tab: 'reports', minRole: 'moderator', label: t.adminStatReportsQueue, icon: 'Flag',        color: '#f43f5e', value: formatNum(st.moderation.pendingReports), sub: t.adminSubAwaitingReview },
-    { tab: 'support', minRole: 'moderator', label: t.adminNavSupport,       icon: 'LifeBuoy',    color: '#4C67CF', value: formatNum(sec.supportOpen ?? 0),    sub: 'открытых обращений' },
-    { tab: 'groups',  minRole: 'moderator', label: t.adminNavGroupsEvents,  icon: 'LayoutGrid',  color: '#818cf8', value: formatNum(sec.groupsTotal ?? 0),    sub: 'групп на платформе' },
-    { tab: 'ads',     minRole: 'admin',     label: t.adLabel,               icon: 'Megaphone',   color: '#f97316', value: formatNum(st.ads?.active ?? 0),     sub: `${st.moderation.pendingAds} на проверке` },
-    { tab: 'shop',    minRole: 'admin',     label: 'Bloomly Shop',          icon: 'ShoppingBag', color: '#f59e0b', value: formatNum(sec.shopPendingAccess ?? 0), sub: 'заявок на доступ к стикерам' },
-    { tab: 'den',     minRole: 'admin',     label: "Dealers' Den",          icon: 'Store',       color: '#fb923c', value: formatNum(sec.denActiveListings ?? 0), sub: `${sec.denOpenDisputes ?? 0} открытых споров` },
-    { tab: 'tags',    minRole: 'moderator', label: 'Синонимы тегов',        icon: 'Hash',        color: '#94a3b8', value: formatNum(sec.tagsTotal ?? 0),      sub: 'тегов в системе' },
-    { tab: 'updates', minRole: 'admin',     label: t.adminNavBroadcasts,    icon: 'Send',        color: '#4C67CF', value: formatNum(sec.broadcastsTotal ?? 0), sub: 'отправлено рассылок' },
-    { tab: 'overview', statsSubTab: 'online', minRole: 'admin', label: 'Онлайн сейчас', icon: 'Activity', color: '#34d399', value: formatNum(st.online ?? 0), sub: 'активность по часам' },
-  ]
-  return cards.filter(c => myRoleRank.value >= ROLE_RANK[c.minRole])
-})
-
-const openCard = (c: CardTarget) => {
+type Target = { tab: AdminTab; usersView?: UsersView; statsSubTab?: StatsSubTab }
+const open = (c: Target) => {
   if (c.statsSubTab) {
     statsSubTab.value = c.statsSubTab
     document.getElementById('admin-statistics')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -45,84 +22,124 @@ const openCard = (c: CardTarget) => {
   switchTab(c.tab, { usersView: c.usersView })
 }
 
-// ── Growth charts — cumulative totals reconstructed from last-12-months deltas
+// ── Требует внимания: очереди, которые разбирает команда ──────────────────
+const attention = computed(() => {
+  const st = stats.value
+  if (!st) return []
+  const t = langStore.t
+  const list: (Target & { label: string; hint: string; icon: string; color: string; value: number })[] = [
+    { tab: 'reports',      label: t.adminStatReportsQueue, hint: 'ждут решения',        icon: 'Flag',        color: '#f59e0b', value: st.moderation.pendingReports },
+    { tab: 'support',      label: t.adminNavSupport,       hint: 'открытых обращений',  icon: 'LifeBuoy',    color: '#60a5fa', value: st.sections?.supportOpen ?? badges.support },
+    { tab: 'verification', label: t.secVerification,       hint: 'заявок на проверке',  icon: 'BadgeCheck',  color: '#2dd4bf', value: st.moderation.pendingVerification },
+    { tab: 'automod',      label: 'AutoMod',               hint: 'срабатываний за 24 ч', icon: 'ShieldAlert', color: '#f87171', value: st.moderation.autoModFlags24h },
+  ]
+  if (isAdminPlus.value) list.splice(3, 0, { tab: 'ads', label: t.adLabel, hint: 'заявок на проверке', icon: 'Megaphone', color: '#fb923c', value: st.moderation.pendingAds })
+  return list
+})
+const allClear = computed(() => attention.value.length > 0 && attention.value.every(a => !a.value))
 
-const buildCumulative = (rows: { month: string; count: number }[] | undefined, endTotal: number) => {
+// ── Ключевые показатели ───────────────────────────────────────────────────
+const cumulative = (rows: { month: string; count: number }[] | undefined, endTotal: number) => {
   if (!rows?.length) return []
-  const sum = rows.reduce((s, r) => s + r.count, 0)
-  let running = endTotal - sum
-  return rows.map(r => { running += r.count; return { month: r.month, total: running } })
+  let running = endTotal - rows.reduce((s, r) => s + r.count, 0)
+  return rows.map(r => ({ month: r.month, total: (running += r.count) }))
 }
-// 'loading' | 'error' | 'empty' | 'ok' — one state per chart so the card never renders blank
+const userSeries = computed(() => cumulative(stats.value?.userGrowth, stats.value?.users.total ?? 0))
+const postSeries = computed(() => cumulative(stats.value?.postGrowth, stats.value?.posts.total ?? 0))
+
+const spark = (series: { total: number }[]) => {
+  if (series.length < 2) return ''
+  const vals = series.map(p => p.total)
+  const min = Math.min(...vals), range = Math.max(Math.max(...vals) - min, 1)
+  return vals.map((v, i) => `${((i / (vals.length - 1)) * 100).toFixed(1)},${(26 - ((v - min) / range) * 22).toFixed(1)}`).join(' ')
+}
+const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0)
+
+const kpis = computed(() => {
+  const st = stats.value
+  if (!st) return []
+  const list: { label: string; value: string; sub: string; icon: string; color: string; target: Target; spark?: string }[] = [
+    { label: 'Пользователи', value: formatNum(st.users.total), sub: `+${st.users.today} сегодня · +${st.users.week} за неделю`, icon: 'Users', color: '#6d83e8', target: { tab: 'users' }, spark: spark(userSeries.value) },
+    { label: 'Публикации', value: formatNum(st.posts.total), sub: `+${st.posts.today} сегодня · +${st.posts.week} за неделю`, icon: 'FileText', color: '#22d3ee', target: { tab: 'posts' }, spark: spark(postSeries.value) },
+    { label: 'Онлайн сейчас', value: formatNum(st.online ?? 0), sub: `${formatNum(st.activity?.day ?? 0)} за сутки · ${formatNum(st.activity?.week ?? 0)} за неделю`, icon: 'Activity', color: '#34d399', target: { tab: 'overview', statsSubTab: 'online' } },
+  ]
+  if (isAdminPlus.value) {
+    list.push({ label: 'Подписчики', value: formatNum(st.premiumSubscribers), sub: `${pct(st.premiumSubscribers, st.users.total)}% аудитории`, icon: 'Sparkles', color: '#a78bfa', target: { tab: 'finance' } })
+    if (st.finance) list.push({ label: 'Поступления, 30 дн.', value: `${formatNum(Math.round(st.finance.rub30d))} ₽`, sub: `${st.finance.payments30d} платежей`, icon: 'Wallet', color: '#fbbf24', target: { tab: 'finance' } })
+  } else {
+    list.push({ label: 'Активны за месяц', value: formatNum(st.activity?.month ?? 0), sub: `${pct(st.activity?.month ?? 0, st.users.total)}% аудитории`, icon: 'TrendingUp', color: '#a78bfa', target: { tab: 'users' } })
+  }
+  return list
+})
+
+// ── Динамика ───────────────────────────────────────────────────────────────
 const growthState = (rows: { count: number }[] | undefined, total: number | undefined) => {
   if (!stats.value) return isLoadingStats.value ? 'loading' : statsError.value ? 'error' : 'loading'
   if (!rows?.length || (!total && !rows.some(r => r.count > 0))) return 'empty'
   return 'ok'
 }
+const chartRows = (series: { month: string; total: number }[]) => series.map(p => ({ label: formatMonthShort(p.month), total: p.total }))
 const userGrowthState = computed(() => growthState(stats.value?.userGrowth, stats.value?.users?.total))
 const postGrowthState = computed(() => growthState(stats.value?.postGrowth, stats.value?.posts?.total))
-const userGrowthSeries = computed(() => buildCumulative(stats.value?.userGrowth, stats.value?.users.total ?? 0))
-const postGrowthSeries = computed(() => buildCumulative(stats.value?.postGrowth, stats.value?.posts.total ?? 0))
-const userGrowthMax = computed(() => Math.max(...userGrowthSeries.value.map(p => p.total), 1))
-const userGrowthMin = computed(() => Math.min(...userGrowthSeries.value.map(p => p.total), userGrowthMax.value))
-const postGrowthMax = computed(() => Math.max(...postGrowthSeries.value.map(p => p.total), 1))
-const postGrowthMin = computed(() => Math.min(...postGrowthSeries.value.map(p => p.total), postGrowthMax.value))
 
-// SVG polyline points for a simple area/line chart, normalised into a 0..300 x 0..100 viewBox
-const buildLineCoords = (series: { month: string; total: number }[], min: number, max: number) => {
-  if (series.length < 2) return []
-  const range = Math.max(max - min, 1)
-  return series.map((p, i) => {
-    const x = (i / (series.length - 1)) * 300
-    const y = 100 - ((p.total - min) / range) * 92 - 4
-    return { x, y, month: p.month, total: p.total }
-  })
-}
-const userGrowthCoords = computed(() => buildLineCoords(userGrowthSeries.value, userGrowthMin.value, userGrowthMax.value))
-const postGrowthCoords = computed(() => buildLineCoords(postGrowthSeries.value, postGrowthMin.value, postGrowthMax.value))
-const userGrowthPoints = computed(() => userGrowthCoords.value.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' '))
-const postGrowthPoints = computed(() => postGrowthCoords.value.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' '))
-
-const hoveredGrowthPoint = ref<{ chart: 'users' | 'posts'; index: number } | null>(null)
-const activeGrowthTooltip = computed(() => {
-  if (!hoveredGrowthPoint.value) return null
-  const { chart, index } = hoveredGrowthPoint.value
-  const coord = (chart === 'users' ? userGrowthCoords.value : postGrowthCoords.value)[index]
-  if (!coord) return null
-  return { left: (coord.x / 300) * 100, top: coord.y, month: coord.month, total: coord.total }
-})
-
-const hoveredActivityBar = ref<{ row: string; index: number } | null>(null)
-const formatWeekday = (d: string) => {
-  const label = new Date(d).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { weekday: 'short', day: 'numeric', month: 'short' })
-  return label.charAt(0).toUpperCase() + label.slice(1)
-}
-
-// ── Weekly activity — posts / likes / comments per day, last 7 days
-const weeklyActivityRows = computed(() => {
+// ── Активность за неделю: посты, лайки, комментарии по дням ───────────────
+const weekly = computed(() => {
   const wa = stats.value?.weeklyActivity
-  if (!wa) return []
-  const rows = [
-    { label: langStore.t.postsTab,   color: '#4C67CF', days: wa.posts },
-    { label: langStore.t.adminLikesLabel, color: '#f7a9e2', days: wa.likes },
-    { label: langStore.t.comments,   color: '#cd83f5', days: wa.comments },
+  if (!wa) return null
+  const series = [
+    { key: 'posts',    label: langStore.t.postsTab,         color: '#4C67CF', days: wa.posts as { day: string; count: number }[] },
+    { key: 'likes',    label: langStore.t.adminLikesLabel,  color: '#f7a9e2', days: wa.likes as { day: string; count: number }[] },
+    { key: 'comments', label: langStore.t.comments,         color: '#cd83f5', days: wa.comments as { day: string; count: number }[] },
   ]
-  return rows.map(r => ({
-    ...r,
-    total: r.days.reduce((s: number, d: any) => s + d.count, 0),
-    max: Math.max(...r.days.map((d: any) => d.count), 1),
+  const days = series[0].days.map((d, i) => ({
+    day: d.day,
+    values: series.map(s => ({ key: s.key, label: s.label, color: s.color, count: s.days[i]?.count ?? 0 })),
   }))
+  const max = Math.max(...days.flatMap(d => d.values.map(v => v.count)), 1)
+  return { series: series.map(s => ({ ...s, total: s.days.reduce((a, d) => a + d.count, 0) })), days, max }
+})
+const weekdayShort = (d: string) => new Date(d).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { weekday: 'short' })
+
+// ── Здоровье аудитории ─────────────────────────────────────────────────────
+const audience = computed(() => {
+  const st = stats.value
+  if (!st) return []
+  const total = st.users.total
+  return [
+    { label: 'Подтвердили почту', value: pct(st.onboarding?.verifiedEmails ?? 0, total), color: '#34d399' },
+    { label: 'Прошли онбординг', value: pct(st.onboarding?.onboarded ?? 0, total), color: '#6d83e8' },
+    { label: 'Активны за месяц', value: pct(st.activity?.month ?? 0, total), color: '#f59e0b' },
+  ]
+})
+const engagement = computed(() => {
+  const st = stats.value
+  if (!st) return []
+  return [
+    { label: 'Комментарии', value: formatNum(st.comments), icon: 'MessageCircle', color: '#cd83f5' },
+    { label: 'Репосты', value: formatNum(st.repaws), icon: 'Repeat2', color: '#22d3ee' },
+    { label: 'Подписки', value: formatNum(st.follows), icon: 'UserPlus', color: '#10b981' },
+  ]
 })
 
-// ── Geography — top countries by user count (from /admin/stats/network)
-// "Не указана" is the unspecified bucket — excluded so the ranking only reflects known countries
-const topCountries = computed(() => {
-  const rows = (networkStats.value?.usersByCountry ?? []).filter((r: any) => r.label && r.label !== 'null' && r.label !== 'Не указана')
-  const total = rows.reduce((s: number, r: any) => s + r.value, 0) || 1
-  return rows.slice(0, 5).map((r: any) => ({ ...r, pct: Math.round((r.value / total) * 100) }))
+// ── Разделы платформы ──────────────────────────────────────────────────────
+const sections = computed(() => {
+  const st = stats.value
+  if (!st) return []
+  const sec = st.sections ?? {}
+  const list: (Target & { label: string; value: string; sub: string; icon: string; color: string })[] = [
+    { tab: 'groups', label: langStore.t.adminNavGroupsEvents, value: formatNum(sec.groupsTotal ?? 0), sub: 'групп на платформе', icon: 'LayoutGrid', color: '#818cf8' },
+  ]
+  if (isAdminPlus.value) {
+    list.push(
+      { tab: 'shop', label: 'Bloomly Shop', value: formatNum(sec.shopPendingAccess ?? 0), sub: 'заявок на доступ к стикерам', icon: 'ShoppingBag', color: '#f59e0b' },
+      { tab: 'den',  label: "Dealers' Den", value: formatNum(sec.denActiveListings ?? 0), sub: `лотов · ${sec.denOpenDisputes ?? 0} открытых споров`, icon: 'Store', color: '#fb923c' },
+      { tab: 'ads',  label: langStore.t.adLabel, value: formatNum(st.ads?.active ?? 0), sub: 'активных объявлений', icon: 'Megaphone', color: '#f97316' },
+    )
+  }
+  return list
 })
 
-// ── Reports by AutoMod category
+// ── Жалобы по категориям ───────────────────────────────────────────────────
 const REPORT_CATEGORY_LABEL = computed<Record<string, string>>(() => ({
   spam: langStore.t.adminCategorySpam, toxic: langStore.t.adminCategoryToxic, duplicate: langStore.t.adminCategoryDuplicate, fraud: langStore.t.adminCategoryFraud,
   suspicious: langStore.t.adminCategorySuspicious, manual: langStore.t.adminCategoryManual, other: langStore.t.other,
@@ -132,25 +149,16 @@ const topReportCategories = computed(() => {
   const max = Math.max(...rows.map((r: any) => r.count), 1)
   return rows.slice(0, 5).map((r: any) => ({ ...r, label: REPORT_CATEGORY_LABEL.value[r.category] ?? r.category, pct: Math.round((r.count / max) * 100) }))
 })
-
-// Moderation snapshot — the things staff act on first (freezes, bans, reports, automod)
-const modSnapshot = computed(() => stats.value ? [
-  { tab: 'reports'      as const, usersView: undefined as UsersView | undefined, label: langStore.t.adminStatReportsQueue, icon: 'Flag',        color: '#f59e0b', value: stats.value.moderation.pendingReports },
-  { tab: 'users'        as const, usersView: 'frozen' as UsersView | undefined,  label: langStore.t.adminNavFrozen,        icon: 'Snowflake',   color: '#38bdf8', value: stats.value.moderation.frozenUsers },
-  { tab: 'automod'      as const, usersView: undefined as UsersView | undefined, label: `AutoMod ${langStore.t.adminLast24h}`, icon: 'ShieldAlert', color: '#ef4444', value: stats.value.moderation.autoModFlags24h },
-  { tab: 'verification' as const, usersView: undefined as UsersView | undefined, label: langStore.t.secVerification,       icon: 'BadgeCheck',  color: '#2dd4bf', value: stats.value.moderation.pendingVerification },
-] : [])
+const roles = computed(() => (stats.value?.roleBreakdown ?? []).filter((r: any) => r.role !== 'user'))
 </script>
 
 <template>
   <div>
     <AdminAgentsCard />
 
-    <!-- Skeleton -->
-    <div v-if="isLoadingStats" class="stack-y-5">
-      <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div v-for="n in 6" :key="n" class="h-28 rounded-2xl bg-white/5 animate-pulse" />
-      </div>
+    <div v-if="isLoadingStats && !stats" class="stack-y-5">
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3"><div v-for="n in 4" :key="n" class="h-28 rounded-2xl bg-white/5 animate-pulse" /></div>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3"><div v-for="n in 4" :key="n" class="h-36 rounded-2xl bg-white/5 animate-pulse" /></div>
       <div class="h-56 rounded-2xl bg-white/5 animate-pulse" />
     </div>
 
@@ -160,208 +168,127 @@ const modSnapshot = computed(() => stats.value ? [
     </div>
 
     <template v-else-if="stats">
-      <!-- Moderation snapshot — the queue staff actually work from -->
+      <!-- Требует внимания -->
       <div class="flex items-center gap-2 mb-3">
-        <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
+        <span class="w-1.5 h-1.5 rounded-full" :class="allClear ? 'bg-emerald-400' : 'bg-rose-400 animate-pulse'"></span>
         <h2 class="text-xs font-extrabold text-white/50 tracking-[0.15em] uppercase">{{ langStore.t.adminRequiresAttention }}</h2>
+        <span v-if="allClear" class="text-[11px] font-bold text-emerald-400">всё разобрано</span>
       </div>
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-        <button v-for="mc in modSnapshot" :key="mc.label" @click="switchTab(mc.tab, { usersView: mc.usersView })"
-          class="relative text-left rounded-2xl p-4 overflow-hidden border transition-all duration-200 group hover:-translate-y-0.5 hover:shadow-lg"
-          :style="`background:${mc.color}0d;border-color:${mc.color}25`">
-          <div class="flex items-center justify-between mb-2.5">
-            <div class="w-8 h-8 rounded-xl flex items-center justify-center transition-transform duration-200 group-hover:scale-110" :style="`background:${mc.color}20`">
-              <BIcon :name="mc.icon" class="w-4 h-4" :style="`color:${mc.color}`" />
+      <div class="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-8">
+        <button v-for="a in attention" :key="a.tab + a.label" @click="open(a)"
+          class="group relative text-left rounded-2xl p-4 border overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+          :style="a.value ? `background:${a.color}12;border-color:${a.color}40` : 'background:rgba(255,255,255,0.025);border-color:rgba(255,255,255,0.08)'">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center" :style="`background:${a.color}22`">
+              <BIcon :name="a.icon" class="w-[18px] h-[18px]" :style="`color:${a.color}`" />
             </div>
-            <BIcon name="ArrowUpRight" class="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+            <BIcon name="ArrowUpRight" class="w-4 h-4 text-white/20 group-hover:text-white/60 transition-colors" />
           </div>
-          <p class="text-2xl font-black text-white">{{ mc.value }}</p>
-          <p class="text-xs text-white/45 mt-0.5 font-semibold">{{ mc.label }}</p>
+          <p class="text-3xl font-black leading-none" :class="a.value ? 'text-white' : 'text-white/35'">{{ formatNum(a.value) }}</p>
+          <p class="text-sm font-bold text-white/85 mt-2 truncate">{{ a.label }}</p>
+          <p class="text-[11px] text-white/40 mt-0.5 truncate">{{ a.hint }}</p>
         </button>
       </div>
 
-      <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">{{ langStore.t.adminGeneralStats }}</h2>
-      <!-- Stat cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-6">
-        <button v-for="sc in statCards" :key="sc.label" type="button" @click="openCard(sc)"
-          class="group relative text-left rounded-2xl p-4 border border-brand-border bg-brand-card hover:border-white/25 hover:-translate-y-0.5 transition-all duration-200">
-          <div class="flex items-center justify-between mb-3 gap-2">
-            <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ sc.label }}</p>
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" :style="`background:${sc.color}20`">
-              <BIcon :name="sc.icon" class="w-3.5 h-3.5" :style="`color:${sc.color}`" />
+      <!-- Ключевые показатели -->
+      <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">Ключевые показатели</h2>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8" :class="kpis.length === 5 ? 'xl:grid-cols-5' : ''">
+        <button v-for="k in kpis" :key="k.label" type="button" @click="open(k.target)"
+          class="group relative text-left rounded-2xl p-4 sm:p-5 border border-brand-border bg-brand-card hover:border-white/25 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden min-w-0">
+          <div class="flex items-center gap-2.5 mb-3">
+            <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${k.color}22`">
+              <BIcon :name="k.icon" class="w-4 h-4" :style="`color:${k.color}`" />
             </div>
+            <p class="text-xs font-bold text-white/55 truncate">{{ k.label }}</p>
           </div>
-          <p class="text-2xl font-black text-white">{{ sc.value }}</p>
-          <p class="text-xs font-semibold mt-1" :style="`color:${sc.color}`">{{ sc.sub }}</p>
-          <BIcon name="ArrowUpRight" class="absolute right-3 bottom-3 w-3.5 h-3.5 text-white/15 group-hover:text-white/50 transition-colors" />
+          <p class="text-2xl sm:text-3xl font-black text-white leading-none">{{ k.value }}</p>
+          <p class="text-[11px] font-semibold mt-2 leading-snug" :style="`color:${k.color}`">{{ k.sub }}</p>
+          <svg v-if="k.spark" viewBox="0 0 100 30" preserveAspectRatio="none" class="w-full h-7 mt-3 opacity-80">
+            <polyline :points="k.spark" fill="none" :stroke="k.color" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+          </svg>
         </button>
       </div>
 
-      <!-- Growth charts -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
-        <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-          <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminUserGrowthTitle }}</h3>
-          <p class="text-xs text-white/40 mt-0.5 mb-4">{{ langStore.t.adminUserGrowthSub }}</p>
-          <template v-if="userGrowthState === 'ok'">
-          <div class="relative">
-            <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'users'"
-              class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
-              :style="`left:${activeGrowthTooltip.left}%;top:${activeGrowthTooltip.top}%;margin-top:-10px`">
-              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-xs border border-brand-accent/30 shadow-lg shadow-black/40 whitespace-nowrap">
-                <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background:#4C67CF" />
-                <div class="leading-tight">
-                  <p class="text-[9px] text-white/45 font-semibold capitalize">{{ formatMonthShort(activeGrowthTooltip.month) }}</p>
-                  <p class="text-xs font-black text-white">{{ formatNum(activeGrowthTooltip.total) }}</p>
-                </div>
-              </div>
-              <div class="w-2 h-2 rotate-45 -mt-1 bg-[#0B1030]/95 border-r border-b border-brand-accent/30" />
+      <!-- Динамика -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 mb-6">
+        <AdminGrowthChart :title="langStore.t.adminUserGrowthTitle ?? 'Рост пользователей'" subtitle="Всего зарегистрировано, по месяцам" color="#6d83e8"
+          :series="chartRows(userSeries)" :state="userGrowthState" @retry="fetchStats" />
+        <AdminGrowthChart :title="langStore.t.adminPostGrowthTitle" :subtitle="langStore.t.adminPostGrowthSub" color="#66C770"
+          :series="chartRows(postSeries)" :state="postGrowthState" @retry="fetchStats" />
+      </div>
+
+      <!-- Активность за неделю + аудитория -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 mb-6">
+        <div class="lg:col-span-2 rounded-2xl border border-brand-border bg-brand-card p-4 sm:p-5 min-w-0">
+          <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminWeeklyActivityTitle }}</h3>
+            <div v-if="weekly" class="flex flex-wrap gap-x-4 gap-y-1">
+              <span v-for="s in weekly.series" :key="s.key" class="flex items-center gap-1.5 text-xs text-white/55">
+                <span class="w-2 h-2 rounded-sm" :style="`background:${s.color}`" />{{ s.label }}
+                <b class="text-white">{{ formatNum(s.total) }}</b>
+              </span>
             </div>
-            <svg viewBox="0 0 300 100" preserveAspectRatio="none" class="w-full h-32">
-              <polygon v-if="userGrowthPoints" :points="`0,100 ${userGrowthPoints} 300,100`" fill="url(#ov-grad-users)" />
-              <polyline v-if="userGrowthPoints" :points="userGrowthPoints" fill="none" stroke="#4C67CF" stroke-width="2" vector-effect="non-scaling-stroke" />
-              <defs>
-                <linearGradient id="ov-grad-users" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#4C67CF" stop-opacity="0.35" />
-                  <stop offset="100%" stop-color="#4C67CF" stop-opacity="0" />
-                </linearGradient>
-              </defs>
-              <line v-for="gy in [22, 50, 78]" :key="gy" x1="0" x2="300" :y1="gy" :y2="gy" stroke="white" stroke-opacity="0.06" stroke-width="1" vector-effect="non-scaling-stroke" />
-              <line v-if="hoveredGrowthPoint?.chart === 'users'" :x1="userGrowthCoords[hoveredGrowthPoint.index]?.x" :x2="userGrowthCoords[hoveredGrowthPoint.index]?.x"
-                y1="4" y2="100" stroke="#4C67CF" stroke-width="1" stroke-dasharray="3,3" opacity="0.3" vector-effect="non-scaling-stroke" />
-              <g v-for="(c, i) in userGrowthCoords" :key="i">
-                <circle v-if="hoveredGrowthPoint?.chart === 'users' && hoveredGrowthPoint?.index === i"
-                  :cx="c.x" :cy="c.y" r="6" fill="#4C67CF" opacity="0.2" />
-                <circle :cx="c.x" :cy="c.y" :r="hoveredGrowthPoint?.chart === 'users' && hoveredGrowthPoint?.index === i ? 3 : 2.25"
-                  fill="#4C67CF" stroke="#0B1030" stroke-width="1.5" vector-effect="non-scaling-stroke" class="transition-all" />
-                <circle :cx="c.x" :cy="c.y" r="8" fill="transparent" class="cursor-pointer"
-                  @mouseenter="hoveredGrowthPoint = { chart: 'users', index: i }"
-                  @mouseleave="hoveredGrowthPoint = null" />
-              </g>
-            </svg>
           </div>
-          <div class="flex justify-between mt-1">
-            <span v-for="(p, i) in userGrowthSeries" :key="i" class="text-[9px] text-white/25" :class="i % 2 === 1 ? 'hidden sm:inline' : ''">{{ formatMonthShort(p.month) }}</span>
+          <div v-if="weekly" class="flex items-end gap-1.5 sm:gap-3 h-40">
+            <div v-for="d in weekly.days" :key="d.day" class="flex-1 h-full flex flex-col justify-end min-w-0 group relative">
+              <div class="flex items-end justify-center gap-[2px] sm:gap-1 h-[calc(100%-1.25rem)]">
+                <div v-for="v in d.values" :key="v.key" class="flex-1 max-w-3 rounded-t-md transition-opacity group-hover:opacity-100 opacity-90"
+                  :style="`height:${Math.max(v.count ? 4 : 1, (v.count / weekly.max) * 100)}%;background:${v.color}`" :title="`${v.label}: ${v.count}`" />
+              </div>
+              <p class="text-[10px] text-white/35 text-center mt-1.5 capitalize truncate">{{ weekdayShort(d.day) }}</p>
+              <div class="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-10 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 border border-white/10 shadow-lg whitespace-nowrap pointer-events-none">
+                <p v-for="v in d.values" :key="v.key" class="text-[11px] text-white/70 flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full" :style="`background:${v.color}`" />{{ v.label }}: <b class="text-white">{{ v.count }}</b>
+                </p>
+              </div>
+            </div>
           </div>
-          </template>
-          <div v-else class="h-32 flex flex-col items-center justify-center gap-2 text-white/30">
-            <div v-if="userGrowthState === 'loading'" class="w-full h-full rounded-xl bg-white/5 animate-pulse" />
-            <template v-else-if="userGrowthState === 'error'">
-              <p class="text-xs font-semibold">{{ langStore.t.adminLoadFailed }}</p>
-              <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
-            </template>
-            <template v-else>
-              <BIcon name="BarChart2" class="w-7 h-7 opacity-40" />
-              <p class="text-xs font-semibold">{{ langStore.t.adminChartNoData }}</p>
-            </template>
-          </div>
+          <p v-else class="text-xs text-white/25 text-center py-10">{{ langStore.t.adminNoDataLabel }}</p>
         </div>
-        <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-          <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminPostGrowthTitle }}</h3>
-          <p class="text-xs text-white/40 mt-0.5 mb-4">{{ langStore.t.adminPostGrowthSub }}</p>
-          <template v-if="postGrowthState === 'ok'">
-          <div class="relative">
-            <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'posts'"
-              class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
-              :style="`left:${activeGrowthTooltip.left}%;top:${activeGrowthTooltip.top}%;margin-top:-10px`">
-              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-xs border border-brand-success/30 shadow-lg shadow-black/40 whitespace-nowrap">
-                <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background:#66C770" />
-                <div class="leading-tight">
-                  <p class="text-[9px] text-white/45 font-semibold capitalize">{{ formatMonthShort(activeGrowthTooltip.month) }}</p>
-                  <p class="text-xs font-black text-white">{{ formatNum(activeGrowthTooltip.total) }}</p>
-                </div>
+
+        <div class="rounded-2xl border border-brand-border bg-brand-card p-4 sm:p-5">
+          <h3 class="font-extrabold text-white text-sm mb-4">Аудитория</h3>
+          <div class="stack-y-4">
+            <div v-for="a in audience" :key="a.label">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-semibold text-white/60">{{ a.label }}</span>
+                <span class="text-xs font-black text-white">{{ a.value }}%</span>
               </div>
-              <div class="w-2 h-2 rotate-45 -mt-1 bg-[#0B1030]/95 border-r border-b border-brand-success/30" />
+              <div class="h-2 rounded-full bg-white/6 overflow-hidden">
+                <div class="h-full rounded-full transition-all" :style="`width:${a.value}%;background:${a.color}`" />
+              </div>
             </div>
-            <svg viewBox="0 0 300 100" preserveAspectRatio="none" class="w-full h-32">
-              <polygon v-if="postGrowthPoints" :points="`0,100 ${postGrowthPoints} 300,100`" fill="url(#ov-grad-posts)" />
-              <polyline v-if="postGrowthPoints" :points="postGrowthPoints" fill="none" stroke="#66C770" stroke-width="2" vector-effect="non-scaling-stroke" />
-              <defs>
-                <linearGradient id="ov-grad-posts" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#66C770" stop-opacity="0.35" />
-                  <stop offset="100%" stop-color="#66C770" stop-opacity="0" />
-                </linearGradient>
-              </defs>
-              <line v-for="gy in [22, 50, 78]" :key="gy" x1="0" x2="300" :y1="gy" :y2="gy" stroke="white" stroke-opacity="0.06" stroke-width="1" vector-effect="non-scaling-stroke" />
-              <line v-if="hoveredGrowthPoint?.chart === 'posts'" :x1="postGrowthCoords[hoveredGrowthPoint.index]?.x" :x2="postGrowthCoords[hoveredGrowthPoint.index]?.x"
-                y1="4" y2="100" stroke="#66C770" stroke-width="1" stroke-dasharray="3,3" opacity="0.3" vector-effect="non-scaling-stroke" />
-              <g v-for="(c, i) in postGrowthCoords" :key="i">
-                <circle v-if="hoveredGrowthPoint?.chart === 'posts' && hoveredGrowthPoint?.index === i"
-                  :cx="c.x" :cy="c.y" r="6" fill="#66C770" opacity="0.2" />
-                <circle :cx="c.x" :cy="c.y" :r="hoveredGrowthPoint?.chart === 'posts' && hoveredGrowthPoint?.index === i ? 3 : 2.25"
-                  fill="#66C770" stroke="#0B1030" stroke-width="1.5" vector-effect="non-scaling-stroke" class="transition-all" />
-                <circle :cx="c.x" :cy="c.y" r="8" fill="transparent" class="cursor-pointer"
-                  @mouseenter="hoveredGrowthPoint = { chart: 'posts', index: i }"
-                  @mouseleave="hoveredGrowthPoint = null" />
-              </g>
-            </svg>
           </div>
-          <div class="flex justify-between mt-1">
-            <span v-for="(p, i) in postGrowthSeries" :key="i" class="text-[9px] text-white/25" :class="i % 2 === 1 ? 'hidden sm:inline' : ''">{{ formatMonthShort(p.month) }}</span>
-          </div>
-          </template>
-          <div v-else class="h-32 flex flex-col items-center justify-center gap-2 text-white/30">
-            <div v-if="postGrowthState === 'loading'" class="w-full h-full rounded-xl bg-white/5 animate-pulse" />
-            <template v-else-if="postGrowthState === 'error'">
-              <p class="text-xs font-semibold">{{ langStore.t.adminLoadFailed }}</p>
-              <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
-            </template>
-            <template v-else>
-              <BIcon name="BarChart2" class="w-7 h-7 opacity-40" />
-              <p class="text-xs font-semibold">{{ langStore.t.adminChartNoData }}</p>
-            </template>
+          <div class="grid grid-cols-3 gap-2 mt-5 pt-4 border-t border-brand-border">
+            <div v-for="e in engagement" :key="e.label" class="text-center">
+              <BIcon :name="e.icon" class="w-4 h-4 mx-auto mb-1" :style="`color:${e.color}`" />
+              <p class="text-sm font-black text-white">{{ e.value }}</p>
+              <p class="text-[10px] text-white/40 truncate">{{ e.label }}</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Weekly activity / geography / reports breakdown -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-        <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-          <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminWeeklyActivityTitle }}</h3>
-          <div v-for="row in weeklyActivityRows" :key="row.label" class="mb-5 last:mb-0">
-            <div class="flex items-center justify-between mb-1.5">
-              <span class="text-xs font-semibold text-white/60">{{ row.label }}</span>
-              <span class="text-sm font-black text-white">{{ formatNum(row.total) }}</span>
+      <!-- Разделы платформы -->
+      <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">Разделы платформы</h2>
+      <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <button v-for="sc in sections" :key="sc.label" type="button" @click="open(sc)"
+          class="group relative text-left rounded-2xl p-4 border border-brand-border bg-brand-card hover:border-white/25 hover:-translate-y-0.5 transition-all duration-200 min-w-0">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${sc.color}22`">
+              <BIcon :name="sc.icon" class="w-4 h-4" :style="`color:${sc.color}`" />
             </div>
-            <div class="relative flex items-end gap-1 h-10">
-              <div v-if="hoveredActivityBar?.row === row.label"
-                class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
-                :style="`left:${((hoveredActivityBar.index + 0.5) / row.days.length) * 100}%;bottom:calc(${Math.max(6, (row.days[hoveredActivityBar.index].count / row.max) * 100)}% + 8px)`">
-                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-xs border shadow-lg shadow-black/40 whitespace-nowrap"
-                  :style="`border-color:${row.color}4d`">
-                  <span class="w-1.5 h-1.5 rounded-full shrink-0" :style="`background:${row.color}`" />
-                  <div class="leading-tight">
-                    <p class="text-[9px] text-white/45 font-semibold">{{ formatWeekday(row.days[hoveredActivityBar.index].day) }}</p>
-                    <p class="text-xs font-black text-white">{{ formatNum(row.days[hoveredActivityBar.index].count) }}</p>
-                  </div>
-                </div>
-                <div class="w-2 h-2 rotate-45 -mt-1 bg-[#0B1030]/95 border-r border-b" :style="`border-color:${row.color}4d`" />
-              </div>
-              <div v-for="(d, i) in row.days" :key="i" class="relative flex-1 h-full flex items-end cursor-pointer"
-                @mouseenter="hoveredActivityBar = { row: row.label, index: i }"
-                @mouseleave="hoveredActivityBar = null">
-                <div class="w-full rounded-t-md transition-all duration-150"
-                  :style="`height:${Math.max(6, (d.count / row.max) * 100)}%;background:${row.color};opacity:${!hoveredActivityBar || hoveredActivityBar.row !== row.label || hoveredActivityBar.index === i ? 1 : 0.35}`" />
-              </div>
-            </div>
+            <BIcon name="ArrowUpRight" class="w-3.5 h-3.5 text-white/20 group-hover:text-white/60 transition-colors" />
           </div>
-          <p v-if="!weeklyActivityRows.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoDataLabel }}</p>
-        </div>
+          <p class="text-2xl font-black text-white leading-none">{{ sc.value }}</p>
+          <p class="text-sm font-bold text-white/80 mt-2 truncate">{{ sc.label }}</p>
+          <p class="text-[11px] text-white/40 mt-0.5 leading-snug">{{ sc.sub }}</p>
+        </button>
+      </div>
 
-        <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-          <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminUserGeographyTitle }}</h3>
-          <div v-for="c in topCountries" :key="c.label" class="mb-3 last:mb-0">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-xs font-semibold text-white/60">{{ c.label }}</span>
-              <span class="text-xs font-bold text-white">{{ c.pct }}%</span>
-            </div>
-            <div class="h-1.5 rounded-full bg-white/6 overflow-hidden">
-              <div class="h-full rounded-full bg-brand-accent" :style="`width:${c.pct}%`" />
-            </div>
-          </div>
-          <p v-if="!topCountries.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoDataLabel }}</p>
-        </div>
-
-        <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
+      <!-- Жалобы по категориям + команда -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 mb-6">
+        <div class="rounded-2xl border border-brand-border bg-brand-card p-4 sm:p-5">
           <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminReportsByCategoryTitle }}</h3>
           <div v-for="r in topReportCategories" :key="r.category" class="mb-3 last:mb-0">
             <div class="flex items-center justify-between mb-1">
@@ -374,21 +301,19 @@ const modSnapshot = computed(() => stats.value ? [
           </div>
           <p v-if="!topReportCategories.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoReportsYet }}</p>
         </div>
-      </div>
 
-      <!-- Roles -->
-      <div class="rounded-2xl border border-brand-border bg-brand-card p-6">
-        <h3 class="font-extrabold text-sm text-white mb-4 flex items-center gap-2">
-          <BIcon name="Users" class="w-4 h-4 text-white/40" /> {{ langStore.t.adminRoleDistribution }}
-        </h3>
-        <div class="flex flex-wrap gap-3">
-          <div v-for="rb in stats.roleBreakdown" :key="rb.role"
-            class="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border border-white/8"
-            style="background:rgba(255,255,255,0.04)">
-            <div class="w-2 h-2 rounded-full" :style="`background:${roleColor(rb.role)}`" />
-            <span class="text-sm font-black text-white">{{ rb.count }}</span>
-            <span class="text-xs text-white/45">{{ roleLabel(rb.role) }}</span>
+        <div class="rounded-2xl border border-brand-border bg-brand-card p-4 sm:p-5">
+          <h3 class="font-extrabold text-sm text-white mb-4 flex items-center gap-2">
+            <BIcon name="Users" class="w-4 h-4 text-white/40" /> Команда
+          </h3>
+          <div v-if="roles.length" class="flex flex-wrap gap-2.5">
+            <div v-for="rb in roles" :key="rb.role" class="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl border border-white/8 bg-white/4">
+              <div class="w-2 h-2 rounded-full" :style="`background:${roleColor(rb.role)}`" />
+              <span class="text-sm font-black text-white">{{ rb.count }}</span>
+              <span class="text-xs text-white/45">{{ roleLabel(rb.role) }}</span>
+            </div>
           </div>
+          <p v-else class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoDataLabel }}</p>
         </div>
       </div>
     </template>

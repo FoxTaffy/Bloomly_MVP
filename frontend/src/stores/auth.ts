@@ -244,6 +244,7 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
+      void claimAttribution()
     } catch (e) {
       error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
@@ -371,6 +372,7 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
+      void claimAttribution()
     } catch (e) {
       error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
@@ -393,6 +395,8 @@ export const useAuthStore = defineStore('auth', () => {
       if (data.success) {
         user.value = data.data.user
         saveUser(data.data.user)
+        // Метки могли остаться от входа, где привязка не сработала (сеть, 5xx); без них вызов ничего не делает
+        void claimAttribution()
       }
     } catch {
       // A dead session is handled by the axios interceptor (refresh 401/403 → logout);

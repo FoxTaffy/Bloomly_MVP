@@ -164,7 +164,10 @@ export const trackingService = {
                COUNT(*)::bigint AS signups,
                COUNT(*) FILTER (WHERE u.email_verified)::bigint AS verified,
                COUNT(*) FILTER (WHERE u.onboarding_done)::bigint AS onboarded,
-               COUNT(*) FILTER (WHERE u.subscription_tier <> 'free')::bigint AS paid
+               COUNT(*) FILTER (WHERE EXISTS (
+                 SELECT 1 FROM "Payment" p
+                 WHERE p.user_id = u.id AND p.status = 'succeeded' AND p.purpose <> 'card_binding'
+               ))::bigint AS paid
         FROM "UserAttribution" a JOIN "User" u ON u.id = a.user_id
         WHERE a.first_link_id IS NOT NULL AND a.created_at >= ${since} GROUP BY a.first_link_id`,
       prisma.$queryRaw<{ link_id: string; last_touch: bigint }[]>`
@@ -194,7 +197,7 @@ export const trackingService = {
       };
     });
 
-    const [conflicts, totalSignups, untagged] = await Promise.all([
+    const [conflicts, totalSignups, untagged, manualSignups] = await Promise.all([
       prisma.$queryRaw<{ c: bigint }[]>`
         SELECT COUNT(*)::bigint AS c FROM "UserAttribution"
         WHERE created_at >= ${since} AND first_link_id IS NOT NULL AND last_link_id IS NOT NULL AND first_link_id <> last_link_id`,
@@ -204,7 +207,32 @@ export const trackingService = {
         SELECT utm_source AS source, utm_campaign AS campaign, COUNT(DISTINCT visitor_id)::bigint AS visitors
         FROM "TrackingVisit" WHERE link_id IS NULL AND created_at >= ${since}
         GROUP BY utm_source, utm_campaign ORDER BY visitors DESC LIMIT 20`,
+      // Регистрации с теми же ручными метками: воронка до оплаты, как у ссылок раздела
+      prisma.$queryRaw<{ source: string | null; campaign: string | null; signups: bigint; verified: bigint; onboarded: bigint; paid: bigint }[]>`
+        SELECT a.first_utm->>'utm_source' AS source, a.first_utm->>'utm_campaign' AS campaign,
+               COUNT(*)::bigint AS signups,
+               COUNT(*) FILTER (WHERE u.email_verified)::bigint AS verified,
+               COUNT(*) FILTER (WHERE u.onboarding_done)::bigint AS onboarded,
+               COUNT(*) FILTER (WHERE EXISTS (
+                 SELECT 1 FROM "Payment" p
+                 WHERE p.user_id = u.id AND p.status = 'succeeded' AND p.purpose <> 'card_binding'
+               ))::bigint AS paid
+        FROM "UserAttribution" a JOIN "User" u ON u.id = a.user_id
+        WHERE a.first_link_id IS NULL AND a.first_utm IS NOT NULL AND a.created_at >= ${since}
+        GROUP BY 1, 2`,
     ]);
+
+    const manualKey = (source: string | null, campaign: string | null) => `${source ?? ''}\u0000${campaign ?? ''}`;
+    const manual = new Map<string, { source: string | null; campaign: string | null; visitors: number; signups: number; verified: number; onboarded: number; paid: number }>();
+    for (const r of untagged) {
+      manual.set(manualKey(r.source, r.campaign), { source: r.source, campaign: r.campaign, visitors: Number(r.visitors), signups: 0, verified: 0, onboarded: 0, paid: 0 });
+    }
+    for (const r of manualSignups) {
+      const k = manualKey(r.source, r.campaign);
+      const row = manual.get(k) ?? { source: r.source, campaign: r.campaign, visitors: 0, signups: 0, verified: 0, onboarded: 0, paid: 0 };
+      Object.assign(row, { signups: Number(r.signups), verified: Number(r.verified), onboarded: Number(r.onboarded), paid: Number(r.paid) });
+      manual.set(k, row);
+    }
 
     return {
       days,
@@ -220,7 +248,7 @@ export const trackingService = {
         attribution_conflicts: n(conflicts[0]?.c),
         attributed_signups: totalSignups,
       },
-      manual_utm: untagged.map((r) => ({ source: r.source, campaign: r.campaign, visitors: Number(r.visitors) })),
+      manual_utm: [...manual.values()].sort((a, b) => b.visitors + b.signups - (a.visitors + a.signups)),
     };
   },
 

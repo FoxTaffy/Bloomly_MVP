@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watchEffect, onActivated } from 'vue'
+import { ref, computed, watchEffect, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLangStore } from '@/stores/lang'
 import api from '@/api'
@@ -15,60 +15,110 @@ const { confirmDialog } = useConfirm()
 const { badges } = useAdminContext()
 
 // ── Ads ────────────────────────────────────────────────────────────────
+const { reportAdminError } = useAdminContext()
+
+type AdPlacementKey = 'feed_top' | 'left_menu' | 'right_column' | 'groups_page'
+const PLACEMENTS: { key: AdPlacementKey; label: string; desc: string; icon: string }[] = [
+  { key: 'feed_top',     label: langStore.t.adminAdSlotFeedTop,      desc: langStore.t.adminAdSlotFeedTopDesc,      icon: 'Newspaper' },
+  { key: 'left_menu',    label: langStore.t.adminAdSlotSidebarLeft,  desc: langStore.t.adminAdSlotSidebarLeftDesc,  icon: 'Menu' },
+  { key: 'right_column', label: langStore.t.adminAdSlotSidebarRight, desc: langStore.t.adminAdSlotSidebarRightDesc, icon: 'LayoutDashboard' },
+  { key: 'groups_page',  label: langStore.t.adminAdSlotGroupsPage,   desc: langStore.t.adminAdSlotGroupsPageDesc,   icon: 'LayoutGrid' },
+]
+const placementLabel = (k?: string | null) => PLACEMENTS.find(p => p.key === k)?.label ?? 'Везде (старая реклама)'
+
 const ads = ref<any[]>([])
 const isLoadingAds = ref(false)
-const newAd = ref({ title: '', description: '', linkUrl: '', imageUrl: '', priceLabel: '' })
+// Те же цены в BLM, что видит покупатель в окне «Разместить рекламу»
+const pricing = ref<{ placements: { placement: string; prices: { day: number; week: number } }[] } | null>(null)
+const priceOf = (k: string) => pricing.value?.placements.find(p => p.placement === k)?.prices
+
+const newAd = ref({ title: '', description: '', linkUrl: '', imageUrl: '', placement: 'feed_top' as AdPlacementKey, days: 7 })
 const showAdForm = ref(false)
 const isSubmittingAd = ref(false)
+
+type AdFilter = 'pending' | 'active' | 'finished' | 'rejected' | 'all'
+const adFilter = ref<AdFilter>('pending')
+const isExpired = (a: any) => a.status === 'active' && a.ends_at && new Date(a.ends_at).getTime() < Date.now()
+const adGroup = (a: any): AdFilter => a.status === 'pending' ? 'pending' : a.status === 'rejected' ? 'rejected' : isExpired(a) ? 'finished' : 'active'
+const adCounts = computed(() => {
+  const c = { pending: 0, active: 0, finished: 0, rejected: 0, all: ads.value.length }
+  for (const a of ads.value) c[adGroup(a) as 'pending' | 'active' | 'finished' | 'rejected']++
+  return c
+})
+const visibleAds = computed(() => adFilter.value === 'all' ? ads.value : ads.value.filter(a => adGroup(a) === adFilter.value))
+const revenueBlm = computed(() => ads.value
+  .filter(a => a.price_blm != null && a.status !== 'rejected' && !a.refunded_at)
+  .reduce((s, a) => s + Number(a.price_blm), 0))
+
+const STATUS_VIEW: Record<AdFilter, { label: string; cls: string }> = {
+  pending:  { label: 'На проверке', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  active:   { label: 'Показывается', cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  finished: { label: 'Завершена', cls: 'text-white/40 bg-white/5 border-white/10' },
+  rejected: { label: 'Отклонена', cls: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+  all: { label: '', cls: '' },
+}
+const dateShort = (d?: string | null) => d ? new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '—'
+const daysLeft = (a: any) => a.ends_at ? Math.max(0, Math.ceil((new Date(a.ends_at).getTime() - Date.now()) / 86_400_000)) : null
 
 const fetchAds = async () => {
   isLoadingAds.value = true
   try {
-    const res = await api.get('/admin/ads')
-    if (res.data.success) ads.value = res.data.data.ads
-  } catch {} finally { isLoadingAds.value = false }
+    const [res, pr] = await Promise.all([api.get('/admin/ads'), api.get('/admin/ads/pricing').catch(() => null)])
+    if (res.data.success) {
+      ads.value = res.data.data.ads
+      // Сразу открываем очередь заявок, если есть что проверять; иначе — активные
+      if (!adCounts.value.pending) adFilter.value = adCounts.value.active ? 'active' : 'all'
+    }
+    if (pr?.data?.success) pricing.value = pr.data.data
+  } catch (e) { reportAdminError(e) } finally { isLoadingAds.value = false }
 }
 
 const submitAd = async () => {
-  if (!newAd.value.title || !newAd.value.linkUrl) return
+  if (!newAd.value.title.trim() || !newAd.value.linkUrl.trim()) return
   isSubmittingAd.value = true
   try {
-    const res = await api.post('/admin/ads', {
-      title: newAd.value.title,
-      description: newAd.value.description || undefined,
-      linkUrl: newAd.value.linkUrl,
+    const res = await api.post('/admin/ads/staff', {
+      title: newAd.value.title.trim(),
+      description: newAd.value.description.trim() || undefined,
+      linkUrl: newAd.value.linkUrl.trim(),
       imageUrl: newAd.value.imageUrl || undefined,
-      priceLabel: newAd.value.priceLabel || undefined,
+      placement: newAd.value.placement,
+      days: newAd.value.days,
     })
     if (res.data.success) {
       ads.value.unshift(res.data.data.ad)
-      newAd.value = { title: '', description: '', linkUrl: '', imageUrl: '', priceLabel: '' }
+      newAd.value = { title: '', description: '', linkUrl: '', imageUrl: '', placement: 'feed_top', days: 7 }
       showAdForm.value = false
+      adFilter.value = 'active'
     }
-  } catch {} finally { isSubmittingAd.value = false }
+  } catch (e) { reportAdminError(e) } finally { isSubmittingAd.value = false }
 }
 
 const deleteAd = async (adId: string) => {
-  if (!(await confirmDialog(langStore.t.adminConfirmDeleteAd, { danger: true }))) return
+  const ad = ads.value.find(a => a.id === adId)
+  const refundNote = ad?.status === 'pending' && ad?.price_blm != null ? ` Заявителю вернутся ${ad.price_blm} BLM.` : ''
+  if (!(await confirmDialog(langStore.t.adminConfirmDeleteAd + refundNote, { danger: true }))) return
   try {
     await api.delete(`/admin/ads/${adId}`)
     ads.value = ads.value.filter(a => a.id !== adId)
-  } catch {}
+  } catch (e) { reportAdminError(e) }
 }
 
 const reviewAd = async (adId: string, status: 'active' | 'rejected') => {
+  const target = ads.value.find(a => a.id === adId)
+  if (status === 'rejected' && target?.price_blm != null &&
+    !(await confirmDialog(`Отклонить заявку? Заявителю вернутся ${target.price_blm} BLM.`, { danger: true }))) return
   try {
     const body: any = { status }
     // Оплаченная реклама сама получает срок от момента одобрения; даты по умолчанию — только для старых заявок
-    const target = ads.value.find(a => a.id === adId)
     if (status === 'active' && !target?.duration_days) {
       body.startsAt = new Date().toISOString()
       body.endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     }
-    await api.patch(`/admin/ads/${adId}/review`, body)
+    const res = await api.patch(`/admin/ads/${adId}/review`, body)
     const a = ads.value.find(a => a.id === adId)
-    if (a) a.status = status
-  } catch {}
+    if (a) Object.assign(a, res.data?.data?.ad ?? { status })
+  } catch (e) { reportAdminError(e) }
 }
 
 // ── Banners ───────────────────────────────────────────────────────────
@@ -150,6 +200,7 @@ const switchAdsView = (mode: typeof adsViewMode.value) => {
 }
 
 onActivated(() => { if (!ads.value.length) fetchAds() })
+const refreshAds = () => fetchAds()
 watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pending').length })
 </script>
 
@@ -172,86 +223,83 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
     </div>
 
     <template v-if="adsViewMode === 'ads'">
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-      <p class="text-xs text-white/35 font-semibold">{{ ads.length }} {{ langStore.t.adminAdsCountSuffix }}</p>
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div class="flex items-center gap-2">
+        <p class="text-xs text-white/35 font-semibold">{{ ads.length }} {{ langStore.t.adminAdsCountSuffix }}</p>
+        <button type="button" @click="refreshAds" :disabled="isLoadingAds" title="Обновить"
+          class="w-7 h-7 rounded-lg bg-white/5 border border-white/8 text-white/40 hover:text-white flex items-center justify-center disabled:opacity-40">
+          <BIcon name="RefreshCw" class="w-3.5 h-3.5" :class="isLoadingAds ? 'animate-spin' : ''" />
+        </button>
+      </div>
       <button @click="showAdForm = !showAdForm"
         class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-lg text-white"
         style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 16px rgba(76,103,207,0.3)">
-        <BIcon name="Plus" class="w-3.5 h-3.5" /> {{ langStore.t.adminCreateBtn }}
+        <BIcon name="Plus" class="w-3.5 h-3.5" /> Служебная реклама
       </button>
     </div>
 
-    <!-- Где показывается: мини-визуал мест размещения -->
+    <!-- Сводка по заявкам -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div class="rounded-2xl border border-amber-500/20 bg-amber-500/8 p-3.5">
+        <p class="text-[10px] font-extrabold text-white/40 uppercase tracking-wider">На проверке</p>
+        <p class="text-2xl font-black text-white mt-1">{{ adCounts.pending }}</p>
+      </div>
+      <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/8 p-3.5">
+        <p class="text-[10px] font-extrabold text-white/40 uppercase tracking-wider">Показываются</p>
+        <p class="text-2xl font-black text-white mt-1">{{ adCounts.active }}</p>
+      </div>
+      <div class="rounded-2xl border border-brand-border bg-brand-card p-3.5">
+        <p class="text-[10px] font-extrabold text-white/40 uppercase tracking-wider">Завершены / отклонены</p>
+        <p class="text-2xl font-black text-white mt-1">{{ adCounts.finished }} <span class="text-white/25">/</span> {{ adCounts.rejected }}</p>
+      </div>
+      <div class="rounded-2xl border border-brand-border bg-brand-card p-3.5">
+        <p class="text-[10px] font-extrabold text-white/40 uppercase tracking-wider">Оплачено рекламодателями</p>
+        <p class="text-2xl font-black text-white mt-1">{{ Math.round(revenueBlm * 100) / 100 }} <span class="text-sm text-white/40">BLM</span></p>
+      </div>
+    </div>
+
+    <!-- Где показывается: места и актуальные цены в BLM (те же, что в окне покупки) -->
     <div class="rounded-3xl border border-brand-border p-5 mb-5" style="background:#1F223C">
       <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">{{ langStore.t.adminAdShowsWhereTitle }}</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <!-- Лента (hero) -->
-        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
-          <div class="w-full h-14 rounded-xl bg-white/5 flex overflow-hidden mb-2">
-            <div class="w-10 h-full bg-white/10 shrink-0" />
-            <div class="flex-1 px-2 py-1.5 stack-y-1">
-              <div class="h-1.5 w-8 rounded-full bg-brand-accent/50" />
-              <div class="h-1.5 w-16 rounded-full bg-white/25" />
+        <div v-for="p in PLACEMENTS" :key="p.key" class="rounded-2xl border border-white/8 p-3 bg-white/[0.02]">
+          <div class="flex items-center gap-2 mb-1.5">
+            <div class="w-7 h-7 rounded-lg bg-brand-accent/15 flex items-center justify-center shrink-0">
+              <BIcon :name="p.icon" class="w-3.5 h-3.5 text-brand-accent" />
             </div>
+            <p class="text-[12px] font-bold text-white/80 leading-tight">{{ p.label }}</p>
           </div>
-          <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotFeedTop }}</p>
-          <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotFeedTopDesc }}</p>
-          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotFeedTopPrice }}</p>
-        </div>
-        <!-- Левый сайдбар -->
-        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
-          <div class="w-full h-14 rounded-xl bg-white/5 flex flex-col overflow-hidden mb-2 p-1.5 gap-1">
-            <div class="h-2 w-10 rounded-sm bg-white/10" />
-            <div class="h-2 w-8 rounded-sm bg-white/10" />
-            <div class="h-2 w-9 rounded-sm bg-brand-accent/40" />
-          </div>
-          <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotSidebarLeft }}</p>
-          <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotSidebarLeftDesc }}</p>
-          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotSidebarLeftPrice }}</p>
-        </div>
-        <!-- Правый сайдбар -->
-        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
-          <div class="w-full h-14 rounded-xl bg-white/5 flex flex-col overflow-hidden mb-2 p-1.5 gap-1">
-            <div class="h-2 w-9 rounded-sm bg-brand-accent/40" />
-            <div class="h-2 w-full rounded-sm bg-white/10" />
-            <div class="h-2 w-7 rounded-sm bg-white/10" />
-          </div>
-          <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotSidebarRight }}</p>
-          <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotSidebarRightDesc }}</p>
-          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotSidebarRightPrice }}</p>
-        </div>
-        <!-- Страница групп -->
-        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
-          <div class="w-full h-14 rounded-xl bg-white/5 flex overflow-hidden mb-2">
-            <div class="w-10 h-full bg-white/10 shrink-0" />
-            <div class="flex-1 px-2 py-1.5 stack-y-1">
-              <div class="h-1.5 w-8 rounded-full bg-brand-accent/50" />
-              <div class="h-1.5 w-16 rounded-full bg-white/25" />
-            </div>
-          </div>
-          <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotGroupsPage }}</p>
-          <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotGroupsPageDesc }}</p>
-          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotGroupsPagePrice }}</p>
+          <p class="text-[10px] text-white/35">{{ p.desc }}</p>
+          <p v-if="priceOf(p.key)" class="text-[11px] font-bold text-brand-accent mt-1.5">
+            {{ priceOf(p.key)!.day }} BLM / сут. · {{ priceOf(p.key)!.week }} BLM / нед.
+          </p>
         </div>
       </div>
-      <p class="text-[11px] text-white/25 mt-3">{{ langStore.t.adminAdSlotsDisclaimer }}</p>
+      <p class="text-[11px] text-white/30 mt-3">
+        Пользователи оплачивают рекламу в BLM при подаче заявки; срок показа идёт с момента одобрения. При отклонении или удалении заявки на проверке деньги возвращаются автоматически. Если активных объявлений нет, на месте показывается карточка «Здесь может быть ваша реклама».
+      </p>
     </div>
 
-    <!-- Create form -->
+    <!-- Служебная реклама -->
     <Transition name="filter-expand">
       <div v-if="showAdForm"
-        class="rounded-3xl border border-brand-accent/20 p-6 mb-5 shadow-xl"
+        class="rounded-3xl border border-brand-accent/20 p-5 sm:p-6 mb-5 shadow-xl"
         style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.04))">
-        <h4 class="font-extrabold text-sm text-white mb-4">{{ langStore.t.adminNewAdTitle }}</h4>
+        <h4 class="font-extrabold text-sm text-white">Служебная реклама</h4>
+        <p class="text-xs text-white/40 mt-0.5 mb-4">Размещается от имени команды бесплатно и сразу показывается на выбранном месте.</p>
         <div class="stack-y-3">
-          <input v-model="newAd.title" :placeholder="langStore.t.adminTitlePlaceholderRequired"
-            class="adm-input" />
-          <textarea v-model="newAd.description" :placeholder="langStore.t.adminDescriptionPlaceholder"
-            class="adm-input resize-none h-20" />
-          <input v-model="newAd.linkUrl" type="url" :placeholder="langStore.t.adminLinkPlaceholderRequired"
-            class="adm-input" />
-          <input v-model="newAd.priceLabel" :placeholder="langStore.t.adminPriceLabelPlaceholderExample"
-            class="adm-input" />
+          <input v-model="newAd.title" :placeholder="langStore.t.adminTitlePlaceholderRequired" class="adm-input" />
+          <textarea v-model="newAd.description" :placeholder="langStore.t.adminDescriptionPlaceholder" class="adm-input resize-none h-20" />
+          <input v-model="newAd.linkUrl" type="url" :placeholder="langStore.t.adminLinkPlaceholderRequired" class="adm-input" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select v-model="newAd.placement" class="adm-input">
+              <option v-for="p in PLACEMENTS" :key="p.key" :value="p.key">{{ p.label }}</option>
+            </select>
+            <div class="flex items-center gap-2">
+              <input v-model.number="newAd.days" type="number" min="1" max="365" class="adm-input" />
+              <span class="text-xs text-white/40 shrink-0">суток</span>
+            </div>
+          </div>
           <div>
             <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">{{ langStore.t.adminImageOptionalLabel }}</p>
             <div v-if="newAd.imageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/8 rounded-2xl">
@@ -264,89 +312,83 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
             <MediaUpload v-else type="banners" @uploaded="(urls) => newAd.imageUrl = urls[0] ?? ''" />
           </div>
         </div>
-
-        <!-- Live preview: exactly how the card renders on-site -->
-        <div v-if="newAd.title" class="mt-4">
-          <p class="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-1.5">{{ langStore.t.adminCardPreviewLabel }}</p>
-          <div class="max-w-xs bg-brand-card border border-brand-accent/25 rounded-3xl overflow-hidden shadow-xl">
-            <img v-if="newAd.imageUrl" :src="newAd.imageUrl" class="w-full object-cover max-h-28" />
-            <div class="px-4 py-3">
-              <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ langStore.t.adLabel }}</span>
-              <p class="text-xs font-bold text-white leading-snug mt-1.5">{{ newAd.title }}</p>
-              <p v-if="newAd.description" class="text-[11px] text-white/55 mt-0.5 line-clamp-2">{{ newAd.description }}</p>
-              <p v-if="newAd.priceLabel" class="text-[11px] font-bold text-brand-accent mt-1">{{ newAd.priceLabel }}</p>
-            </div>
-          </div>
-        </div>
-
         <div class="flex gap-2 justify-end mt-4">
           <button @click="showAdForm = false"
             class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/8 transition-all">{{ langStore.t.cancel }}</button>
-          <button @click="submitAd" :disabled="isSubmittingAd || !newAd.title || !newAd.linkUrl"
+          <button @click="submitAd" :disabled="isSubmittingAd || !newAd.title.trim() || !newAd.linkUrl.trim() || !(newAd.days >= 1)"
             class="px-5 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all shadow-lg"
             style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 12px rgba(76,103,207,0.3)">
-            {{ isSubmittingAd ? '...' : langStore.t.adminCreateBtn }}
+            {{ isSubmittingAd ? '...' : 'Разместить' }}
           </button>
         </div>
       </div>
     </Transition>
 
+    <!-- Фильтр по статусам -->
+    <div class="flex gap-1.5 overflow-x-auto pb-1 mb-4 -mx-1 px-1">
+      <button v-for="f in ([['pending','На проверке'],['active','Активные'],['finished','Завершённые'],['rejected','Отклонённые'],['all','Все']] as [AdFilter,string][])" :key="f[0]"
+        type="button" @click="adFilter = f[0]"
+        class="shrink-0 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all"
+        :class="adFilter === f[0] ? 'bg-brand-accent/20 border-brand-accent/40 text-white' : 'bg-white/4 border-white/8 text-white/45 hover:text-white/75'">
+        {{ f[1] }} <span class="ml-1 opacity-60">{{ adCounts[f[0]] }}</span>
+      </button>
+    </div>
+
     <div v-if="isLoadingAds" class="stack-y-3">
       <div v-for="n in 3" :key="n" class="h-24 rounded-3xl bg-white/5 animate-pulse" />
     </div>
-    <div v-else-if="ads.length === 0"
-      class="flex flex-col items-center gap-3 py-20 text-white/25">
+    <div v-else-if="visibleAds.length === 0" class="flex flex-col items-center gap-3 py-16 text-white/25">
       <BIcon name="Megaphone" class="w-10 h-10 opacity-40" />
-      <p class="text-sm font-semibold">{{ langStore.t.adminNoAdsFound }}</p>
+      <p class="text-sm font-semibold">{{ adFilter === 'pending' ? 'Новых заявок нет' : langStore.t.adminNoAdsFound }}</p>
     </div>
     <div v-else class="stack-y-3">
-      <div v-for="ad in ads" :key="ad.id"
-        class="rounded-3xl border border-brand-border p-4 flex items-start gap-4 hover:border-white/10 transition-all"
+      <div v-for="ad in visibleAds" :key="ad.id"
+        class="rounded-3xl border border-brand-border p-4 flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 hover:border-white/10 transition-all"
         style="background:#1F223C">
-        <img v-if="ad.image_url" :src="ad.image_url" class="w-16 h-16 rounded-2xl object-cover border border-white/8 shrink-0" />
-        <div v-else class="w-16 h-16 rounded-2xl bg-white/5 border border-white/8 shrink-0 flex items-center justify-center">
-          <BIcon name="Image" class="w-5 h-5 text-white/20" />
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-1 flex-wrap">
-            <span class="text-xs font-extrabold px-2 py-0.5 rounded-full border"
-              :class="ad.status==='active'
-                ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                : ad.status==='pending'
-                  ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                  : 'text-white/30 bg-white/5 border-white/10'">
-              {{ ad.status }}
-            </span>
-            <span class="text-[10px] text-white/30">{{ ad.impressions ?? 0 }} {{ langStore.t.adminImpressionsSuffix }} · {{ ad.clicks ?? 0 }} {{ langStore.t.adminClicksSuffix }}</span>
-            <span v-if="ad.price_label" class="text-[10px] font-bold text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ ad.price_label }}</span>
-            <span v-if="ad.price_blm != null" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              {{ ad.placement }} · {{ ad.periods }}{{ ad.billing === 'week' ? ' нед.' : ' сут.' }} · {{ ad.price_blm }} BLM<template v-if="ad.discount_pct"> (−{{ ad.discount_pct }}%)</template>
-            </span>
+        <div class="flex items-start gap-3 flex-1 min-w-0">
+          <img v-if="ad.image_url" :src="ad.image_url" class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-white/8 shrink-0" />
+          <div v-else class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/5 border border-white/8 shrink-0 flex items-center justify-center">
+            <BIcon name="Image" class="w-5 h-5 text-white/20" />
           </div>
-          <p class="font-bold text-sm text-white">{{ ad.title }}</p>
-          <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-1">{{ ad.description }}</p>
-          <a :href="safeHref(ad.link_url)" target="_blank"class="text-xs text-brand-accent hover:text-brand-accent/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
-          <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-            <router-link v-if="ad.requester" :to="`/profile/${ad.requester.username}`" target="_blank"
-              class="text-[11px] text-white/35 hover:text-white/60 transition-colors">
-              {{ langStore.t.adminFromPrefix }} @{{ ad.requester.username }}
-            </router-link>
-            <span v-if="ad.contact_info" class="text-[11px] text-white/25">· {{ langStore.t.adminContactLabel }} {{ ad.contact_info }}</span>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+              <span class="text-[11px] font-extrabold px-2 py-0.5 rounded-full border" :class="STATUS_VIEW[adGroup(ad)].cls">{{ STATUS_VIEW[adGroup(ad)].label }}</span>
+              <span class="text-[10px] font-bold text-white/60 bg-white/6 px-2 py-0.5 rounded-full border border-white/8">{{ placementLabel(ad.placement) }}</span>
+              <span v-if="ad.price_blm != null" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                {{ ad.periods }}{{ ad.billing === 'week' ? ' нед.' : ' сут.' }} · {{ ad.price_blm }} BLM<template v-if="ad.discount_pct"> (−{{ ad.discount_pct }}%)</template><template v-if="ad.refunded_at"> · возврат</template>
+              </span>
+              <span v-else-if="ad.requester_id && ad.status !== 'pending'" class="text-[10px] font-bold text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">служебная</span>
+            </div>
+            <p class="font-bold text-sm text-white break-words">{{ ad.title }}</p>
+            <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-2">{{ ad.description }}</p>
+            <a :href="safeHref(ad.link_url)" target="_blank" rel="noopener noreferrer" class="text-xs text-brand-accent hover:text-brand-accent/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
+            <div class="flex items-center gap-x-3 gap-y-0.5 mt-1.5 flex-wrap text-[11px] text-white/35">
+              <router-link v-if="ad.requester" :to="`/profile/${ad.requester.username}`" target="_blank" class="hover:text-white/60 transition-colors">
+                {{ langStore.t.adminFromPrefix }} @{{ ad.requester.username }}
+              </router-link>
+              <span v-if="ad.contact_info">{{ langStore.t.adminContactLabel }} {{ ad.contact_info }}</span>
+              <span>подана {{ dateShort(ad.created_at) }}</span>
+              <span v-if="ad.status === 'active'">
+                {{ dateShort(ad.starts_at) }} – {{ dateShort(ad.ends_at) }}<template v-if="daysLeft(ad) !== null && !isExpired(ad)"> · осталось {{ daysLeft(ad) }} дн.</template>
+              </span>
+              <span v-else-if="ad.status === 'pending' && ad.duration_days">после одобрения — {{ ad.duration_days }} дн.</span>
+              <span v-if="ad.status === 'active'">{{ ad.impressions ?? 0 }} {{ langStore.t.adminImpressionsSuffix }} · {{ ad.clicks ?? 0 }} {{ langStore.t.adminClicksSuffix }}</span>
+            </div>
           </div>
         </div>
-        <div class="flex flex-col gap-2 shrink-0">
+        <div class="flex sm:flex-col gap-2 shrink-0 items-center sm:items-stretch">
           <template v-if="ad.status === 'pending'">
             <button @click="reviewAd(ad.id, 'active')"
-              class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+              class="flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
               {{ langStore.t.adminApproveBtn }}
             </button>
             <button @click="reviewAd(ad.id, 'rejected')"
-              class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
+              class="flex-1 sm:flex-none px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
               {{ langStore.t.adminRejectBtn }}
             </button>
           </template>
           <button @click="deleteAd(ad.id)" :title="langStore.t.deleteBtn"
-            class="w-7 h-7 rounded-xl bg-white/5 border border-white/8 text-white/40 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/20 flex items-center justify-center transition-all self-end">
+            class="w-8 h-8 rounded-xl bg-white/5 border border-white/8 text-white/40 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/20 flex items-center justify-center transition-all sm:self-end">
             <BIcon name="Trash2" class="w-3.5 h-3.5" />
           </button>
         </div>

@@ -20,7 +20,7 @@ interface Totals {
   clicks: number; unique_clicks: number; bots: number; visitors: number; signups: number; paid: number
   lost_before_landing: number; attribution_conflicts: number; attributed_signups: number
 }
-interface ManualUtm { source: string | null; campaign: string | null; visitors: number }
+interface ManualUtm { source: string | null; campaign: string | null; visitors: number; signups: number; verified: number; onboarded: number; paid: number }
 interface SeriesPoint { date: string; clicks: number; visitors: number; signups: number }
 
 const days = ref(30)
@@ -415,13 +415,24 @@ const funnel = (s: LinkStats) => [
     <div v-if="manualUtm.length" class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
       <div class="px-5 py-3 border-b border-brand-border">
         <p class="text-sm font-bold text-white/85">Метки, поставленные вручную</p>
-        <p class="text-[11px] text-white/40">Заходы с UTM-метками, поставленными вручную, мимо этого раздела. Для них считаются только открытия сайта, без переходов.</p>
+        <p class="text-[11px] text-white/40">Заходы с UTM-метками мимо этого раздела. Переходы для них не считаются, зато видно открытия сайта и путь зарегистрировавшихся до оплаты.</p>
       </div>
-      <div class="divide-y divide-brand-border">
-        <div v-for="(m, i) in manualUtm" :key="i" class="px-5 py-2.5 flex items-center gap-3 text-xs">
-          <span class="text-white/80 font-semibold w-32 truncate">{{ m.source || '—' }}</span>
-          <span class="text-white/50 flex-1 truncate">{{ m.campaign || '—' }}</span>
-          <span class="text-white font-bold">{{ m.visitors }}</span>
+      <div class="overflow-x-auto">
+        <div class="min-w-[560px]">
+          <div class="px-5 py-2 grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_repeat(5,3.5rem)] gap-2 text-[10px] font-bold uppercase tracking-wide text-white/30 border-b border-brand-border">
+            <span>Источник</span><span>Кампания</span><span class="text-right">Визиты</span><span class="text-right">Регистр.</span><span class="text-right">Почта</span><span class="text-right">Онборд.</span><span class="text-right">Оплата</span>
+          </div>
+          <div class="divide-y divide-brand-border">
+            <div v-for="(m, i) in manualUtm" :key="i" class="px-5 py-2.5 grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_repeat(5,3.5rem)] gap-2 items-center text-xs">
+              <span class="text-white/80 font-semibold truncate">{{ m.source || '—' }}</span>
+              <span class="text-white/50 truncate">{{ m.campaign || '—' }}</span>
+              <span class="text-white font-bold text-right">{{ m.visitors }}</span>
+              <span class="text-white font-bold text-right">{{ m.signups }}</span>
+              <span class="text-white/70 text-right">{{ m.verified }}</span>
+              <span class="text-white/70 text-right">{{ m.onboarded }}</span>
+              <span class="text-white/70 text-right">{{ m.paid }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import {
   getPostsAdminHandler, deletePostAdminHandler,
   getReportsHandler, getReportEvidenceHandler, submitReportHandler, resolveReportHandler, resolveReportsBatchHandler, resolveReportIssueHandler,
   getAppealsHandler, decideAppealHandler,
-  getAdsHandler, getActiveAdsHandler, submitAdHandler, getAdPricingHandler, reviewAdHandler, deleteAdHandler,
+  getAdsHandler, getActiveAdsHandler, submitAdHandler, getAdPricingHandler, createStaffAdHandler, reviewAdHandler, deleteAdHandler,
   trackImpressionHandler, trackClickHandler,
   getBannersHandler, getActiveBannersHandler, createBannerHandler, updateBannerHandler, deleteBannerHandler,
   getAutoModLogsHandler, unfreezeUserHandler, freezeUserHandler, clearWarnsHandler, warnUserHandler,
@@ -14,7 +14,7 @@ import {
   getStickerStatsHandler, getNetworkStatsHandler, getStickerPackDetailHandler, togglePostPinHandler,
   getGroupsOverviewHandler, getPremiumOverviewHandler, getFinanceReportHandler, getInfraOverviewHandler,
   getStaffHandler, promoteToStaffHandler,
-  sendBroadcastHandler, getBroadcastsHandler,
+  sendBroadcastHandler, getBroadcastsHandler, getBroadcastAudienceHandler,
   getSettingsHandler, updateSettingHandler,
 } from './controller.js';
 import {
@@ -62,6 +62,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Broadcasts
   fastify.get<RouteGenericOf<typeof getBroadcastsHandler>>('/broadcasts',  auth, getBroadcastsHandler);
+  fastify.get<RouteGenericOf<typeof getBroadcastAudienceHandler>>('/broadcasts/audience', auth, getBroadcastAudienceHandler);
   fastify.post<RouteGenericOf<typeof sendBroadcastHandler>>('/broadcasts', auth, sendBroadcastHandler);
 
   // Site settings
@@ -122,6 +123,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getAdsHandler>>('/ads',              auth, getAdsHandler);
   fastify.get<RouteGenericOf<typeof getActiveAdsHandler>>('/ads/active',       getActiveAdsHandler);
   fastify.get('/ads/pricing', auth, getAdPricingHandler);
+  fastify.post<RouteGenericOf<typeof createStaffAdHandler>>('/ads/staff', auth, createStaffAdHandler);
   fastify.post<RouteGenericOf<typeof submitAdHandler>>('/ads',             { onRequest: [fastify.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler);
   fastify.patch<RouteGenericOf<typeof reviewAdHandler>>('/ads/:id/review', auth, reviewAdHandler);
   fastify.delete<RouteGenericOf<typeof deleteAdHandler>>('/ads/:id',       auth, deleteAdHandler);

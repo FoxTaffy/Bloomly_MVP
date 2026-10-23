@@ -41,6 +41,9 @@ const groups = computed(() => {
   return [...map.entries()].map(([canonical, aliases]) => ({ canonical, aliases }))
 })
 
+const previewAliases = computed(() =>
+  form.value.alias.split(',').map((a) => a.trim().replace(/^#/, '').toLowerCase().replace(/\s+/g, '_')).filter(Boolean).slice(0, 12))
+
 async function add() {
   // Несколько синонимов через запятую: «лиса, лисица, foxes» → fox
   const aliases = form.value.alias.split(',').map((a) => a.trim()).filter(Boolean)
@@ -74,22 +77,39 @@ async function remove(alias: string) {
 
 <template>
   <div>
-    <div class="rounded-3xl border border-brand-border p-5 mb-5" style="background:#1F223C">
-      <p class="text-sm font-bold text-white/85 mb-1">Добавить синоним</p>
-      <p class="text-xs text-white/40 mb-4">
-        Теги в постах не меняются. Синонимы объединяются в популярных тегах и в поиске, если включён переключатель «Синонимы тегов».
-        Варианты, отличающиеся только «_» и «-» (furry_art, furry-art, furryart), склеиваются автоматически.
-      </p>
-      <form class="flex flex-col sm:flex-row gap-2" @submit.prevent="add">
-        <input v-model="form.alias" type="text" placeholder="Синонимы через запятую: лиса, лисица, foxes"
-          class="adm-input flex-1 min-w-0" />
-        <div class="flex items-center justify-center text-white/30"><BIcon name="ArrowRight" class="w-4 h-4 rotate-90 sm:rotate-0" /></div>
-        <input v-model="form.canonical" type="text" placeholder="Основной тег: fox" class="adm-input sm:w-48" />
+    <div class="rounded-3xl border border-brand-border p-4 sm:p-5 mb-5" style="background:#1F223C">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-9 h-9 rounded-xl bg-brand-accent/15 flex items-center justify-center shrink-0">
+          <BIcon name="Hash" class="w-4 h-4 text-brand-accent" />
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-bold text-white/90">Добавить синоним</p>
+          <p class="text-xs text-white/40 mt-0.5 leading-relaxed">
+            Теги в постах не меняются: синонимы объединяются в популярных тегах и в поиске. Варианты, отличающиеся только «_» и «-» (furry_art, furry-art, furryart), склеиваются сами.
+          </p>
+        </div>
+      </div>
+      <form class="grid grid-cols-1 md:grid-cols-[1fr_auto_minmax(0,14rem)_auto] gap-3 md:items-end" @submit.prevent="add">
+        <label class="block min-w-0">
+          <span class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Синонимы</span>
+          <input v-model="form.alias" type="text" placeholder="лиса, лисица, foxes" class="adm-input" />
+        </label>
+        <div class="hidden md:flex h-[42px] items-center text-white/30"><BIcon name="ArrowRight" class="w-4 h-4" /></div>
+        <label class="block min-w-0">
+          <span class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Основной тег</span>
+          <input v-model="form.canonical" type="text" placeholder="fox" class="adm-input" />
+        </label>
         <button type="submit" :disabled="saving"
-          class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-accent text-white disabled:opacity-50 hover:brightness-110 transition-all shrink-0">
+          class="h-[42px] px-5 rounded-2xl text-sm font-bold bg-brand-accent text-white disabled:opacity-50 hover:brightness-110 transition-all">
           {{ saving ? 'Сохранение…' : 'Добавить' }}
         </button>
       </form>
+      <div v-if="previewAliases.length" class="flex flex-wrap items-center gap-1.5 mt-3">
+        <span class="text-[11px] text-white/35">Будет объединено:</span>
+        <span v-for="a in previewAliases" :key="a" class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/5 border border-white/8 text-white/65">#{{ a }}</span>
+        <BIcon name="ArrowRight" class="w-3 h-3 text-white/30" />
+        <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-brand-accent/15 border border-brand-accent/25 text-brand-accent">#{{ form.canonical.trim().replace(/^#/, '').toLowerCase() || '…' }}</span>
+      </div>
       <p v-if="error" class="text-xs text-brand-error mt-3">{{ error }}</p>
     </div>
 
@@ -97,7 +117,7 @@ async function remove(alias: string) {
       <div class="px-5 py-3 border-b border-brand-border flex items-center gap-3">
         <BIcon name="Search" class="w-4 h-4 text-white/30" />
         <input v-model="filter" type="text" placeholder="Найти тег" class="flex-1 bg-transparent text-sm text-white placeholder-white/25 outline-hidden" />
-        <span class="text-xs text-white/30">{{ synonyms.length }}</span>
+        <span class="text-xs text-white/30 shrink-0">{{ groups.length }} тегов · {{ synonyms.length }} синонимов</span>
       </div>
       <div v-if="loading" class="p-5 text-xs text-white/40">Загрузка…</div>
       <div v-else-if="!groups.length" class="p-8 text-center text-sm text-white/40">
