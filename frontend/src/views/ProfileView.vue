@@ -307,26 +307,22 @@
                       <Transition name="status-pop">
                         <div v-if="isOwnProfile || hasActiveStatus"
                           :key="profileStatus.text + profileStatus.emoji + (profileStatus.music?.title || '')"
-                          class="relative w-fit max-w-full md:max-w-sm">
+                          class="relative w-fit max-w-full md:max-w-xl">
                           <button
                             @click="isOwnProfile ? openStatusEdit() : null"
                             :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
                             class="relative block w-full text-left hover:opacity-90 active:scale-95 transition-all">
-                            <!-- Bubble -->
-                            <div class="w-full px-3 py-2 rounded-2xl text-white overflow-hidden"
+                            <!-- Bubble: one horizontal row, time at the end -->
+                            <div class="w-full flex items-center flex-nowrap gap-2.5 px-3 py-1.5 rounded-2xl text-white overflow-hidden"
                               :class="hasActiveStatus ? 'status-bubble-glow' : ''"
                               :style="{ background: statusBubbleGradient, boxShadow: hasActiveStatus ? `0 4px 18px -2px ${statusBubbleColor}80, 0 2px 6px rgba(0,0,0,0.35)` : '0 8px 20px rgba(0,0,0,0.35)' }">
                               <!-- Text/emoji -->
-                              <div v-if="profileStatus.text || profileStatus.emoji"
-                                class="flex gap-1 items-start"
-                                :class="profileStatus.music ? 'mb-1' : ''">
+                              <div v-if="profileStatus.text || profileStatus.emoji" class="flex gap-1 items-center min-w-0">
                                 <span v-if="profileStatus.emoji" class="text-sm shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
-                                <span v-if="profileStatus.text"
-                                  class="text-[11px] font-semibold leading-snug"
-                                  style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-word">{{ profileStatus.text }}</span>
+                                <span v-if="profileStatus.text" class="text-[11px] font-semibold leading-snug truncate">{{ profileStatus.text }}</span>
                               </div>
                               <!-- Music -->
-                              <div v-if="profileStatus.music" class="flex items-center gap-1.5" @click.stop="toggleStatusMusicPreview">
+                              <div v-if="profileStatus.music" class="flex items-center gap-1.5 min-w-0 max-w-[45%] shrink-0" @click.stop="toggleStatusMusicPreview">
                                 <div class="relative w-6 h-6 rounded-md overflow-hidden shrink-0 bg-black/30">
                                   <img v-if="profileStatus.music.artworkUrl" :src="profileStatus.music.artworkUrl" class="w-full h-full object-cover" />
                                   <div class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/50 transition-colors">
@@ -340,9 +336,9 @@
                               </div>
                               <!-- Empty own profile -->
                               <span v-if="!hasActiveStatus && isOwnProfile"
-                                class="flex items-center gap-1 text-[11px] text-white/60">
+                                class="flex items-center gap-1 text-[11px] text-white/60 whitespace-nowrap">
                                 {{ langStore.t.emptyBio }}</span>
-                              <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
+                              <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 ml-auto shrink-0 whitespace-nowrap text-[9px] opacity-60">
                                 <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
                             </div>
                           </button>
@@ -1246,7 +1242,7 @@
                     </button>
                   </div>
                   <!-- Media previews -->
-                  <MediaUpload ref="profileMediaUploadRef" type="posts" :multiple="true" :max-files="20" @uploaded="onProfileMediaUploaded" />
+                  <MediaUpload ref="profileMediaUploadRef" type="posts" documents :multiple="true" :max-files="20" @uploaded="onProfileMediaUploaded" />
 
                   <!-- Tags row -->
                   <div v-if="newPostTags.length" class="flex flex-wrap gap-1.5">
