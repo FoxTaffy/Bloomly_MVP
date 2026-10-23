@@ -1,8 +1,9 @@
 <template>
   <div class="rounded-3xl border p-4 transition-all" :class="theme.card">
     <div class="flex items-center gap-3">
-      <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border" :class="theme.icon">
-        <BIcon :name="hunter.level === 3 ? 'Crown' : 'Bug'" class="w-6 h-6" />
+      <img v-if="hunter.level > 0" :src="BUG_HUNTER_ICONS[hunter.level]" :alt="levelTitle" class="w-14 h-14 object-contain shrink-0 drop-shadow-lg" />
+      <div v-else class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border" :class="theme.icon">
+        <BIcon name="Bug" class="w-6 h-6" />
       </div>
       <div class="flex-1 min-w-0">
         <p class="text-[10px] font-bold uppercase tracking-widest text-white/45">{{ t.bugHunterTitle }}</p>
@@ -44,6 +45,12 @@ const props = defineProps<{
 const langStore = useLangStore()
 // computed, чтобы подписи менялись при смене языка без перезагрузки
 const t = computed(() => langStore.t)
+
+const BUG_HUNTER_ICONS: Record<number, string> = {
+  1: '/icons/badges/bug-hunter-1.png',
+  2: '/icons/badges/bug-hunter-2.png',
+  3: '/icons/badges/bug-hunter-hacker.png',
+}
 
 const LEVEL_THEME = [
   { card: 'bg-brand-bg/60 border-brand-border', icon: 'bg-white/5 border-white/10 text-white/40', bar: 'bg-white/40' },

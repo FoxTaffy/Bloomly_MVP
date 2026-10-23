@@ -38,7 +38,7 @@
             <div v-for="badge in achievementBadges" :key="badge.key"
               class="flex items-center gap-4 p-4 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-accent/30 transition-all group">
               <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden transition-transform group-hover:scale-105" :class="badge.iconImg ? '' : badge.iconBg">
-                <img v-if="badge.iconImg" :src="badge.iconImg" :alt="badge.label" class="w-full h-full object-cover" />
+                <img v-if="badge.iconImg" :src="badge.iconImg" :alt="badge.label" class="w-full h-full object-contain" />
                 <component :is="badge.iconComp" v-else class="w-7 h-7" :class="badge.iconColor" />
               </div>
               <div class="min-w-0">
@@ -1868,7 +1868,7 @@
                   <div v-for="badge in achievementBadges" :key="badge.key"
                     class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-brand-bg/60 transition-all group cursor-default">
                     <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 overflow-hidden transition-transform group-hover:scale-110" :class="badge.iconImg ? '' : badge.iconBg">
-                      <img v-if="badge.iconImg" :src="badge.iconImg" :alt="badge.label" class="w-full h-full object-cover" />
+                      <img v-if="badge.iconImg" :src="badge.iconImg" :alt="badge.label" class="w-full h-full object-contain" />
                       <component :is="badge.iconComp" v-else class="w-3.5 h-3.5" :class="badge.iconColor" />
                     </div>
                     <div class="min-w-0">
@@ -3085,6 +3085,11 @@ const achievementBadges = computed(() => {
   else if (p.badge_type === 'verified' || p.is_verified)   badges.push({ key: 'verified',   label: langStore.t.verBadgeLabelVerifiedPage, desc: langStore.t.verBadgeVerifiedAccountDesc, iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
   if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: langStore.t.profileActiveAuthorBadgeLabel,      desc: langStore.t.profileActiveAuthorBadgeDesc,           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
   if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: langStore.t.profilePopularBadgeLabel,          desc: langStore.t.profilePopularBadgeDesc,            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })
+  const bh = p.bug_hunter
+  if (bh && bh.level > 0) {
+    const bhLabel = [langStore.t.bugHunterLvl0, langStore.t.bugHunterLvl1, langStore.t.bugHunterLvl2, langStore.t.bugHunterHacker][bh.level]
+    badges.push({ key: 'bug-hunter', label: bhLabel, desc: langStore.t.bugHunterTitle, iconImg: ['', '/icons/badges/bug-hunter-1.png', '/icons/badges/bug-hunter-2.png', '/icons/badges/bug-hunter-hacker.png'][bh.level], iconBg: 'bg-violet-500/20', iconColor: 'text-violet-300' })
+  }
   // Default badge for all
   if (!badges.length) badges.push({ key: 'furlite', label: 'FurLite',             desc: langStore.t.profileSubscriberSincePrefix + ' ' + joinDate.value,  iconComp: Award,    iconBg: 'bg-brand-accent/20', iconColor: 'text-brand-accent' })
   return badges
