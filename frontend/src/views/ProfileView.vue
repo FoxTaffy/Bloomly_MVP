@@ -302,7 +302,7 @@
                       @play="isStatusMusicPlaying = true" @pause="isStatusMusicPlaying = false" @ended="isStatusMusicPlaying = false" />
                   </div>
 
-                  <div class="md:flex-1 md:min-w-0 md:pt-4 md:px-3 max-md:absolute max-md:left-[7.5rem] max-md:right-4 max-md:top-2 max-md:z-20">
+                  <div class="absolute z-20 top-[-2.75rem] left-[7.5rem] right-4 md:top-[-3rem] md:left-[10.5rem] md:right-6">
                       <!-- Status bubble — to the right of the avatar -->
                       <Transition name="status-pop">
                         <div v-if="isOwnProfile || hasActiveStatus"
@@ -347,7 +347,7 @@
                   </div>
 
                   <!-- Action buttons (positioned to side of avatar) -->
-                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap max-md:order-3 max-md:w-full max-md:pr-0 max-md:pt-4">
+                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap md:ml-auto max-md:order-3 max-md:w-full max-md:pr-0 max-md:pt-4">
                     <template v-if="isOwnProfile">
                       <router-link to="/settings/profile"
                         class="relative inline-flex items-center gap-2 px-5 py-2.5 max-md:flex-1 max-md:justify-center bg-linear-to-r/srgb from-brand-accent to-brand-accent-plus text-white rounded-xl text-sm font-bold shadow-lg shadow-brand-accent/30 hover:shadow-brand-accent/50 hover:scale-[1.03] active:scale-[0.98] transition-all overflow-hidden group">
