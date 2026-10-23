@@ -296,7 +296,8 @@ router.beforeEach(async (to) => {
   }
 
   // Защищённый маршрут без токена → редирект на /login
-  if (to.meta.requiresAuth && !auth.token) {
+  // (кроме случая, когда refresh временно не удался из-за сети — тогда сессия сохранена)
+  if (to.meta.requiresAuth && !auth.token && !auth.sessionPending) {
     return { name: 'login' }
   }
 

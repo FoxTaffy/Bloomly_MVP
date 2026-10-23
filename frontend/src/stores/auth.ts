@@ -1,4 +1,5 @@
 import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
+import { isRefreshRejected, singleFlight } from '@/lib/sessionRefresh'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api, { setupApiAuth } from '../api'
@@ -75,6 +76,8 @@ export const useAuthStore = defineStore('auth', () => {
   const user          = ref<User | null>(loadUser())
   const isLoading     = ref(false)
   const isInitialized = ref(false)
+  // Cached session whose refresh failed transiently (offline / 5xx): not logged out, retried on reconnect.
+  const sessionPending = ref(false)
   const error         = ref<string | null>(null)
   // Populated when a mid-session request comes back ACCOUNT_FROZEN — drives the
   // globally-mounted FrozenAccountModal (see App.vue) after the forced logout below.
@@ -88,16 +91,16 @@ export const useAuthStore = defineStore('auth', () => {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   /** Restore session on page load by using the httpOnly refresh_token cookie.
-   *  `lenient=true` (mid-session, triggered by the axios 401 interceptor) keeps the
-   *  current session intact on a transient failure (network blip, 5xx) instead of
-   *  wiping it — only a server-confirmed 401 means the session is actually dead.
-   *  A confirmed 401 (no/expired refresh cookie) always wipes immediately — that's
-   *  a real "not logged in", not a hiccup. Anything else (network blip, cold start,
-   *  5xx, 429) is retried with backoff before the initial (non-lenient) call gives
-   *  up, so a valid 30-day "remember me" cookie can't be thrown away by one bad
-   *  request. */
-  async function tryRefresh(lenient = false): Promise<boolean> {
-    const maxAttempts = lenient ? 1 : 3
+   *  Single-flight: the page-load refresh, the axios 401 interceptor and the
+   *  online/visibility retries all share one request, so a rotating refresh token
+   *  is never spent twice in parallel.
+   *  Only an explicit 401/403 from /auth/refresh means the session is dead and wipes
+   *  local state. Anything else (offline, timeout, 502/503/504, 429) is transient:
+   *  retried with backoff, and then the cached session is kept (`sessionPending`)
+   *  and re-checked when the network comes back.
+   *  `lenient=true` (mid-session, from the interceptor) makes a single attempt. */
+  const refreshOnce = singleFlight(async (lenient: boolean): Promise<boolean> => {
+    const maxAttempts = lenient ? 1 : 4
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const res = await api.post('/auth/refresh')
@@ -105,28 +108,28 @@ export const useAuthStore = defineStore('auth', () => {
           token.value = res.data.data.token
           user.value  = res.data.data.user
           saveUser(res.data.data.user)
+          sessionPending.value = false
           return true
         }
       } catch (e) {
-        const confirmedDead = apiErrorStatus(e) === 401
-        if (confirmedDead) {
+        if (isRefreshRejected(apiErrorStatus(e))) {
           token.value = null
           clearUser()
           user.value = null
+          sessionPending.value = false
           return false
         }
         if (attempt < maxAttempts) {
-          await new Promise((r) => setTimeout(r, attempt * 400))
+          await new Promise((r) => setTimeout(r, attempt * 500))
           continue
-        }
-        if (!lenient) {
-          clearUser()
-          user.value = null
         }
       }
     }
+    // Transient failure: keep the cached user, remember to retry later.
+    sessionPending.value = !!user.value
     return false
-  }
+  })
+  const tryRefresh = (lenient = false): Promise<boolean> => refreshOnce(lenient)
 
   async function login(email: string, password: string, remember = false): Promise<void> {
     isLoading.value = true
@@ -391,8 +394,9 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = data.data.user
         saveUser(data.data.user)
       }
-    } catch (e) {
-      if (apiErrorStatus(e) === 401) logout()
+    } catch {
+      // A dead session is handled by the axios interceptor (refresh 401/403 → logout);
+      // a failure here must never log the user out on its own.
     }
   }
 
@@ -433,13 +437,25 @@ export const useAuthStore = defineStore('auth', () => {
       return user.value ? undefined : null
     },
     onFrozenDetected,
+    () => sessionPending.value,
   )
+
+  // Network is back / tab is visible again → finish the refresh that failed transiently.
+  function retryPendingSession() {
+    if (sessionPending.value) void tryRefresh()
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', retryPendingSession)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') retryPendingSession()
+    })
+  }
 
   // Restore session via httpOnly refresh_token cookie on page load
   tryRefresh().finally(() => { isInitialized.value = true })
 
   return {
-    token, user, isLoading, isInitialized, error, frozenPrompt,
+    token, user, isLoading, isInitialized, sessionPending, error, frozenPrompt,
     isAuthenticated, displayName, avatarUrl,
     login, register, verifyEmail, resendOtp, loginWithToken,
     requestUnfreeze, confirmUnfreeze, exportData,

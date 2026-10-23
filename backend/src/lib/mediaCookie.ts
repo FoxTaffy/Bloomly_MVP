@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../config/prisma.js';
 import { isDevEnv } from './env.js';
+import { REMEMBER_TTL_SEC } from './sessionTtl.js';
 import { resolveAccountIdentity } from './accountAccess.js';
 
 /**
@@ -26,7 +27,7 @@ export function setMediaCookie(reply: FastifyReply, refreshRaw: string, remember
     sameSite: 'lax',
     path: MEDIA_COOKIE_PATH,
     signed: true,
-    ...(remember ? { maxAge: 30 * 24 * 60 * 60 } : {}),
+    ...(remember ? { maxAge: REMEMBER_TTL_SEC } : {}),
   });
 }
 

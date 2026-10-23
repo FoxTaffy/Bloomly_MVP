@@ -42,6 +42,7 @@ export interface SessionData {
   expiresAt: Date;
   remember: boolean;
   deviceName: string | null;
+  deviceId?: string | null;
   userAgent: string | null;
   ipAddress: string | null;
 }
@@ -49,6 +50,23 @@ export interface SessionData {
 export const sessions = {
   /** New session row (login / registration / OAuth). */
   async create(userId: string, s: SessionData) {
+    // Известное устройство (тот же device_id) с новым IP — обновляем его живую
+    // сессию, а не плодим дубликат; лишние дубли того же устройства отзываем.
+    if (s.deviceId) {
+      const existing = await prisma.refreshToken.findMany({
+        where: { user_id: userId, device_id: s.deviceId, revoked: false, expires_at: { gt: new Date() } },
+        orderBy: { last_used_at: 'desc' },
+        select: { id: true },
+      });
+      if (existing.length) {
+        const [keep, ...extra] = existing;
+        await prisma.refreshToken.update({ where: { id: keep.id }, data: toRow(s) });
+        if (extra.length) {
+          await prisma.refreshToken.updateMany({ where: { id: { in: extra.map((e) => e.id) } }, data: { revoked: true } });
+        }
+        return;
+      }
+    }
     await prisma.refreshToken.create({ data: { user_id: userId, ...toRow(s) } });
   },
 
@@ -62,8 +80,23 @@ export const sessions = {
       await prisma.refreshToken.update({ where: { id: sessionId }, data: toRow(s) });
       return true;
     }
-    const result = await prisma.refreshToken.updateMany({ where: { id: sessionId, token_hash: expectedHash }, data: toRow(s) });
+    const result = await prisma.refreshToken.updateMany({
+      where: { id: sessionId, token_hash: expectedHash },
+      data: { ...toRow(s), prev_token_hash: expectedHash, rotated_at: new Date() },
+    });
     return result.count > 0;
+  },
+
+  /** Живая сессия, чей токен был ротирован не позднее `graceMs` назад (для повторного refresh со старым токеном). */
+  findRecentlyRotated(prevHash: string, graceMs: number) {
+    return prisma.refreshToken.findFirst({
+      where: {
+        prev_token_hash: prevHash,
+        revoked: false,
+        expires_at: { gt: new Date() },
+        rotated_at: { gt: new Date(Date.now() - graceMs) },
+      },
+    });
   },
 
   findByHash(hash: string) {
@@ -107,7 +140,7 @@ export const sessions = {
 function toRow(s: SessionData) {
   return {
     token_hash: s.tokenHash, expires_at: s.expiresAt, remember: s.remember, revoked: false,
-    device_name: s.deviceName, user_agent: s.userAgent, ip_address: s.ipAddress,
+    device_name: s.deviceName, ...(s.deviceId ? { device_id: s.deviceId } : {}), user_agent: s.userAgent, ip_address: s.ipAddress,
     last_used_at: new Date(),
   };
 }

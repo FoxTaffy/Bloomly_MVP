@@ -139,3 +139,68 @@ describe('auth: 2FA', () => {
     expect(r.status).toBe(401);
   });
 });
+
+describe('auth: session lifetime and refresh race tolerance', () => {
+  beforeEach(resetDb);
+
+  async function loginCookies(remember: boolean) {
+    const { user: u } = await createUser();
+    const res = await api('POST', '/api/auth/login', { body: { email: u.email, password: PASSWORD, remember }, headers: { 'user-agent': 'TestAgent/1' } });
+    expect(res.status).toBe(200);
+    return { u, res, rt: res.cookie('refresh_token')! };
+  }
+  const maxAge = (res: any) => res.res.cookies.find((c: any) => c.name === 'refresh_token')?.maxAge;
+
+  it('remember=true gives a persistent 90-day cookie, remember=false a session cookie', async () => {
+    const on = await loginCookies(true);
+    expect(maxAge(on.res)).toBe(90 * 24 * 60 * 60);
+    const row = await prisma.refreshToken.findFirst({ where: { user_id: on.u.id } });
+    expect(row!.remember).toBe(true);
+    expect(row!.expires_at.getTime() - Date.now()).toBeGreaterThan(89 * 24 * 3600 * 1000);
+
+    await resetDb();
+    const off = await loginCookies(false);
+    expect(maxAge(off.res)).toBeUndefined();
+  });
+
+  it('refresh keeps the persistent cookie, including the replay path', async () => {
+    const { rt } = await loginCookies(true);
+    const headers = { 'user-agent': 'TestAgent/1' };
+    const a = await api('POST', '/api/auth/refresh', { cookies: { refresh_token: rt }, headers });
+    expect(a.status).toBe(200);
+    expect(maxAge(a)).toBe(90 * 24 * 60 * 60);
+    // тот же (уже ротированный) токен повторно — duplicate request
+    const b = await api('POST', '/api/auth/refresh', { cookies: { refresh_token: rt }, headers });
+    expect(b.status).toBe(200);
+    expect(maxAge(b)).toBe(90 * 24 * 60 * 60);
+  });
+
+  it('DB grace accepts a just-rotated token (same UA) even without the in-memory cache', async () => {
+    const { u, rt } = await loginCookies(true);
+    const row = await prisma.refreshToken.findFirst({ where: { user_id: u.id } });
+    // эмулируем рестарт/другой инстанс: ротация в БД есть, replay-кэша нет
+    const { hashToken } = await import('../src/modules/auth/session.service.js');
+    await prisma.refreshToken.update({
+      where: { id: row!.id },
+      data: { token_hash: hashToken('rotated-away'), prev_token_hash: hashToken(rt), rotated_at: new Date() },
+    });
+    const ok = await api('POST', '/api/auth/refresh', { cookies: { refresh_token: rt }, headers: { 'user-agent': 'TestAgent/1' } });
+    expect(ok.status).toBe(200);
+    expect(ok.json.data.token).toBeTruthy();
+
+    const otherUa = await api('POST', '/api/auth/refresh', { cookies: { refresh_token: rt }, headers: { 'user-agent': 'Other/2' } });
+    expect(otherUa.status).toBe(401);
+
+    await prisma.refreshToken.update({ where: { id: row!.id }, data: { rotated_at: new Date(Date.now() - 60_000) } });
+    const expired = await api('POST', '/api/auth/refresh', { cookies: { refresh_token: rt }, headers: { 'user-agent': 'TestAgent/1' } });
+    expect(expired.status).toBe(401);
+  });
+
+  it('concurrent refreshes with one token all succeed', async () => {
+    const { rt } = await loginCookies(true);
+    const headers = { 'user-agent': 'TestAgent/1' };
+    const results = await Promise.all(Array.from({ length: 5 }, () => api('POST', '/api/auth/refresh', { cookies: { refresh_token: rt }, headers })));
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200, 200, 200]);
+  });
+});
+

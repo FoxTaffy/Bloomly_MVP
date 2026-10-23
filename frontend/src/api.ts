@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { ref } from 'vue'
+import { singleFlight } from '@/lib/sessionRefresh'
 
 // Flipped on by the backend's global maintenance-mode gate (every non-auth,
 // non-admin route 503s while it's on) — MaintenanceOverlay.vue watches this
@@ -18,17 +19,21 @@ let _refreshToken: () => Promise<string | null | undefined> = async () => null
 // authenticated request) — kicks the user out to the main menu instead of just
 // silently failing whatever action they were doing.
 let _onFrozen: (reason: string) => void = () => {}
+// True while a cached session is waiting for a transiently failed refresh to be retried.
+let _hasPendingSession: () => boolean = () => false
 
 export function setupApiAuth(
   getToken: () => string | null,
   onUnauthorized: () => void,
   refreshToken: () => Promise<string | null | undefined>,
   onFrozen?: (reason: string) => void,
+  hasPendingSession?: () => boolean,
 ) {
   _getToken = getToken
   _onUnauthorized = onUnauthorized
   _refreshToken = refreshToken
   if (onFrozen) _onFrozen = onFrozen
+  if (hasPendingSession) _hasPendingSession = hasPendingSession
 }
 
 const api = axios.create({
@@ -46,9 +51,18 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 )
 
-// Flag to prevent multiple concurrent refresh attempts
-let _isRefreshing = false
-let _refreshQueue: Array<(token: string | null | undefined) => void> = []
+// Single-flight: all requests that hit a 401 at once await one shared refresh.
+// _onUnauthorized fires inside it, exactly once, and only when the refresh was
+// explicitly rejected (null) — never for network errors / 5xx (undefined).
+const refreshShared = singleFlight(async (): Promise<string | null | undefined> => {
+  try {
+    const newToken = await _refreshToken()
+    if (newToken === null) _onUnauthorized()
+    return newToken
+  } catch {
+    return undefined
+  }
+})
 
 api.interceptors.response.use(
   (response) => {
@@ -66,47 +80,20 @@ api.interceptors.response.use(
     }
     const originalRequest = error.config
     const hadAuthorization = Boolean(originalRequest?.headers?.Authorization || originalRequest?.headers?.authorization)
-    if (error.response?.status === 401 && hadAuthorization && originalRequest && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
-      if (_isRefreshing) {
-        // Queue request until refresh finishes
-        return new Promise((resolve, reject) => {
-          _refreshQueue.push((newToken) => {
-            if (newToken) {
-              originalRequest.headers.Authorization = `Bearer ${newToken}`
-              resolve(api(originalRequest))
-            } else {
-              reject(error)
-            }
-          })
-        })
-      }
-
+    if (
+      error.response?.status === 401 && originalRequest && !originalRequest._retry &&
+      (hadAuthorization || _hasPendingSession()) && !originalRequest.url?.includes('/auth/refresh')
+    ) {
       originalRequest._retry = true
-      _isRefreshing = true
-
-      try {
-        const newToken = await _refreshToken()
-        _refreshQueue.forEach((cb) => cb(newToken))
-        _refreshQueue = []
-        if (newToken) {
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return api(originalRequest)
-        } else if (newToken === null) {
-          // Server confirmed the session is dead — this is a real logout.
-          _onUnauthorized()
-          return Promise.reject(error)
-        } else {
-          // Transient refresh failure (e.g. network blip) — session may still be
-          // valid, so just fail this one request instead of kicking the user out.
-          return Promise.reject(error)
-        }
-      } catch {
-        _refreshQueue.forEach((cb) => cb(undefined))
-        _refreshQueue = []
-        return Promise.reject(error)
-      } finally {
-        _isRefreshing = false
+      // Another request may have refreshed already: retry with the current token, no new refresh.
+      const current = _getToken()
+      const sent = String(originalRequest.headers?.Authorization ?? originalRequest.headers?.authorization ?? '')
+      const newToken = current && sent !== `Bearer ${current}` ? current : await refreshShared()
+      if (newToken) {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return api(originalRequest)
       }
+      // null → logout already triggered by refreshShared; undefined → transient, keep the session.
     }
     return Promise.reject(error)
   },

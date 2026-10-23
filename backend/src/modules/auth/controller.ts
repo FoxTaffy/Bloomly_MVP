@@ -10,6 +10,7 @@ import { isAdult } from '../../lib/age.js';
 import { createMfaToken, verifyMfaToken } from '../../lib/mfaToken.js';
 import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 import { isDevEnv } from '../../lib/env.js';
+import { REMEMBER_TTL_SEC, SESSION_TTL_SEC, ROTATION_GRACE_MS } from '../../lib/sessionTtl.js';
 import { presence } from '../realtime/presence.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 import { logger } from '../../lib/logger.js';
@@ -24,9 +25,8 @@ const authService = new AuthService();
 // пользователя, хотя первый запрос ротацию уже успешно выполнил.
 // Кэшируем результат ротации на несколько секунд и отдаём его повторно, если
 // видим тот же (уже отревокнутый) hash снова в течение окна.
-interface RotationReplay { token: string; refreshToken: string; user: any; storedAt: number }
+interface RotationReplay { token: string; refreshToken: string; user: any; remember: boolean; storedAt: number }
 const recentRotations = new Map<string, RotationReplay>();
-const ROTATION_GRACE_MS = 15_000;
 
 function pruneRotationReplays() {
   const now = Date.now();
@@ -65,7 +65,7 @@ function isMobileClient(request: FastifyRequest): boolean {
 }
 
 // ── Выдача refresh token: запись в БД + httpOnly cookie ───────────────────────
-// remember=true  → persistent 30-day cookie + 30-day DB token
+// remember=true  → persistent 90-day cookie + 90-day DB token (скользящий)
 // remember=false → session cookie (no maxAge) + 24-hour DB token
 // Возвращает raw-токен, чтобы мобильные клиенты могли сохранить его сами
 // (веб-клиент его игнорирует и полагается на httpOnly cookie как раньше).
@@ -90,13 +90,14 @@ async function issueRefreshToken(
   expectedHash?: string,
 ): Promise<string | null> {
   const raw = randomBytes(40).toString('hex');
-  const ttlMs = remember ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const ttlMs = (remember ? REMEMBER_TTL_SEC : SESSION_TTL_SEC) * 1000;
   const userAgent = request.headers['user-agent'];
   const session = {
     tokenHash: hashToken(raw),
     expiresAt: new Date(Date.now() + ttlMs),
     remember,
     deviceName: parseDeviceName(userAgent),
+    deviceId: rotateSessionId ? null : resolveDeviceId(request, reply),
     userAgent: userAgent ?? null,
     ipAddress: getClientIp(request) ?? null,
   };
@@ -111,15 +112,34 @@ async function issueRefreshToken(
   return raw;
 }
 
+// ── device_id cookie ──────────────────────────────────────────────────────────
+// Долгоживущий идентификатор браузера. Не привязан к IP, поэтому смена VPN/IP
+// не делает устройство «новым». Мобильные клиенты без cookie jar шлют X-Device-Id.
+const DEVICE_ID_RE = /^[A-Za-z0-9-]{16,64}$/;
+
+function resolveDeviceId(request: FastifyRequest, reply: FastifyReply): string {
+  const header = request.headers['x-device-id'];
+  const candidate = request.cookies?.device_id ?? (typeof header === 'string' ? header : undefined);
+  const id = candidate && DEVICE_ID_RE.test(candidate) ? candidate : randomBytes(24).toString('hex');
+  reply.setCookie('device_id', id, {
+    httpOnly: true,
+    secure:   !isDevEnv(),
+    sameSite: 'strict',
+    path:     '/api/auth',
+    maxAge:   400 * 24 * 60 * 60,
+  });
+  return id;
+}
+
 // ── refresh_token cookie ──────────────────────────────────────────────────────
-// remember → persistent 30-day cookie; otherwise a session cookie.
+// remember → persistent 90-day cookie; otherwise a session cookie.
 function setRefreshCookie(reply: FastifyReply, raw: string, remember: boolean) {
   reply.setCookie('refresh_token', raw, {
     httpOnly: true,
     secure:   !isDevEnv(),
     sameSite: 'strict',
     path:     '/api/auth',
-    ...(remember ? { maxAge: 30 * 24 * 60 * 60 } : {}),
+    ...(remember ? { maxAge: REMEMBER_TTL_SEC } : {}),
   });
   // Тот же срок жизни — у cookie для файлов по прямым ссылкам (см. lib/mediaCookie.ts)
   setMediaCookie(reply, raw, remember);
@@ -707,12 +727,29 @@ export const refreshHandler = async (
   if (!record || record.revoked) {
     const replay = await validReplay(hash);
     if (replay) {
-      setRefreshCookie(reply, replay.refreshToken, !!record?.remember);
+      setRefreshCookie(reply, replay.refreshToken, replay.remember);
       return reply.send({
         success: true,
         data: { token: replay.token, user: replay.user, ...(isMobileClient(request) ? { refreshToken: replay.refreshToken } : {}) },
         error: null,
       });
+    }
+  }
+
+  // Второй уровень grace — по БД (пережившей рестарт и работающей на любом инстансе):
+  // токен только что ротирован, а повтор пришёл с того же клиента (тот же User-Agent).
+  // Новую пару не выдаём — cookie уже обновил первый ответ; отдаём лишь свежий access token.
+  if (!record) {
+    const rotated = await sessions.findRecentlyRotated(hash, ROTATION_GRACE_MS);
+    if (rotated && rotated.user_agent === (request.headers['user-agent'] ?? null)) {
+      const graceUser = await authUsers.findFullById(rotated.user_id);
+      if (graceUser) {
+        return reply.send({
+          success: true,
+          data: { token: issueAccessToken(request, graceUser.id, graceUser.role), user: withIsAdult(graceUser) },
+          error: null,
+        });
+      }
     }
   }
 
@@ -744,7 +781,7 @@ export const refreshHandler = async (
     }
     const replay = await validReplay(hash);
     if (replay) {
-      setRefreshCookie(reply, replay.refreshToken, record.remember);
+      setRefreshCookie(reply, replay.refreshToken, replay.remember);
       return reply.send({
         success: true,
         data: { token: replay.token, user: replay.user, ...(isMobileClient(request) ? { refreshToken: replay.refreshToken } : {}) },
@@ -758,7 +795,7 @@ export const refreshHandler = async (
   const publicUser = withIsAdult(user);
 
   pruneRotationReplays();
-  recentRotations.set(hash, { token, refreshToken, user: publicUser, storedAt: Date.now() });
+  recentRotations.set(hash, { token, refreshToken, user: publicUser, remember: record.remember, storedAt: Date.now() });
 
   return reply.send({
     success: true,
