@@ -148,6 +148,31 @@
               </div>
             </div>
 
+            <!-- Settings search -->
+            <div class="relative">
+              <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"/></svg>
+              <input
+                v-model="settingsSearch"
+                type="text"
+                :placeholder="settingsSearchPlaceholder"
+                class="field-input !pl-11 !pr-10"
+                @keydown.esc="settingsSearch = ''"
+                @keydown.enter.prevent="searchResults[0] && goToSearchResult(searchResults[0])"
+              />
+              <button v-if="settingsSearch" type="button" @click="settingsSearch = ''"
+                class="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full text-white/55 hover:text-white hover:bg-white/10">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+              <div v-if="settingsSearch.trim()" class="absolute left-0 right-0 top-full mt-2 z-30 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto">
+                <button v-for="(r, i) in searchResults" :key="i" type="button" @click="goToSearchResult(r)"
+                  class="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-white/5 transition-colors">
+                  <span class="text-sm text-white truncate">{{ r.text }}</span>
+                  <span class="text-[11px] font-semibold shrink-0" :style="`color:${r.color}`">{{ r.sectionLabel }}</span>
+                </button>
+                <p v-if="!searchResults.length" class="px-4 py-3 text-sm text-white/55">{{ settingsSearchEmpty }}</p>
+              </div>
+            </div>
+
             <!-- Mobile section tabs (xl+ uses the sticky sidebar instead) -->
             <div class="flex gap-2 overflow-x-auto pb-1 xl:hidden no-scrollbar max-md:-mx-3 max-md:px-3">
               <button
@@ -1589,7 +1614,7 @@
 
 <script setup lang="ts">
 import { apiErrorMessage } from '@/lib/apiError'
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, shallowRef, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore, cacheUser } from '@/stores/auth'
@@ -3097,6 +3122,48 @@ function openSec(id: string) {
   // Scroll the form column to the top so newly opened section is visible
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
+
+// ── Settings search ───────────────────────────────────────────────────────
+// Scans headings/labels of every section (hidden ones too, they are v-show)
+interface SearchResult { text: string; sectionId: string; sectionLabel: string; color: string; el: HTMLElement }
+const settingsSearch = ref('')
+const searchResults = shallowRef<SearchResult[]>([])
+const settingsSearchPlaceholder = computed(() => (langStore.t as Record<string, string | undefined>).settingsSearchPlaceholder ?? 'Поиск по настройкам')
+const settingsSearchEmpty = computed(() => (langStore.t as Record<string, string | undefined>).settingsSearchEmpty ?? 'Ничего не найдено')
+
+function runSettingsSearch() {
+  const q = settingsSearch.value.trim().toLowerCase()
+  if (!q) { searchResults.value = []; return }
+  const out: SearchResult[] = []
+  const seen = new Set<string>()
+  for (const sec of sections.value) {
+    const root = document.getElementById(sec.id)
+    if (!root) continue
+    if (sec.label.toLowerCase().includes(q)) {
+      out.push({ text: sec.label, sectionId: sec.id, sectionLabel: sec.label, color: sec.color, el: root })
+      seen.add(`${sec.id}|${sec.label.toLowerCase()}`)
+    }
+    root.querySelectorAll<HTMLElement>('label, h2, h3, h4, h5, legend, [data-search]').forEach((el) => {
+      const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+      const key = `${sec.id}|${text.toLowerCase()}`
+      if (text.length < 2 || text.length > 100 || seen.has(key) || !text.toLowerCase().includes(q)) return
+      seen.add(key)
+      out.push({ text, sectionId: sec.id, sectionLabel: sec.label, color: sec.color, el })
+    })
+  }
+  searchResults.value = out.slice(0, 15)
+}
+watch(settingsSearch, () => nextTick(runSettingsSearch))
+
+function goToSearchResult(r: SearchResult) {
+  settingsSearch.value = ''
+  openSection.value = r.sectionId
+  nextTick(() => {
+    r.el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    r.el.classList.add('search-hit-flash')
+    setTimeout(() => r.el.classList.remove('search-hit-flash'), 1800)
+  })
+}
 </script>
 
 <style scoped>
@@ -3117,6 +3184,13 @@ function openSec(id: string) {
 @keyframes section-link-flash {
   0%   { box-shadow: 0 0 0 3px rgba(167,139,250,0.7), 0 0 24px rgba(167,139,250,0.5); }
   100% { box-shadow: 0 0 0 3px rgba(167,139,250,0), 0 0 0 rgba(167,139,250,0); }
+}
+
+/* ── Search hit highlight ───────────────────────────────────────────────── */
+.search-hit-flash { animation: search-hit-flash 1.8s ease-out; border-radius: 0.5rem; }
+@keyframes search-hit-flash {
+  0%, 60% { background: rgba(167,139,250,0.35); box-shadow: 0 0 0 4px rgba(167,139,250,0.35); }
+  100%    { background: transparent; box-shadow: 0 0 0 4px rgba(167,139,250,0); }
 }
 
 /* ── No scrollbar (mobile tabs) ─────────────────────────────────────────── */
