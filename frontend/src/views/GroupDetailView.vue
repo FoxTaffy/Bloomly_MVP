@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useListingApplicationsStore } from '@/stores/listingApplications'
+import { useGroupAlerts } from '@/composables/useGroupAlerts'
 import { vStickyBottom } from '@/lib/stickyBottom'
 import LinkifiedText from '@/components/LinkifiedText.vue'
 import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
@@ -41,6 +41,7 @@ const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 const messagesStore = useMessagesStore()
+const groupAlerts = useGroupAlerts(() => group.value?.id)
 
 const nsfwMode = useNsfwMode().nsfwEnabled
 const showDonateModal = ref(false)
@@ -721,12 +722,10 @@ async function load() {
   if (group.value?.type === 'event' && activeEvent.value) {
     loadMyRsvp()
   }
-  if (isAdmin.value && group.value) messagesStore.fetchGroupInboxCount(group.value.id)
-  if (isAdmin.value && group.value?.den_enabled) lotApplicationsStore.fetchPendingCount(group.value.id)
+  if (isAdmin.value && group.value) {
+    groupAlerts.refresh({ den: !!group.value.den_enabled, business: !!group.value.business_enabled && ['artist', 'creative', 'shop'].includes(group.value.type) })
+  }
 }
-const lotApplicationsStore = useListingApplicationsStore()
-const lotPendingCount = computed(() => (group.value ? lotApplicationsStore.pendingByGroup[group.value.id] ?? 0 : 0))
-const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
 const showScrollTop = ref(false)
 function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 function handleScroll() { showScrollTop.value = window.scrollY > 500 }
@@ -835,7 +834,7 @@ function showDmError(message: string) {
 async function openGroupChatOrInbox() {
   if (!group.value) return
   if (isAdmin.value) {
-    router.push({ name: 'group-settings', params: { slugOrId: group.value.slug || group.value.id }, query: { section: 'tool-inbox' } })
+    router.push({ name: 'group-dashboard', params: { slugOrId: group.value.slug || group.value.id }, query: { section: 'inbox' } })
     return
   }
   if (dmLoading.value) return
@@ -1099,15 +1098,17 @@ const vClickOutside = {
                     </button>
                     <!-- Group chat: admins/owner → shared inbox; everyone else → their own thread with the group -->
                     <button v-if="isAdmin"
-                      @click="openGroupChatOrInbox()"
+                      @click="router.push({ name: 'group-dashboard', params: { slugOrId: group.slug || group.id } })"
                       :class="['relative inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all',
-                        inboxCount > 0
-                          ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/15'
-                          : 'border-brand-border bg-brand-bg text-white/55 hover:border-brand-accent/60 hover:text-brand-accent']">
-                      <BIcon name="Inbox" class="w-4 h-4" /> {{ langStore.t.groupDetailInboxBtn }}
-                      <span v-if="inboxCount > 0"
+                        groupAlerts.overdue.value > 0
+                          ? 'border-brand-error/60 bg-brand-error/10 text-brand-error hover:bg-brand-error/15'
+                          : groupAlerts.total.value > 0
+                            ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/15'
+                            : 'border-brand-border bg-brand-bg text-white/55 hover:border-brand-accent/60 hover:text-brand-accent']">
+                      <BIcon name="LayoutDashboard" class="w-4 h-4" /> Дашборд
+                      <span v-if="groupAlerts.total.value > 0"
                         class="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-brand-error text-white text-[11px] font-extrabold leading-none">
-                        {{ inboxCount > 99 ? '99+' : inboxCount }}
+                        {{ groupAlerts.total.value > 99 ? '99+' : groupAlerts.total.value }}
                       </span>
                     </button>
                     <button v-else
@@ -1116,18 +1117,6 @@ const vClickOutside = {
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all disabled:opacity-50">
                       <BIcon name="MessageCircle" class="w-4 h-4" />
                       {{ dmLoading ? langStore.t.groupDetailOpeningEllipsis : langStore.t.groupDetailMessageGroupBtn }}
-                    </button>
-                    <button v-if="isAdmin && group.den_enabled"
-                      @click="router.push({ name: 'group-settings', params: { slugOrId: group.slug || group.id }, query: { section: 'tool-lot-applications' } })"
-                      :class="['relative inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all',
-                        lotPendingCount > 0
-                          ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/15'
-                          : 'border-brand-border bg-brand-bg text-white/55 hover:border-brand-accent/60 hover:text-brand-accent']">
-                      <BIcon name="Send" class="w-4 h-4" /> Заявки на лоты
-                      <span v-if="lotPendingCount > 0"
-                        class="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-brand-error text-white text-[11px] font-extrabold leading-none">
-                        {{ lotPendingCount > 99 ? '99+' : lotPendingCount }}
-                      </span>
                     </button>
                     <button v-if="isOwner"
                       @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"

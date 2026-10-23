@@ -431,7 +431,7 @@ const onNotifClick = async (n: any) => {
   // Заявка на лот → вкладка заявок в инструментах группы
   if (n.type === 'den_lot_application' && n.meta?.groupSlug) {
     showNotifications.value = false
-    router.push({ name: 'group-settings', params: { slugOrId: n.meta.groupSlug }, query: { section: 'tool-lot-applications' } })
+    router.push({ name: 'group-dashboard', params: { slugOrId: n.meta.groupSlug }, query: { section: 'lot-applications' } })
     return
   }
   // Одобренный доступ открывает пак в библиотеке

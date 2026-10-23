@@ -9,6 +9,7 @@ import { useGroupsStore } from '@/stores/groups'
 import { useMessagesStore } from '@/stores/messages'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import { useGroupAdminTools } from '@/composables/useGroupAdminTools'
+import { useGroupAlerts } from '@/composables/useGroupAlerts'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import api from '@/api'
@@ -35,6 +36,7 @@ const mobileSidebar = useMobileSidebar()
 // and "already on this group's tools page" sync logic live in the composable so
 // group settings page and this sidebar never drift apart.
 const { adminGroup, adminTools, isToolActive } = useGroupAdminTools()
+const groupAlerts = useGroupAlerts(() => adminGroup.value?.id)
 
 function navigate(fn: () => void) {
   mobileSidebar.close()
@@ -285,10 +287,15 @@ const categoryItems = computed(() => [
                 <span class="flex-1 text-left">Настройки группы</span>
               </button>
               <button
-                @click="navigate(() => router.push({ name: 'group-settings', params: { slugOrId: (adminGroup as any).slug }, query: { section: 'tool-overview' } }))"
+                @click="navigate(() => router.push({ name: 'group-dashboard', params: { slugOrId: (adminGroup as any).slug } }))"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/65 hover:bg-brand-card/50 hover:text-white">
                 <BIcon name="LayoutDashboard" class="w-5 h-5" />
-                <span class="flex-1 text-left">Все инструменты</span>
+                <span class="flex-1 text-left">Дашборд</span>
+                <span v-if="groupAlerts.total.value > 0"
+                  class="min-w-5 h-5 px-1.5 rounded-full text-white text-[11px] font-extrabold leading-5 text-center"
+                  :class="groupAlerts.overdue.value > 0 ? 'bg-brand-error' : 'bg-brand-accent'">
+                  {{ groupAlerts.total.value > 99 ? '99+' : groupAlerts.total.value }}
+                </span>
               </button>
               <button v-for="tool in adminTools" :key="tool.key"
                 @click="navigate(tool.action)"
@@ -391,10 +398,15 @@ const categoryItems = computed(() => [
           <span class="flex-1 text-left">Настройки группы</span>
         </button>
         <button
-          @click="router.push({ name: 'group-settings', params: { slugOrId: adminGroup.slug }, query: { section: 'tool-overview' } })"
+          @click="router.push({ name: 'group-dashboard', params: { slugOrId: adminGroup.slug } })"
           class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/65 hover:bg-brand-card/50 hover:text-white">
           <BIcon name="LayoutDashboard" class="w-5 h-5" />
-          <span class="flex-1 text-left">Все инструменты</span>
+          <span class="flex-1 text-left">Дашборд</span>
+          <span v-if="groupAlerts.total.value > 0"
+            class="min-w-5 h-5 px-1.5 rounded-full text-white text-[11px] font-extrabold leading-5 text-center"
+            :class="groupAlerts.overdue.value > 0 ? 'bg-brand-error' : 'bg-brand-accent'">
+            {{ groupAlerts.total.value > 99 ? '99+' : groupAlerts.total.value }}
+          </span>
         </button>
         <button v-for="tool in adminTools" :key="tool.key"
           @click="tool.action()"

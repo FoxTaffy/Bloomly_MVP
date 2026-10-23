@@ -5,6 +5,7 @@ import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type Order, type BusinessStats } from '@/stores/groups'
 import { useMessagesStore } from '@/stores/messages'
 import * as fmt from '@/lib/format'
+import { setOrderAlerts } from '@/composables/useGroupAlerts'
 import OrderBoard from './OrderBoard.vue'
 import {
   STATUSES, STATUS_META, customerName, deadlineRelative, deadlineState, isTrackedForDeadline, needsPayment,
@@ -48,6 +49,8 @@ async function openChat(order: Order) {
 }
 
 watch(() => props.groupId, load)
+// Бейдж «просрочено» на кнопке дашборда живёт теми же данными
+watch(orders, o => setOrderAlerts(props.groupId, o), { deep: true })
 onMounted(load)
 
 // ── Метрики ─────────────────────────────────────────────────────────────────

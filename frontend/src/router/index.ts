@@ -161,6 +161,19 @@ const routes: RouteRecordRaw[] = [
     name: 'group-settings',
     component: () => import('@/views/GroupSettingsView.vue'),
     meta: { requiresAuth: true },
+    // Рабочие инструменты переехали в дашборд: старые ссылки ?section=tool-x ведут в его вкладку x
+    beforeEnter: (to) => {
+      const sec = to.query.section
+      if (typeof sec === 'string' && sec.startsWith('tool-')) {
+        return { name: 'group-dashboard', params: to.params, query: { section: sec.slice(5) }, replace: true }
+      }
+    },
+  },
+  {
+    path: '/groups/:slugOrId/dashboard',
+    name: 'group-dashboard',
+    component: () => import('@/views/GroupDashboardView.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/groups/:slugOrId/business',
@@ -177,11 +190,11 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/groups/:slugOrId/admin',
     name: 'group-admin-tools',
-    // Инструменты переехали в настройки группы: старые ссылки ?tab=x ведут в раздел tool-x
+    // Инструменты живут в дашборде группы: старые ссылки ?tab=x ведут в его вкладку x
     redirect: (to) => ({
-      name: 'group-settings',
+      name: 'group-dashboard',
       params: { slugOrId: to.params.slugOrId },
-      query: { ...(to.query.tab ? { section: `tool-${to.query.tab}` } : { section: 'tool-overview' }) },
+      query: { section: (to.query.tab as string) || 'overview' },
     }),
   },
   {

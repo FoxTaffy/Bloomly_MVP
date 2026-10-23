@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 
 const ADMIN_ROUTES = new Set([
-  'group-detail', 'group-settings',
+  'group-detail', 'group-settings', 'group-dashboard',
   'my-applications', 'my-tickets', 'my-todolist',
 ])
 
@@ -12,7 +12,7 @@ export interface AdminTool {
   key: string
   icon: string
   label: string
-  /** Matching tool section on the group settings page (`tool-<pageTab>`) — lets this button switch the section in place when already there. */
+  /** Matching tab of the group dashboard — lets this button switch the tab in place when already there. */
   pageTab?: string
   action: () => void
 }
@@ -41,10 +41,10 @@ export function useGroupAdminTools() {
     return (isOwner || isAdmin) ? g : null
   })
 
-  // Already on this group's settings page — clicking a tool should switch its section
+  // Already on this group's dashboard — clicking a tool should switch its tab
   // in place rather than navigating to a different route.
   const onAdminToolsPage = computed(() => {
-    if (route.name !== 'group-settings') return false
+    if (route.name !== 'group-dashboard') return false
     const g = adminGroup.value
     if (!g) return false
     const slugOrId = route.params.slugOrId as string
@@ -60,15 +60,15 @@ export function useGroupAdminTools() {
 
     const go = (name: string, pageTab: string | undefined, query?: Record<string, string>) =>
       () => {
-        if (pageTab && onAdminToolsPage.value) {
-          router.replace({ name: 'group-settings', params: { slugOrId: slug }, query: { section: `tool-${pageTab}` } })
-          return
+        if (pageTab) {
+          const to = { name: 'group-dashboard', params: { slugOrId: slug }, query: { section: pageTab } }
+          return onAdminToolsPage.value ? router.replace(to) : router.push(to)
         }
-        router.push({ name, ...(query ? { query } : {}), ...(name === 'group-settings' ? { params: { slugOrId: slug } } : {}) })
+        router.push({ name, ...(query ? { query } : {}) })
       }
 
     if (t === 'event') return [
-      { key: 'applications', icon: 'ClipboardList',  label: 'Заявки участников', pageTab: 'applications', action: go('my-applications', 'applications', { group: gid }) },
+      { key: 'applications', icon: 'ClipboardList',  label: 'Заявки участников', action: go('my-applications', 'applications', { group: gid }) },
       { key: 'tickets',      icon: 'Ticket',          label: 'Билеты',           pageTab: 'tickets',      action: go('my-tickets',      'tickets',      { group: gid }) },
     ]
 
@@ -98,7 +98,7 @@ export function useGroupAdminTools() {
   })
 
   function isToolActive(tool: AdminTool): boolean {
-    return !!tool.pageTab && onAdminToolsPage.value && route.query.section === `tool-${tool.pageTab}`
+    return !!tool.pageTab && onAdminToolsPage.value && route.query.section === tool.pageTab
   }
 
   return { adminGroup, adminTools, onAdminToolsPage, isToolActive }

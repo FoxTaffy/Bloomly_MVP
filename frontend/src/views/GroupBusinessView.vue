@@ -5,7 +5,6 @@ import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
-import OrdersDashboard from '@/components/groups/orders/OrdersDashboard.vue'
 import { STATUS_META } from '@/components/groups/orders/orderMeta'
 import { useGroupsStore, type Order } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
@@ -35,8 +34,12 @@ async function load() {
   try {
     await groupsStore.loadGroup(route.params.slugOrId as string)
     if (authStore.user && !groupsStore.myGroups.length) await groupsStore.loadMyGroups()
-    // Админский дашборд сам грузит заказы и сводку; здесь — только список заказчика
-    if (group.value?.business_enabled && !isAdmin.value) orders.value = await groupsStore.fetchOrders(group.value.id)
+    // Админам заказы показывает общий дашборд группы; здесь — только вид заказчика
+    if (group.value && isAdmin.value) {
+      router.replace({ name: 'group-dashboard', params: { slugOrId: route.params.slugOrId }, query: { section: 'orders' } })
+      return
+    }
+    if (group.value?.business_enabled) orders.value = await groupsStore.fetchOrders(group.value.id)
   } finally {
     loading.value = false
   }
@@ -89,7 +92,7 @@ async function submitOrder() {
           <BIcon name="ArrowLeft" class="w-4 h-4" /> Назад к группе
         </button>
 
-        <div v-if="loading" class="text-center py-16">
+        <div v-if="loading || isAdmin" class="text-center py-16">
           <div class="h-8 w-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin mx-auto" />
         </div>
 
@@ -101,27 +104,6 @@ async function submitOrder() {
           <button v-if="isOwner" @click="router.push({ name: 'group-settings', params: { slugOrId: route.params.slugOrId } })"
             class="text-brand-accent text-sm hover:underline">Включить в настройках</button>
         </div>
-
-        <!-- ── Owner/admin dashboard ────────────────────────────────────── -->
-        <template v-else-if="isAdmin">
-          <header class="flex flex-wrap items-center gap-4 mb-6">
-            <img v-if="group.avatar_url" :src="group.avatar_url" alt=""
-              class="w-12 h-12 rounded-2xl object-cover border border-brand-border shrink-0" />
-            <div v-else class="w-12 h-12 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center shrink-0">
-              <BIcon name="Briefcase" class="w-5 h-5 text-brand-accent" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <h1 class="text-2xl font-extrabold text-white tracking-tight">Заказы</h1>
-              <p class="text-sm text-white/45 truncate">{{ group.name }}</p>
-            </div>
-            <router-link :to="{ name: 'group-settings', params: { slugOrId: route.params.slugOrId } }"
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-card border border-brand-border text-xs font-semibold text-white/60 hover:text-white hover:border-white/20 transition-colors">
-              <BIcon name="Settings" class="w-3.5 h-3.5" /> Настройки группы
-            </router-link>
-          </header>
-
-          <OrdersDashboard :group-id="group.id" :group-slug="group.slug ?? group.id" />
-        </template>
 
         <!-- ── Customer view ────────────────────────────────────────────── -->
         <template v-else>
