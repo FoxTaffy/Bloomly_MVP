@@ -11,7 +11,6 @@ import { freeDeletedUsername } from '../auth/unverifiedRelease.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
 import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
 import { searchScore } from '../../lib/searchRank.js';
-import { perksFor } from '../payments/plan-perks.js';
 import { bugHunterProgress } from '../../lib/bugHunter.js';
 
 const MUSIC_MAX_BYTES = 15 * 1024 * 1024;
@@ -115,7 +114,6 @@ const PUBLIC_SELECT = {
   fav_artist:           true,
   fav_film:             true,
   subscription_tier:    true,
-  commissions_status:   true,
   profile_theme:        true,
   profile_bg_url:       true,
   profile_frame:        true,
@@ -208,11 +206,6 @@ async function assertCustomizationAllowed(id: string, d: Record<string, any>) {
     const tier = tierUser?.subscription_tier ?? 'free';
     if (wantsTheme && tier === 'free') throw Object.assign(new Error('LITE_REQUIRED'), { statusCode: 402 });
     if ((wantsFrame || wantsBg) && !['pro', 'business'].includes(tier)) throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
-  }
-  // Плашка «Заказы открыты» — перк Pro и Business; выключить (none) можно всегда, в том числе после понижения тарифа
-  if (typeof d.commissions_status === 'string' && d.commissions_status !== 'none') {
-    const u = await prisma.user.findUnique({ where: { id, deleted_at: null }, select: { subscription_tier: true } });
-    if (!perksFor(u?.subscription_tier ?? 'free').commissionsBadge) throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
   }
   if (d.profile_frame_id !== undefined && d.profile_frame_id !== null) {
     const owns = await prisma.userAvatarFrame.findFirst({
@@ -683,8 +676,6 @@ export const usersService = {
         // Ручная смена (админ или dev) — бессрочно; оплаченные периоды выдаёт модуль payments
         data: {
           subscription_tier: tier, subscription_expires_at: null,
-          // Плашка «Заказы открыты» живёт только на тарифах, которые её дают
-          ...(perksFor(tier).commissionsBadge ? {} : { commissions_status: 'none' }),
         },
         select: { id: true, subscription_tier: true },
       }),

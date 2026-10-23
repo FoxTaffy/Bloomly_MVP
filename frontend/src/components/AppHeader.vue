@@ -12,7 +12,6 @@ import { useMessagesStore } from '@/stores/messages'
 import { useWarningModalStore } from '@/stores/warningModal'
 import api from '@/api'
 import BIcon from './BIcon.vue'
-import CommissionsBadge from './CommissionsBadge.vue'
 import PostCard from './PostCard.vue'
 import { isDenNotification, denNotificationKey, DEN_NOTIFICATION_ICONS } from '@/lib/denNotifications'
 import * as fmt from '@/lib/format'
@@ -755,9 +754,7 @@ onUnmounted(() => {
                       @error="onAvatarError" />
                     <div class="min-w-0 flex-1">
                       <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
-                      <p class="text-xs text-white/55 flex items-center gap-1.5">@{{ user.username }}
-                        <CommissionsBadge v-if="user.commissions_status && user.commissions_status !== 'none'" :status="user.commissions_status" />
-                      </p>
+                      <p class="text-xs text-white/55 flex items-center gap-1.5">@{{ user.username }}</p>
                     </div>
                   </router-link>
                 </div>

@@ -831,22 +831,6 @@
                     <p class="text-[11px] text-white/35 mt-1.5">{{ langStore.t.settingsProfileDonateHint }}</p>
                   </div>
 
-                  <!-- ── Статус заказов (Pro и Business) ────── -->
-                  <div class="pt-2">
-                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">🎨 {{ langStore.t.commissionsSettingTitle }}</label>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <button v-for="opt in commissionsOptions" :key="opt.value" type="button" @click="setCommissions(opt.value)"
-                        :disabled="!canSetCommissions && opt.value !== 'none'"
-                        class="px-3 py-2 rounded-xl border text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                        :class="commissionsStatus === opt.value ? 'border-brand-accent bg-brand-accent/15 text-white' : 'border-brand-border bg-brand-bg/40 text-white/60 hover:border-brand-accent/40'">
-                        {{ opt.label }}
-                      </button>
-                    </div>
-                    <p class="text-[11px] mt-1.5" :class="canSetCommissions ? 'text-white/35' : 'text-amber-300/80'">
-                      {{ canSetCommissions ? langStore.t.commissionsSettingHint : langStore.t.commissionsNeedPro }}
-                    </p>
-                  </div>
-
                 </div>
               </section>
 
@@ -1698,28 +1682,6 @@ const langOptions = [
   { code: 'ES' as const, fi: 'es', name: 'Español' },
   { code: 'PT' as const, fi: 'br', name: 'Português' },
 ]
-
-// ── Статус заказов: плашка «Заказы открыты» (Pro и Business), применяется сразу ──
-type CommissionsStatus = 'none' | 'open' | 'waitlist' | 'closed'
-const commissionsStatus = ref<CommissionsStatus>(authStore.user?.commissions_status ?? 'none')
-const canSetCommissions = computed(() => ['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free'))
-const commissionsOptions = computed<{ value: CommissionsStatus; label: string }[]>(() => [
-  { value: 'open', label: langStore.t.commissionsOpen },
-  { value: 'waitlist', label: langStore.t.commissionsWaitlist },
-  { value: 'closed', label: langStore.t.commissionsClosed },
-  { value: 'none', label: langStore.t.commissionsNone },
-])
-async function setCommissions(value: CommissionsStatus) {
-  const previous = commissionsStatus.value
-  commissionsStatus.value = value
-  try {
-    await api.patch('/users/me', { commissions_status: value })
-    if (authStore.user) authStore.user.commissions_status = value
-  } catch {
-    commissionsStatus.value = previous
-    showToast('error', langStore.t.commissionsNeedPro)
-  }
-}
 
 // ── Payment region (used to pick alt payment methods when no card is saved) ──
 const paymentRegion = ref<string>(authStore.user?.payment_region || 'GLOBAL')

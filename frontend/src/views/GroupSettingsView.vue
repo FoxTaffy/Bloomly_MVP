@@ -2,6 +2,7 @@
 import { vStickyBottom } from '@/lib/stickyBottom'
 import { apiErrorCode, apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { rubricOptionsFor } from '@/lib/groupRubrics'
+import { topicOptionsFor, topicSelectOptions } from '@/lib/groupTopics'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import { SUPPORT_CURRENCIES } from '@/lib/paymentRegions'
 import { displayCurrency } from '@/lib/displayCurrency'
@@ -893,17 +894,9 @@ const avatarPreview = ref('')
 const bannerPreview = ref('')
 const categoryChangedAt = ref<string | null>(null)
 
-const CATEGORY_OPTIONS = computed((): { value: string; label: string }[] => [
-  { value: 'art', label: langStore.t.groupSettingsCatArt },
-  { value: 'cosplay', label: langStore.t.groupSettingsCatCosplay },
-  { value: 'fandom', label: langStore.t.groupSettingsCatFandom },
-  { value: 'dev', label: langStore.t.groupSettingsCatDev },
-  { value: 'music', label: langStore.t.groupSettingsCatMusic },
-  { value: 'fursuit', label: langStore.t.groupSettingsCatFursuit },
-  { value: 'writing', label: langStore.t.groupSettingsCatWriting },
-  { value: 'events', label: langStore.t.groupSettingsCatEvents },
-  { value: 'other', label: langStore.t.groupSettingsCatOther },
-])
+// Тематика (`category`) зависит от типа группы; у news и brand вместо неё рубрика
+const hasTopic = computed(() => topicOptionsFor(group.value?.type).length > 0)
+const topicOptions = computed(() => topicSelectOptions(group.value?.type, savedForm.category))
 
 const categoryNextChangeAt = computed(() => {
   if (!categoryChangedAt.value) return null
@@ -1143,7 +1136,7 @@ async function save() {
       deliveryInfo: form.deliveryInfo,
       completedWorks: form.completedWorks,
       guaranteeText: form.guaranteeText,
-      category: form.category || undefined,
+      category: form.category !== savedForm.category ? form.category : undefined,
       rubric: form.rubric || undefined,
       groupBgUrl: form.groupBgUrl || undefined,
       groupFrame: form.groupFrame || undefined,
@@ -1175,6 +1168,7 @@ async function save() {
         priceList: commForm.value.priceList.filter((p: { name: string }) => p.name.trim()),
       })
     }
+    if (form.category !== savedForm.category) categoryChangedAt.value = new Date().toISOString()
     snapshotToSaved()
     showToast('success', langStore.t.groupSettingsSettingsSaved)
     // If slug changed, navigate to new URL
@@ -1413,6 +1407,20 @@ async function deleteGroup() {
                         </div>
                         <p class="text-[10px] text-white/25 mt-1">{{ langStore.t.groupSettingsSlugChangeNotice }}</p>
                       </div>
+                    </div>
+                    <div v-if="hasTopic">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsTopic }}</label>
+                      <select v-model="form.category" :disabled="categoryLocked"
+                        class="field-input appearance-none"
+                        :class="categoryLocked ? 'cursor-not-allowed opacity-60' : ''">
+                        <option value="">{{ langStore.t.groupSettingsCategoryNotSelected }}</option>
+                        <option v-for="opt in topicOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                      </select>
+                      <p v-if="categoryLocked" class="text-white/30 text-xs mt-1.5 flex items-center gap-1.5">
+                        <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        {{ langStore.t.groupSettingsCategoryNextChange }} {{ categoryNextChangeAt?.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang]) }}.
+                      </p>
+                      <p v-else class="text-white/30 text-xs mt-1.5">{{ langStore.t.groupSettingsCategoryLimit }}</p>
                     </div>
                     <div v-if="rubricOptionsFor(group?.type).length">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Рубрика</label>

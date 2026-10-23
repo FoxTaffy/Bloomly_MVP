@@ -31,7 +31,6 @@ export interface PlanPerks {
   denCooldownHours: number
   freeBumpsPerMonth: number
   autoBump: boolean
-  commissionsBadge: boolean
   searchBonus: number
   postBoostsPerMonth: number
   promoCashbackBlm: number

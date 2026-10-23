@@ -150,7 +150,6 @@ export interface UserProfile {
   fav_artist: string | null
   fav_film: string | null
   subscription_tier: string
-  commissions_status?: 'none' | 'open' | 'waitlist' | 'closed'
   profile_theme: string | null
   profile_bg_url: string | null
   profile_frame: string | null

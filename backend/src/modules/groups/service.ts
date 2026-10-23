@@ -94,6 +94,17 @@ export const GROUP_RUBRICS: Partial<Record<string, readonly string[]>> = {
   brand: ['studio', 'convention', 'agency', 'publisher', 'service', 'other'],
 };
 
+// Тематика группы (`category`): список зависит от типа. У news и brand тематики нет — там рубрика.
+// Должно совпадать с frontend/src/lib/groupTopics.ts.
+export const GROUP_TOPICS: Partial<Record<string, readonly string[]>> = {
+  creative: ['artist', 'fursuit_maker', 'craftsman', 'sculptor_3d', 'animator', 'writer', 'musician', 'photographer', 'cosplayer', 'developer', 'other'],
+  shop: ['fursuits', 'art_merch', 'accessories', 'props', 'print', 'materials', 'other'],
+  event: ['convention', 'meetup', 'fursuit_walk', 'party', 'festival', 'workshop', 'charity', 'other'],
+  community: ['fandom', 'art', 'fursuit', 'cosplay', 'gaming', 'music', 'dev', 'writing', 'local', 'other'],
+  static: ['art', 'fursuit', 'cosplay', 'fandom', 'dev', 'music', 'writing', 'other'],
+};
+const TOPIC_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
 // A slug must be unique among live slugs and among the redirect aliases of other groups.
 async function assertSlugFree(slug: string, exceptGroupId?: string) {
   const clash = await prisma.group.findFirst({
@@ -605,11 +616,12 @@ export const groupService = {
       const newCategory = input.category || null;
       const current = await prisma.group.findUnique({
         where: { id: groupId },
-        select: { category: true, category_changed_at: true },
+        select: { type: true, category: true, category_changed_at: true },
       });
       if (current && current.category !== newCategory) {
-        const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
-        if (current.category_changed_at && Date.now() - current.category_changed_at.getTime() < COOLDOWN_MS) {
+        const allowed = GROUP_TOPICS[current.type];
+        if (newCategory && !allowed?.includes(newCategory)) throw httpError('Invalid group topic', 400);
+        if (current.category_changed_at && Date.now() - current.category_changed_at.getTime() < TOPIC_COOLDOWN_MS) {
           throw new Error('CATEGORY_CHANGE_COOLDOWN');
         }
         data.category_changed_at = new Date();

@@ -94,8 +94,6 @@
                 <VerificationBadge v-if="post.author.is_verified"
                   :type="post.author.verification_type"
                   icon-class="w-4 h-4 shrink-0" />
-                <CommissionsBadge v-if="post.author.commissions_status && post.author.commissions_status !== 'none'"
-                  :status="post.author.commissions_status" :username="post.author.username" link />
                 <!-- AD badge -->
                 <span v-if="post.author?.role === 'ad'"
                   class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
@@ -793,7 +791,6 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import PostFileAttachments from '@/components/PostFileAttachments.vue'
 import { isDocUrl, visualMedia, fileMedia } from '@/lib/postMedia'
-import CommissionsBadge from '@/components/CommissionsBadge.vue'
 import { useWalletStore } from '@/stores/wallet'
 import { apiErrorCode } from '@/lib/apiError'
 import * as fmt from '@/lib/format'

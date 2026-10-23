@@ -125,7 +125,7 @@ export const updateGroupHandler = async (
     return ok(reply, { group });
   } catch (e) {
     if (e instanceof Error && errMessage(e) === 'CATEGORY_CHANGE_COOLDOWN') {
-      return fail(reply, 429, 'CATEGORY_CHANGE_COOLDOWN', 'Категорию можно менять не чаще одного раза в месяц');
+      return fail(reply, 429, 'CATEGORY_CHANGE_COOLDOWN', 'Тематику можно менять не чаще одного раза в 30 дней');
     }
     return fail(reply, errStatus(e) ?? 400, 'UPDATE_GROUP_ERROR', errMessage(e));
   }

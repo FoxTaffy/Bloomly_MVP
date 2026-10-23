@@ -17,7 +17,6 @@ export interface User {
   bio?: string | null
   status?: string | null
   subscription_tier?: string
-  commissions_status?: 'none' | 'open' | 'waitlist' | 'closed'
   subscription_expires_at?: string | null
   profile_theme?: string | null
   profile_bg_url?: string | null

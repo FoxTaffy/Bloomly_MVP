@@ -96,7 +96,7 @@ export async function filterByProfilePrivacy<T extends { author_id: string }>(ro
 }
 
 /** Reusable author select for posts — includes verification fields */
-const AUTHOR_SELECT = { id: true, username: true, display_name: true, avatar_url: true, is_verified: true, verification_type: true, deceased_at: true, commissions_status: true } as const;
+const AUTHOR_SELECT = { id: true, username: true, display_name: true, avatar_url: true, is_verified: true, verification_type: true, deceased_at: true } as const;
 
 /** Authors can edit a post's content only within this window after creation */
 export const POST_EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;

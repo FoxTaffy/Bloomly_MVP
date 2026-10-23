@@ -460,13 +460,6 @@
                       <Sparkles class="w-2.5 h-2.5" />
                       {{ viewedProfile.subscription_tier === 'lite' ? 'Lite' : viewedProfile.subscription_tier === 'pro' ? 'Pro' : 'Business' }}
                     </span>
-                    <!-- Статус заказов (Pro и Business): у владельца — быстрый переключатель, у гостей — ссылка в магазин -->
-                    <button v-if="isOwnProfile && canSetCommissions" type="button" @click="toggleCommissions"
-                      class="inline-flex items-center" :title="langStore.t.commissionsSettingTitle">
-                      <CommissionsBadge v-if="viewedProfile.commissions_status && viewedProfile.commissions_status !== 'none'" :status="viewedProfile.commissions_status" size="md" />
-                      <span v-else class="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-dashed border-white/20 text-white/45 font-bold hover:text-white/80 transition">🎨 {{ langStore.t.commissionsOpen }}?</span>
-                    </button>
-                    <CommissionsBadge v-else :status="viewedProfile.commissions_status" :username="viewedProfile.username" :link="!isOwnProfile" size="md" />
                     <!-- Artist Badge -->
                     <AppBadge
                       v-if="viewedProfile.badge_level && viewedProfile.badge_level !== 'none'"
@@ -2436,7 +2429,6 @@ import BIcon from '@/components/BIcon.vue'
 import AvatarFrameOverlay from '@/components/AvatarFrameOverlay.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
-import CommissionsBadge from '@/components/CommissionsBadge.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import StoryViewer from '@/components/StoryViewer.vue'
@@ -2848,17 +2840,6 @@ async function onAvatarFileChange(e: Event) {
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isOwnProfile = computed(() => !!authStore.user && authStore.user.id === viewedProfile.value?.id)
-// Плашка «Заказы открыты» — перк Pro и Business
-const canSetCommissions = computed(() => ['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free'))
-async function toggleCommissions() {
-  if (!viewedProfile.value || !canSetCommissions.value) return
-  const next = viewedProfile.value.commissions_status === 'open' ? 'none' : 'open'
-  try {
-    await api.patch('/users/me', { commissions_status: next })
-    viewedProfile.value.commissions_status = next
-    if (authStore.user) authStore.user.commissions_status = next
-  } catch {}
-}
 
 const fursonaHasPersonalityContent = computed(() => {
   const f = profileFursona.value

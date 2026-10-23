@@ -195,8 +195,6 @@ model User {
   groups_pinned_only             Boolean                   @default(false)
   last_seen_at                   DateTime?
   payment_region                 String?                   @db.VarChar(10)
-  /// Плашка «Заказы открыты» (Pro и Business): none | open | waitlist | closed. Сбрасывается в none, когда тариф перестаёт её давать
-  commissions_status             String                    @default("none") @db.VarChar(10)
   paymentMethods                 PaymentMethod[]
   subscriptionPlans              SubscriptionPlan[]
   payments                       Payment[]

@@ -156,7 +156,6 @@ async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period:
     where: { id: userId },
     data: {
       subscription_tier: tier, subscription_expires_at: expiresAt, subscription_period: period,
-      ...(perksFor(tier).commissionsBadge ? {} : { commissions_status: 'none' }),
       // Период оплачен — счётчик неудачных автосписаний обнуляется
       subscription_renew_attempts: 0, subscription_next_renew_at: null,
     },
@@ -766,7 +765,7 @@ export const paymentsService = {
         const res = await tx.user.updateMany({
           where: { id, ...expiredWhere },
           data: {
-            subscription_tier: 'free', subscription_expires_at: null, commissions_status: 'none',
+            subscription_tier: 'free', subscription_expires_at: null,
             subscription_auto_renew: false, subscription_renew_attempts: 0, subscription_next_renew_at: null,
           },
         });

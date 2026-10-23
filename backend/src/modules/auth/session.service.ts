@@ -11,7 +11,7 @@ export const hashToken = (raw: string) => createHash('sha256').update(raw).diges
 export const FULL_USER_SELECT = {
   id: true, username: true, email: true, role: true,
   display_name: true, avatar_url: true, avatar_video_url: true, bio: true, status: true,
-  subscription_tier: true, subscription_expires_at: true, commissions_status: true, profile_theme: true, profile_bg_url: true,
+  subscription_tier: true, subscription_expires_at: true, profile_theme: true, profile_bg_url: true,
   profile_frame: true, is_verified: true, verification_type: true,
   badge_type: true, email_verified: true, onboarding_done: true,
   payment_region: true, birth_date: true, two_factor_method: true, created_at: true,

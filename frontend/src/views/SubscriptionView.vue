@@ -86,7 +86,7 @@ const plans = computed<Plan[]>(() => {
       gradient: 'from-brand-accent/18 to-brand-accent/3',
       iconBg: 'bg-brand-accent/15 text-brand-accent-minus border-brand-accent/30',
       featured: true,
-      features: [t.featAllLite, t.featFilesPro, t.featCommissionsOpen, t.featSearchPriority, t.featSteamTheme, t.featCustomBg, t.featAvatarFrames, t.featProBadge, t.featPostAnalytics, t.featDenFastBumps, t.featAdDiscount15, t.featWithdraw2],
+      features: [t.featAllLite, t.featFilesPro, t.featSearchPriority, t.featSteamTheme, t.featCustomBg, t.featAvatarFrames, t.featProBadge, t.featPostAnalytics, t.featDenFastBumps, t.featAdDiscount15, t.featWithdraw2],
     },
     {
       id: 'business', label: 'Business',

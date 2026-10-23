@@ -65,7 +65,6 @@ const LISTING_SELECT = {
       avatar_url: true,
       is_verified: true,
       verification_type: true,
-      commissions_status: true,
     },
   },
   group: { select: { id: true, slug: true, name: true, avatar_url: true, safe_deals_enabled: true } },
@@ -1070,7 +1069,7 @@ export const dealersDenService = {
       where: { username },
       select: {
         id: true, username: true, display_name: true, avatar_url: true,
-        is_verified: true, badge_type: true, created_at: true, commissions_status: true,
+        is_verified: true, badge_type: true, created_at: true,
         denTrustScore: true,
         den_frozen: true,
       },
@@ -1101,7 +1100,6 @@ export const dealersDenService = {
         denTrustScore: user.denTrustScore,
         createdAt: user.created_at,
         den_frozen: user.den_frozen,
-        commissions_status: user.commissions_status,
       },
       stats: {
         totalSales,
