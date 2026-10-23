@@ -12,10 +12,20 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
+import LotApplicationsPanel from '@/components/groups/panels/LotApplicationsPanel.vue'
+import TicketsPanel from '@/components/groups/panels/TicketsPanel.vue'
+import TodolistPanel from '@/components/groups/panels/TodolistPanel.vue'
+import OrdersPanel from '@/components/groups/panels/OrdersPanel.vue'
+import OverviewPanel from '@/components/groups/panels/OverviewPanel.vue'
+import BalancePanel from '@/components/groups/panels/BalancePanel.vue'
+import InboxPanel from '@/components/groups/panels/InboxPanel.vue'
+import ScheduledPanel from '@/components/groups/panels/ScheduledPanel.vue'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
 import { useGroupsStore, type GroupMember, type CustomRole, type GroupPermission, type MemberRole } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore } from '@/stores/shop'
+import { useMessagesStore } from '@/stores/messages'
+import { useListingApplicationsStore } from '@/stores/listingApplications'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useConfirm } from '@/composables/useConfirm'
 import { readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
@@ -27,6 +37,8 @@ const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 const shopStore = useShopStore()
+const messagesStore = useMessagesStore()
+const lotApplications = useListingApplicationsStore()
 const { confirmDialog } = useConfirm()
 
 const nsfwMode = useNsfwMode().nsfwEnabled
@@ -102,11 +114,47 @@ const filteredNavSections = computed(() => {
 // never sees or touches donations, bank card, member-visibility or group deletion.
 const OWNER_ONLY_SECTIONS = new Set(['sec-finance', 'sec-donations', 'sec-danger'])
 
+// ── Инструменты группы (бывшая страница «Инструменты») ─────────────────────
+type ToolKind = 'overview' | 'lot-applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'scheduled'
+interface ToolSection { id: string; label: string; color: string; icon: string; kind: ToolKind }
+const TOOL_PREFIX = 'tool-'
+
+const toolSections = computed<ToolSection[]>(() => {
+  const mk = (key: string, label: string, icon: string, kind: ToolKind, color: string): ToolSection =>
+    ({ id: TOOL_PREFIX + key, label, icon, kind, color })
+  const overview = mk('overview', 'Обзор', 'BarChart3', 'overview', '#60a5fa')
+  const inbox = mk('inbox', 'Обращения', 'Inbox', 'inbox', '#f472b6')
+  const scheduled = mk('scheduled', 'Отложенные', 'CalendarClock', 'scheduled', '#fbbf24')
+  const balance = mk('balance', 'Баланс', 'Wallet', 'balance', '#10b981')
+  const t: string | undefined = group.value?.type
+  let list: ToolSection[]
+  if (t === 'event') list = [overview, mk('tickets', 'Билеты', 'Ticket', 'tickets', '#a78bfa'), inbox, scheduled, balance]
+  else if (t === 'artist' || t === 'creative') list = [
+    overview,
+    mk('orders', 'Заказы', t === 'artist' ? 'Palette' : 'Scissors', 'orders', '#34d399'),
+    mk('todo', 'Todolist', 'CheckSquare', 'todolist', '#38bdf8'),
+    inbox, scheduled, balance,
+  ]
+  else if (t === 'shop') list = [overview, mk('orders', 'Заказы', 'Package', 'orders', '#34d399'), inbox, scheduled, balance]
+  else list = [overview, inbox, scheduled, balance]
+  // Заявки на лоты — только у групп с подключённым Dealers Den, сразу после «Обзора»
+  if (group.value?.den_enabled) list.splice(1, 0, mk('lot-applications', 'Заявки на лоты', 'Send', 'lot-applications', '#fb923c'))
+  return list
+})
+const lotPendingCount = computed(() => (group.value ? lotApplications.pendingByGroup[group.value.id] ?? 0 : 0))
+const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
+function toolBadge(sec: any): number {
+  if (sec.kind === 'lot-applications') return lotPendingCount.value
+  if (sec.kind === 'inbox') return inboxCount.value
+  return 0
+}
+
 const sections = computed(() => {
-  let s = [...baseSections.value]
+  let s: any[] = [...baseSections.value]
   if (group.value?.type === 'event') s.push(...eventSections.value.filter((x: any) => !x.hidden))
   if (group.value?.type === 'creative') s.push(...creativeSections.value)
   if (group.value?.type === 'shop') s.push(...shopSections.value)
+  s.push(...toolSections.value)
   s.push(...tailSections.value.filter((x: any) => !x.hidden))
   if (!isOwner.value) s = s.filter((x: any) => !OWNER_ONLY_SECTIONS.has(x.id))
   return s
@@ -543,6 +591,9 @@ async function toggleSoonVisibility(eventId: string) {
   soonBadgesLoaded.value = false
   await loadSoonBadges()
 }
+watch(() => route.query.section, (sec) => {
+  if (typeof sec === 'string' && sec !== openSection.value && sections.value.some(s => s.id === sec)) openSec(sec)
+})
 function openSec(id: string) {
   openSection.value = id
   if (id === 'sec-soon') loadSoonBadges()
@@ -1016,6 +1067,10 @@ async function load() {
 }
 onMounted(async () => {
   await load()
+  if (group.value) {
+    if (group.value.den_enabled) lotApplications.fetchPendingCount(group.value.id)
+    messagesStore.fetchGroupInboxCount(group.value.id)
+  }
   const sec = route.query.section as string | undefined
   if (sec && sections.value.some(s => s.id === sec)) openSec(sec)
 })
@@ -1284,13 +1339,20 @@ async function deleteGroup() {
                     <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-all"
                       :style="openSection === sec.id ? `background:${sec.color}30` : ''"
                       :class="openSection !== sec.id ? 'group-hover:bg-white/5' : ''">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      <BIcon v-if="sec.icon" :name="sec.icon" class="w-3.5 h-3.5"
+                        :style="openSection === sec.id ? `color:${sec.color}` : ''"
+                        :class="openSection !== sec.id ? 'text-white/55 group-hover:text-white' : ''" />
+                      <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                         :style="openSection === sec.id ? `color:${sec.color}` : ''"
                         :class="openSection !== sec.id ? 'text-white/55 group-hover:text-white' : ''">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sec.iconPath" />
                       </svg>
                     </div>
                     <span class="flex-1 text-left">{{ sec.label }}</span>
+                    <span v-if="toolBadge(sec) > 0"
+                      class="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-brand-error text-white text-[10px] font-extrabold leading-none">
+                      {{ toolBadge(sec) > 99 ? '99+' : toolBadge(sec) }}
+                    </span>
                     <div v-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full shrink-0" :style="`background:${sec.color}`"></div>
                   </button>
                 </nav>
@@ -1316,6 +1378,7 @@ async function deleteGroup() {
                   :class="openSection === sec.id ? 'text-white border-transparent shadow-lg' : 'text-white/55 border-brand-border hover:border-white/20 bg-brand-card'"
                   :style="openSection === sec.id ? `background:${sec.color};box-shadow:0 4px 12px ${sec.color}44` : ''">
                   {{ sec.label }}
+                  <span v-if="toolBadge(sec) > 0" class="ml-1 px-1 rounded-full bg-brand-error text-white text-[10px] font-extrabold">{{ toolBadge(sec) > 99 ? '99+' : toolBadge(sec) }}</span>
                 </button>
               </div>
 
@@ -3186,6 +3249,22 @@ async function deleteGroup() {
                 </section>
 
               </form>
+
+              <!-- ═══ § ИНСТРУМЕНТЫ (вне формы: у панелей свои кнопки и сохранение) ═══ -->
+              <template v-for="sec in toolSections" :key="sec.id">
+                <section v-if="openSection === sec.id" class="stack-y-4">
+                  <OverviewPanel v-if="sec.kind === 'overview'" :group-id="group.id" />
+                  <LotApplicationsPanel v-else-if="sec.kind === 'lot-applications'" :group-id="group.id" />
+                  <TicketsPanel v-else-if="sec.kind === 'tickets'" :group-id="group.id" />
+                  <TodolistPanel v-else-if="sec.kind === 'todolist'" :group-id="group.id" />
+                  <OrdersPanel v-else-if="sec.kind === 'orders'"
+                    :group-id="group.id" :group-slug="group.slug ?? group.id" :business-enabled="group.business_enabled" />
+                  <BalancePanel v-else-if="sec.kind === 'balance'"
+                    :group-id="group.id" :group-slug="group.slug ?? group.id" :donations-enabled="!!group.donations_enabled" />
+                  <InboxPanel v-else-if="sec.kind === 'inbox'" :group-id="group.id" />
+                  <ScheduledPanel v-else-if="sec.kind === 'scheduled'" :group-id="group.id" />
+                </section>
+              </template>
             </div><!-- /form column -->
           </div><!-- /flex-row-reverse -->
         </template>

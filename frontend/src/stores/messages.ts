@@ -799,7 +799,7 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   // groupId → number of "Обращения" threads currently waiting on a staff reply. Powers the
-  // badges on GroupDetailView's "Обращения" button, the inbox tab in GroupAdminToolsView,
+  // badges on GroupDetailView's "Обращения" button, the inbox section in group settings,
   // the aggregate badge on the sidebar's "Группы" item, and per-card badges on the groups grid.
   const groupInboxCounts = ref<Record<string, number>>({})
   async function fetchGroupInboxCount(groupId: string): Promise<number> {

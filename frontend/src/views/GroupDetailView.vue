@@ -835,7 +835,7 @@ function showDmError(message: string) {
 async function openGroupChatOrInbox() {
   if (!group.value) return
   if (isAdmin.value) {
-    router.push({ name: 'group-admin-tools', params: { slugOrId: group.value.slug || group.value.id }, query: { tab: 'inbox' } })
+    router.push({ name: 'group-settings', params: { slugOrId: group.value.slug || group.value.id }, query: { section: 'tool-inbox' } })
     return
   }
   if (dmLoading.value) return
@@ -1118,7 +1118,7 @@ const vClickOutside = {
                       {{ dmLoading ? langStore.t.groupDetailOpeningEllipsis : langStore.t.groupDetailMessageGroupBtn }}
                     </button>
                     <button v-if="isAdmin && group.den_enabled"
-                      @click="router.push({ name: 'group-admin-tools', params: { slugOrId: group.slug || group.id }, query: { tab: 'lot-applications' } })"
+                      @click="router.push({ name: 'group-settings', params: { slugOrId: group.slug || group.id }, query: { section: 'tool-lot-applications' } })"
                       :class="['relative inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all',
                         lotPendingCount > 0
                           ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/15'
@@ -1946,7 +1946,7 @@ const vClickOutside = {
                     v-model="selectedListing" :group-id="group.id" :can-create="isOwner" />
                   <p v-if="createPostError" class="px-1 text-xs text-brand-error" role="alert">{{ createPostError }}</p>
 
-                  <MediaUpload ref="groupMediaUploadRef" type="posts" :multiple="true" :max-files="20" @uploaded="onGroupMediaUploaded" />
+                  <MediaUpload ref="groupMediaUploadRef" type="posts" documents :multiple="true" :max-files="20" @uploaded="onGroupMediaUploaded" />
 
                   <!-- Tags row -->
                   <div v-if="newPostTags.length" class="flex flex-wrap gap-1.5">

@@ -177,8 +177,12 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/groups/:slugOrId/admin',
     name: 'group-admin-tools',
-    component: () => import('@/views/GroupAdminToolsView.vue'),
-    meta: { requiresAuth: true },
+    // Инструменты переехали в настройки группы: старые ссылки ?tab=x ведут в раздел tool-x
+    redirect: (to) => ({
+      name: 'group-settings',
+      params: { slugOrId: to.params.slugOrId },
+      query: { ...(to.query.tab ? { section: `tool-${to.query.tab}` } : { section: 'tool-overview' }) },
+    }),
   },
   {
     path: '/events/:eventId',

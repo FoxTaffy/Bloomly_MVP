@@ -224,7 +224,7 @@ const onClick = async (n: any) => {
       : `/dealers-den/${n.meta.listingId}`)
   }
   if (n.type === 'den_lot_application' && n.meta?.groupSlug) {
-    router.push({ name: 'group-admin-tools', params: { slugOrId: n.meta.groupSlug }, query: { tab: 'lot-applications' } })
+    router.push({ name: 'group-settings', params: { slugOrId: n.meta.groupSlug }, query: { section: 'tool-lot-applications' } })
   }
 }
 

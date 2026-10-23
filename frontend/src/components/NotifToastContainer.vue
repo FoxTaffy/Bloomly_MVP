@@ -16,7 +16,7 @@ function onClick(t: typeof toasts.value[0]) {
   } else if (t.isGroupDm && t.groupSlug) {
     // A member wrote to the group — staff go straight to the shared "Обращения" inbox,
     // never to /messages (they aren't a participant of the member's personal thread).
-    router.push({ name: 'group-admin-tools', params: { slugOrId: t.groupSlug }, query: { tab: 'inbox' } })
+    router.push({ name: 'group-settings', params: { slugOrId: t.groupSlug }, query: { section: 'tool-inbox' } })
   } else if (t.convId) {
     router.push({ name: 'messages', query: { c: t.convId } })
   } else if (t.type === 'RELATIONSHIP_REQUEST') {
