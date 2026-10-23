@@ -15,7 +15,6 @@ import SoonBadge from '@/components/groups/SoonBadge.vue'
 import LotApplicationsPanel from '@/components/groups/panels/LotApplicationsPanel.vue'
 import TicketsPanel from '@/components/groups/panels/TicketsPanel.vue'
 import TodolistPanel from '@/components/groups/panels/TodolistPanel.vue'
-import OrdersPanel from '@/components/groups/panels/OrdersPanel.vue'
 import OverviewPanel from '@/components/groups/panels/OverviewPanel.vue'
 import BalancePanel from '@/components/groups/panels/BalancePanel.vue'
 import InboxPanel from '@/components/groups/panels/InboxPanel.vue'
@@ -595,6 +594,11 @@ watch(() => route.query.section, (sec) => {
   if (typeof sec === 'string' && sec !== openSection.value && sections.value.some(s => s.id === sec)) openSec(sec)
 })
 function openSec(id: string) {
+  // «Заказы» — отдельный дашборд, а не раздел настроек
+  if (id === TOOL_PREFIX + 'orders' && group.value) {
+    router.push({ name: 'group-business', params: { slugOrId: group.value.slug ?? group.value.id } })
+    return
+  }
   openSection.value = id
   if (id === 'sec-soon') loadSoonBadges()
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1353,7 +1357,8 @@ async function deleteGroup() {
                       class="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-brand-error text-white text-[10px] font-extrabold leading-none">
                       {{ toolBadge(sec) > 99 ? '99+' : toolBadge(sec) }}
                     </span>
-                    <div v-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full shrink-0" :style="`background:${sec.color}`"></div>
+                    <BIcon v-if="sec.kind === 'orders'" name="ArrowUpRight" class="w-3.5 h-3.5 shrink-0 text-white/30 group-hover:text-white/70 transition-colors" />
+                    <div v-else-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full shrink-0" :style="`background:${sec.color}`"></div>
                   </button>
                 </nav>
               </div>
@@ -3257,8 +3262,6 @@ async function deleteGroup() {
                   <LotApplicationsPanel v-else-if="sec.kind === 'lot-applications'" :group-id="group.id" />
                   <TicketsPanel v-else-if="sec.kind === 'tickets'" :group-id="group.id" />
                   <TodolistPanel v-else-if="sec.kind === 'todolist'" :group-id="group.id" />
-                  <OrdersPanel v-else-if="sec.kind === 'orders'"
-                    :group-id="group.id" :group-slug="group.slug ?? group.id" :business-enabled="group.business_enabled" />
                   <BalancePanel v-else-if="sec.kind === 'balance'"
                     :group-id="group.id" :group-slug="group.slug ?? group.id" :donations-enabled="!!group.donations_enabled" />
                   <InboxPanel v-else-if="sec.kind === 'inbox'" :group-id="group.id" />

@@ -5,8 +5,9 @@ import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
-import OrderQueue from '@/components/groups/OrderQueue.vue'
-import { useGroupsStore, type Order, type OrderStatus, type BusinessStats } from '@/stores/groups'
+import OrdersDashboard from '@/components/groups/orders/OrdersDashboard.vue'
+import { STATUS_META } from '@/components/groups/orders/orderMeta'
+import { useGroupsStore, type Order } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useMessagesStore } from '@/stores/messages'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -28,71 +29,23 @@ const isAdmin = computed(() => {
 
 const loading = ref(true)
 const orders = ref<Order[]>([])
-const stats = ref<BusinessStats | null>(null)
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  WAITING: 'Ожидание', SKETCH: 'Скетч', LINEART: 'Лайнарт', COLORING: 'Раскраска', FINISHED: 'Готово',
-}
-
-const deadlineList = computed(() =>
-  orders.value
-    // Принятые заявки попадают сюда сразу, даже пока срок не назначен (он ставится при старте работы)
-    .filter(o => o.status !== 'FINISHED' && (o.deadline_at || (o.form_data as { source?: string } | null)?.source === 'listing_application'))
-    .sort((a, b) => (a.deadline_at ? new Date(a.deadline_at).getTime() : Infinity) - (b.deadline_at ? new Date(b.deadline_at).getTime() : Infinity)),
-)
-
-function deadlineState(order: Order): 'overdue' | 'soon' | null {
-  if (!order.deadline_at) return null
-  const diffMs = new Date(order.deadline_at).getTime() - Date.now()
-  if (diffMs < 0) return 'overdue'
-  if (diffMs < 24 * 60 * 60 * 1000) return 'soon'
-  return null
-}
-
-async function loadOrders() {
-  if (!group.value) return
-  orders.value = await groupsStore.fetchOrders(group.value.id)
-}
-
-async function loadStats() {
-  if (!group.value || !isAdmin.value) return
-  stats.value = await groupsStore.fetchBusinessStats(group.value.id)
-}
 
 async function load() {
   loading.value = true
   try {
     await groupsStore.loadGroup(route.params.slugOrId as string)
     if (authStore.user && !groupsStore.myGroups.length) await groupsStore.loadMyGroups()
-    if (group.value?.business_enabled) {
-      await loadOrders()
-      await loadStats()
-    }
+    // Админский дашборд сам грузит заказы и сводку; здесь — только список заказчика
+    if (group.value?.business_enabled && !isAdmin.value) orders.value = await groupsStore.fetchOrders(group.value.id)
   } finally {
     loading.value = false
   }
 }
 onMounted(load)
 
-function onOrderMoved(updated: Order) {
-  const i = orders.value.findIndex(o => o.id === updated.id)
-  if (i !== -1) orders.value[i] = updated
-  loadStats()
-}
-
-function onOrderRemoved(id: string) {
-  orders.value = orders.value.filter(o => o.id !== id)
-  loadStats()
-}
-
 async function openChat(order: Order) {
-  if (isAdmin.value && group.value) {
-    // Персонал пишет заказчику от лица группы (чат во вкладке «Группы» у заказчика)
-    await messagesStore.openGroupThread(group.value.id, order.customer_id)
-  } else {
-    if (!order.conversation_id) return
-    await messagesStore.selectConversation(order.conversation_id)
-  }
+  if (!order.conversation_id) return
+  await messagesStore.selectConversation(order.conversation_id)
   router.push({ name: 'messages' })
 }
 
@@ -151,62 +104,23 @@ async function submitOrder() {
 
         <!-- ── Owner/admin dashboard ────────────────────────────────────── -->
         <template v-else-if="isAdmin">
-          <div class="flex items-center gap-1.5 mb-4">
-            <BIcon name="Briefcase" class="w-4 h-4 text-brand-accent" />
-            <h1 class="text-lg font-bold text-white">Бизнес</h1>
-          </div>
+          <header class="flex flex-wrap items-center gap-4 mb-6">
+            <img v-if="group.avatar_url" :src="group.avatar_url" alt=""
+              class="w-12 h-12 rounded-2xl object-cover border border-brand-border shrink-0" />
+            <div v-else class="w-12 h-12 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center shrink-0">
+              <BIcon name="Briefcase" class="w-5 h-5 text-brand-accent" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <h1 class="text-2xl font-extrabold text-white tracking-tight">Заказы</h1>
+              <p class="text-sm text-white/45 truncate">{{ group.name }}</p>
+            </div>
+            <router-link :to="{ name: 'group-settings', params: { slugOrId: route.params.slugOrId } }"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-card border border-brand-border text-xs font-semibold text-white/60 hover:text-white hover:border-white/20 transition-colors">
+              <BIcon name="Settings" class="w-3.5 h-3.5" /> Настройки группы
+            </router-link>
+          </header>
 
-          <!-- Stats strip -->
-          <div v-if="stats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <div class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3">
-              <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Посты</p>
-              <p class="text-xl font-bold text-white mt-0.5">{{ stats.postsCount }}</p>
-            </div>
-            <div class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3">
-              <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Сообщения</p>
-              <p class="text-xl font-bold text-white mt-0.5">{{ stats.messagesCount }}</p>
-            </div>
-            <div class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3">
-              <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Заказы</p>
-              <p class="text-xl font-bold text-white mt-0.5">{{ orders.length }}</p>
-            </div>
-            <div class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3">
-          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Средний срок</p>
-          <template v-if="stats.completion.avgDays !== null">
-            <p class="text-xl font-bold text-white mt-0.5">{{ stats.completion.avgDays }} дн.</p>
-            <p class="text-[10px] text-white/35 mt-0.5">по {{ stats.completion.count }} работам<span v-if="stats.completion.onTimePercent !== null"> · в срок {{ stats.completion.onTimePercent }}%</span></p>
-          </template>
-          <template v-else>
-            <p class="text-sm font-bold text-white/50 mt-1">{{ stats.completion.count }} из {{ stats.completion.required }}</p>
-            <div class="h-1 rounded-full bg-white/8 mt-1.5 overflow-hidden"><div class="h-full bg-brand-accent rounded-full" :style="{ width: Math.min(100, stats.completion.count / stats.completion.required * 100) + '%' }" /></div>
-          </template>
-        </div>
-          </div>
-
-          <OrderQueue :group-id="group.id" :is-admin="true" :orders="orders" :avg-days="stats?.completion.avgDays ?? null"
-            @open-chat="openChat" @moved="onOrderMoved" @removed="onOrderRemoved" />
-
-          <!-- Deadlines -->
-          <div v-if="deadlineList.length" class="mt-6">
-            <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 px-1">Дедлайны</p>
-            <div class="stack-y-1.5">
-              <div v-for="order in deadlineList" :key="order.id"
-                class="flex items-center justify-between bg-brand-card border border-brand-border rounded-xl px-3.5 py-2.5">
-                <div class="min-w-0">
-                  <p class="text-sm font-semibold text-white truncate">{{ order.title }}</p>
-                  <p class="text-[11px] text-white/40">{{ order.customer.display_name || order.customer.username }} · {{ STATUS_LABEL[order.status] }}</p>
-                </div>
-                <span class="text-xs font-bold px-2 py-1 rounded-lg shrink-0"
-                  :class="{
-                    'bg-brand-error/15 text-brand-error': deadlineState(order) === 'overdue',
-                    'bg-amber-500/15 text-amber-400': deadlineState(order) === 'soon',
-                    'bg-white/5 text-white/50': !deadlineState(order),
-                  }">
-                  {{ order.deadline_at ? new Date(order.deadline_at!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'срок не задан' }}
-                </span>
-              </div>
-            </div>
-          </div>
+          <OrdersDashboard :group-id="group.id" :group-slug="group.slug ?? group.id" />
         </template>
 
         <!-- ── Customer view ────────────────────────────────────────────── -->
@@ -241,7 +155,7 @@ async function submitOrder() {
               class="flex items-center justify-between bg-brand-card border border-brand-border rounded-xl px-3.5 py-2.5">
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-white truncate">{{ order.title }}</p>
-                <p class="text-[11px] text-white/40">{{ STATUS_LABEL[order.status] }}</p>
+                <p class="text-[11px] text-white/40">{{ STATUS_META[order.status].label }}</p>
               </div>
               <button @click="openChat(order)"
                 class="text-[11px] flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 text-white/55 hover:bg-white/10 hover:text-white transition-all shrink-0">
