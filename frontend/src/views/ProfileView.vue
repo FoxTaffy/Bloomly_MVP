@@ -302,7 +302,7 @@
                       @play="isStatusMusicPlaying = true" @pause="isStatusMusicPlaying = false" @ended="isStatusMusicPlaying = false" />
                   </div>
 
-                  <div class="absolute z-20 top-[-2.75rem] left-[7.5rem] right-4 md:top-[-3rem] md:left-[10.5rem] md:right-6">
+                  <div class="absolute z-20 top-[-2.75rem] left-[7.5rem] right-32 md:top-[-3rem] md:left-[10.5rem] md:right-40">
                       <!-- Status bubble — to the right of the avatar -->
                       <Transition name="status-pop">
                         <div v-if="isOwnProfile || hasActiveStatus"
