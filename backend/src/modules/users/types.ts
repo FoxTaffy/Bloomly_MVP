@@ -107,6 +107,7 @@ export interface UpdateUserInput {
   fav_artist?: string | null;
   fav_film?: string | null;
   profile_theme?: string | null;
+  commissions_status?: 'none' | 'open' | 'waitlist' | 'closed';
   profile_bg_url?: string | null;
   profile_frame?: string | null;
   artist_since?: string | null;

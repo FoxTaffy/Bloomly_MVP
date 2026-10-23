@@ -12,6 +12,7 @@
         <div class="seller-meta">
           <div class="seller-name-row">
             <h1 class="seller-name">{{ data.user.displayName || data.user.username }}</h1>
+            <CommissionsBadge v-if="data.user.commissions_status && data.user.commissions_status !== 'none'" :status="data.user.commissions_status" size="md" />
             <span v-if="data.user.isVerified" class="verified-badge">✓ {{ langStore.t.verBadgeGenericLabel }}</span>
           </div>
           <p class="seller-username">@{{ data.user.username }}</p>
@@ -67,6 +68,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useDealersDenStore } from '../stores/dealersDen'
+import CommissionsBadge from '../components/CommissionsBadge.vue'
 import { useLangStore } from '../stores/lang'
 import DenTrustBadge from '../components/DenTrustBadge.vue'
 import DenReviewCard from '../components/DenReviewCard.vue'

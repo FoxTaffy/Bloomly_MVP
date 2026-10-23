@@ -3,8 +3,10 @@ import prisma from './config/prisma.js';
 import { patrolSuspiciousActivity } from './modules/automod/service.js';
 import { activityService } from './modules/activities/service.js';
 import { dealersDenService } from './modules/dealers-den/service.js';
+import { publishQueuedListings, runAutoBumps } from './modules/dealers-den/feed.service.js';
 import { pollSupportInbox } from './modules/support/mailPoller.js';
 import { scheduledPostService } from './modules/posts/scheduledService.js';
+import { cleanupStaleUploadSessions } from './modules/media/chunked.js';
 import { cleanupSoftDeletedRows, cleanupExpiredStories } from './jobs/cleanup.js';
 import { logger } from './lib/logger.js';
 import { paymentsService } from './modules/payments/service.js';
@@ -37,6 +39,12 @@ const JOBS: CronJob[] = [
     logger.info('[CRON] DB Cleanup completed successfully.');
   } },
 
+  // Брошенные чанковые загрузки (без активности дольше 3 часов): удаляем сессии и временные файлы
+  { name: 'chunked upload cleanup', schedule: '*/30 * * * *', run: async () => {
+    const n = await cleanupStaleUploadSessions();
+    if (n > 0) logger.info(`[CRON] Chunked uploads: removed ${n} stale session(s)`);
+  } },
+
   { name: 'story cleanup', schedule: '30 3 * * *', announce: true, run: cleanupExpiredStories },
 
   { name: 'AutoMod patrol', schedule: '*/15 * * * *', run: patrolSuspiciousActivity },
@@ -52,6 +60,18 @@ const JOBS: CronJob[] = [
 
   // Den auctions: close auctions past their end time (winner = top bid)
   { name: 'closeExpiredAuctions', schedule: '*/5 * * * *', run: () => dealersDenService.closeExpiredAuctions() },
+
+  // Den feed: карточки из очереди выходят в общую ленту, когда прошёл кулдаун группы
+  { name: 'den feed queue', schedule: '*/1 * * * *', run: async () => {
+    const n = await publishQueuedListings();
+    if (n > 0) logger.info(`[CRON] Den feed: published ${n} queued listing(s)`);
+  } },
+
+  // Den feed: автоподнятие карточек (тариф Business)
+  { name: 'den auto-bump', schedule: '*/10 * * * *', run: async () => {
+    const n = await runAutoBumps();
+    if (n > 0) logger.info(`[CRON] Den auto-bump: ${n} listing(s)`);
+  } },
 
   // Support inbox: poll bloomly_support@pm.me (via Proton Bridge) for new/replied messages
   { name: 'support inbox poll', schedule: '*/1 * * * *', run: pollSupportInbox },

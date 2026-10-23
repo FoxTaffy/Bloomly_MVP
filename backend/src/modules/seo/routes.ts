@@ -8,6 +8,7 @@
  *  GET /og/post/:id            — HTML с контентом и OG-тегами поста (боты-превьюшки и поисковые краулеры;
  *  GET /og/profile/:username     nginx направляет их сюда по User-Agent)
  *  GET /og/group/:slugOrId     — то же для группы
+ *  GET /og/listing/:id         — то же для лота Dealers' Den
  *  Несуществующий / закрытый объект → настоящий 404 (а не soft-404 с оболочкой SPA).
  */
 
@@ -82,6 +83,7 @@ ${ld}</head>
 </html>`
 }
 
+import { firstVisualMedia } from '../../lib/postMedia.js';
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif)(\?|$)/i
 
 function urlEntry(loc: string, opts: { lastmod?: Date; changefreq?: string; priority?: string; image?: string } = {}): string {
@@ -169,9 +171,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     const description = post.is_nsfw
       ? `A post by ${authorName} on Bloomly.`
       : (post.content ? post.content.slice(0, 200).replace(/\n/g, ' ') : `A post by ${authorName} on Bloomly.`)
-    const image = !post.is_nsfw && Array.isArray(post.media_urls) && post.media_urls.length > 0
-      ? String(post.media_urls[0])
-      : undefined
+    const image = !post.is_nsfw ? firstVisualMedia(post.media_urls) : undefined // вложение-файл не может быть картинкой превью
     const url = `${BASE_URL}/post/${post.id}`
     const noindex = post.is_nsfw || post.is_archived
 
@@ -214,6 +214,48 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
         '@context': 'https://schema.org',
         '@type': 'ProfilePage',
         mainEntity: { '@type': 'Person', name, alternateName: user.username, url, ...(user.avatar_url ? { image: user.avatar_url } : {}) },
+      },
+    }))
+  })
+
+  // Превью лота: название — заголовок, в описании сначала цена и слоты, потом текст лота.
+  fastify.get<{ Params: { id: string } }>('/og/listing/:id', async (req, reply) => {
+    const listing = await seoService.listingForOg(req.params.id)
+    if (!listing) {
+      return reply.status(404).header('X-Robots-Tag', 'noindex').send('Not found')
+    }
+
+    const sellerName = listing.seller?.display_name || listing.seller?.username || 'a seller'
+    const price = Number(listing.price)
+    const priceLine = price > 0 ? `${price} ${listing.currency}` : 'Free'
+    const slotsLine = listing.commission_slots_total != null
+      ? `${listing.commission_slots_total - listing.commission_slots_taken} of ${listing.commission_slots_total} slots open`
+      : null
+    const soldLine = listing.status === 'sold' ? 'Sold' : null
+    const header = [soldLine, priceLine, slotsLine].filter(Boolean).join(' · ')
+    const body = listing.description?.replace(/\s+/g, ' ').trim()
+    const description = body ? `${header} — ${body}` : `${header} — by ${sellerName} on Bloomly's Dealers' Den.`
+    const image = Array.isArray(listing.images) && listing.images.length > 0 ? String(listing.images[0]) : undefined
+    const url = `${BASE_URL}/dealers-den/${listing.id}`
+
+    reply.header('Content-Type', 'text/html; charset=utf-8')
+    reply.header('Cache-Control', 'public, max-age=600')
+    return reply.send(buildOgHtml({
+      title: listing.title, description, image, url, type: 'product',
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: listing.title,
+        description,
+        url,
+        ...(image ? { image } : {}),
+        offers: {
+          '@type': 'Offer',
+          price: String(price),
+          priceCurrency: listing.currency,
+          availability: listing.status === 'sold' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
+          url,
+        },
       },
     }))
   })

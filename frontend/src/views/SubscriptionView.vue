@@ -7,6 +7,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import SubscriptionPaymentModal from '@/components/SubscriptionPaymentModal.vue'
+import { blmLocal } from '@/lib/format'
 
 const auth = useAuthStore()
 
@@ -16,6 +17,7 @@ const toast      = ref('')
 const activeNav  = ref('subscriptions')
 const payingPlan = ref<Plan | null>(null)
 
+// Цены в BLM (1 BLM = 1 $) — те же, что в backend/payments/pricing.ts; сумму к оплате считает сервер.
 // Ранние пользователи = зарегистрировались до 1 января 2027 — постоянная скидка -50%
 const EARLY_USER_CUTOFF = '2027-01-01T00:00:00Z'
 const EARLY_USER_DISCOUNT = 50 // %
@@ -61,41 +63,41 @@ const plans = computed<Plan[]>(() => {
       color: 'text-white/70',
       gradient: 'from-white/5 to-white/2',
       iconBg: 'bg-white/8 text-white/60 border-white/10',
-      features: [t.featUnlimitedPosts, t.featFollowAuthors, t.featBasicNotifs, t.featPrivateMsgs],
+      features: [t.featUnlimitedPosts, t.featFollowAuthors, t.featBasicNotifs, t.featPmUnlimited, t.featFilesFree, t.featDenAccess, t.featDenSell, t.featZeroFee],
     },
     {
       id: 'lite', label: 'Lite',
       icon: 'Zap',
       badge: t.planBadgePopular,
       badgeColor: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
-      priceM: 149, priceY: 99,
+      priceM: 2, priceY: 1.5,
       color: 'text-sky-400',
       gradient: 'from-sky-500/12 to-sky-500/3',
       iconBg: 'bg-sky-400/10 text-sky-400 border-sky-400/25',
-      features: [t.featAllFree, t.featNoAds, t.featProfileTheme, t.featLiteBadge, t.featProfileStats, t.featPrioritySearch, t.featUnlimitedMsgs, t.featStorage5gb],
+      features: [t.featAllFree, t.featNoAds, t.featProfileTheme, t.featLiteBadge, t.featProfileStats, t.featFilesLite],
     },
     {
       id: 'pro', label: 'Pro',
       icon: 'Crown',
       badge: t.planBadgeBest,
       badgeColor: 'text-brand-accent bg-brand-accent/10 border-brand-accent/20',
-      priceM: 349, priceY: 249,
+      priceM: 4, priceY: 3,
       color: 'text-brand-accent',
       gradient: 'from-brand-accent/18 to-brand-accent/3',
       iconBg: 'bg-brand-accent/15 text-brand-accent-minus border-brand-accent/30',
       featured: true,
-      features: [t.featAllLite, t.featCustomBg, t.featSteamTheme, t.featAvatarFrames, t.featProBadge, t.featStorage20gb, t.featPostAnalytics, t.featExclStickers],
+      features: [t.featAllLite, t.featFilesPro, t.featCommissionsOpen, t.featSearchPriority, t.featSteamTheme, t.featCustomBg, t.featAvatarFrames, t.featProBadge, t.featPostAnalytics, t.featDenFastBumps, t.featAdDiscount15, t.featWithdraw2],
     },
     {
       id: 'business', label: 'Business',
       icon: 'Briefcase',
       badge: t.planBadgeBusiness,
       badgeColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-      priceM: 899, priceY: 649,
+      priceM: 10, priceY: 7.5,
       color: 'text-amber-400',
       gradient: 'from-amber-400/12 to-amber-400/3',
       iconBg: 'bg-amber-400/10 text-amber-400 border-amber-400/25',
-      features: [t.featAllPro, t.featAdProfile, t.featAdCampaigns, t.featBoostPosts, t.featAdvAnalytics, t.featStorage100gb, t.featPrioritySupport, t.featEarlyAccess],
+      features: [t.featAllPro, t.featFilesBusiness, t.featPostBoosts, t.featPromoCashback, t.featAutoBump, t.featAdDiscount30, t.featWithdraw1, t.featAdvAnalytics, t.featPrioritySupport, t.featEarlyAccess],
     },
   ]
 })
@@ -105,7 +107,7 @@ const plans = computed<Plan[]>(() => {
 function effectivePrice(plan: Plan): number {
   const base = billing.value === 'yearly' ? plan.priceY : plan.priceM
   if (base === 0) return 0
-  return isEarlyUser.value ? Math.round(base * (1 - EARLY_USER_DISCOUNT / 100)) : base
+  return isEarlyUser.value ? Math.round(base * (1 - EARLY_USER_DISCOUNT / 100) * 100) / 100 : base
 }
 
 // Цена-ценник для зачёркивания — всегда полная ежемесячная цена без скидок,
@@ -132,6 +134,9 @@ const avgYearlySavings = computed(() => {
   return Math.round(paid.reduce((sum, p) => sum + yearlySavingsPercent(p), 0) / paid.length)
 })
 
+/** «≈ 90 ₽» в валюте региона или пустая строка */
+const local = (blm: number) => { const v = blmLocal(blm); return v ? `≈ ${v}` : '' }
+
 function showToast(msg: string) {
   toast.value = msg
   setTimeout(() => { toast.value = '' }, 3000)
@@ -140,7 +145,6 @@ function showToast(msg: string) {
 function selectPlan(planId: string) {
   if (isLocked(planId)) return
   if (planId === 'free') { showToast(langStore.t.subToastFreeInfo); return }
-  if (planId === 'business') { showToast(langStore.t.subToastBusinessInfo); return }
   const plan = plans.value.find(p => p.id === planId)
   if (plan) payingPlan.value = plan
 }
@@ -310,12 +314,13 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
                   </template>
                   <template v-else>
                     <div class="flex items-end gap-1.5">
-                      <p class="text-4xl font-extrabold tracking-tight" :class="plan.featured ? 'bg-linear-to-b/srgb from-white to-brand-accent-minus bg-clip-text text-transparent' : 'text-white'">{{ effectivePrice(plan) }} ₽</p>
+                      <p class="text-4xl font-extrabold tracking-tight" :class="plan.featured ? 'bg-linear-to-b/srgb from-white to-brand-accent-minus bg-clip-text text-transparent' : 'text-white'">{{ effectivePrice(plan) }} BLM</p>
                       <p class="text-sm text-white/55 mb-1.5">{{ langStore.t.subPerMonth }}</p>
                     </div>
+                    <p v-if="local(effectivePrice(plan))" class="text-xs text-white/40 mt-0.5">{{ local(effectivePrice(plan)) }}</p>
                     <div class="flex items-center flex-wrap gap-1.5 mt-2 min-h-6">
                       <template v-if="totalDiscountPercent(plan) > 0">
-                        <span class="text-xs text-white/35 line-through decoration-white/25">{{ originalPrice(plan) }} ₽</span>
+                        <span class="text-xs text-white/35 line-through decoration-white/25">{{ originalPrice(plan) }} BLM</span>
                         <span class="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-lg border"
                           :class="isEarlyUser
                             ? 'text-amber-300 bg-linear-to-r/srgb from-amber-400/25 to-amber-500/10 border-amber-400/30 shadow-[0_0_12px_rgba(251,191,36,0.25)]'
@@ -325,7 +330,7 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
                         </span>
                       </template>
                       <span v-if="billing === 'yearly'" class="text-[10px] text-white/35 w-full">
-                        {{ effectivePrice(plan) * 12 }} ₽{{ langStore.t.subYearlyTotal }}
+                        {{ Math.round(effectivePrice(plan) * 12 * 100) / 100 }} BLM{{ langStore.t.subYearlyTotal }}
                       </span>
                     </div>
                   </template>

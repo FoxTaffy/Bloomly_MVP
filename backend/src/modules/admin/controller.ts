@@ -2,7 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { adminService } from './service.js';
 import { moderationService } from './moderation.service.js';
 import { autoModLogs, logStaffAction } from '../automod/logs.service.js';
-import { userLookup } from '../users/lookup.js';
+import { purchaseAd, getAdPricing } from '../ads/ads.service.js';
 import { getFinanceReport } from './finance.service.js';
 import { requireModerator, requireAdmin, requireOwner } from '../../lib/authHooks.js';
 import { ROLE_RANK, canModerateTarget } from '../../lib/roles.js';
@@ -434,21 +434,25 @@ export const getActiveAdsHandler = async (_req: FastifyRequest, reply: FastifyRe
 };
 
 export const submitAdHandler = async (
-  req: FastifyRequest<{ Body: { title: string; description?: string; imageUrl?: string; linkUrl: string; contactInfo?: string; priceLabel?: string } }>,
+  req: FastifyRequest<{ Body: { title: string; description?: string; imageUrl?: string; linkUrl: string; contactInfo?: string; placement?: string; billing?: string; periods?: number } }>,
   reply: FastifyReply,
 ) => {
-  const requesterId = (req.user)?.id;
-  // Placing ads is a Business-subscription perk — matches the "featAdCampaigns" pricing bullet.
-  const tier = requesterId ? await userLookup.subscriptionTier(requesterId) : null;
-  if (tier !== 'business') {
-    return reply.code(402).send({ success: false, data: null, error: { code: 'BUSINESS_REQUIRED', message: 'Placing ads requires a Business subscription' } });
-  }
+  // Баннер покупает любой авторизованный пользователь за BLM; скидка зависит от тарифа (Pro 15 %, Business 30 %)
   try {
-    const ad = await adminService.submitAd({ ...req.body, requesterId });
-    return reply.code(201).send({ success: true, data: { ad }, error: null });
+    const result = await purchaseAd(req.user.id, req.body);
+    return reply.code(201).send({ success: true, data: { ad: result.ad, quote: result.quote, wallet: result.wallet }, error: null });
   } catch (e) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_AD_LINK', message: errMessage(e) } });
+    const status = errStatus(e);
+    if (status && status < 500) {
+      return reply.code(status).send({ success: false, data: null, error: { code: errCode(e) ?? 'AD_ERROR', message: errMessage(e), details: (e as { details?: unknown }).details } });
+    }
+    req.log.error(e);
+    return reply.code(500).send({ success: false, data: null, error: { code: 'AD_ERROR', message: 'Failed to place ad' } });
   }
+};
+
+export const getAdPricingHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+  return reply.send({ success: true, data: await getAdPricing(req.user.id), error: null });
 };
 
 export const reviewAdHandler = async (

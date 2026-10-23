@@ -12,6 +12,7 @@ import BIcon from './BIcon.vue'
 import AppHeader from './AppHeader.vue'
 import AppSidebar from './AppSidebar.vue'
 import AdSlot from './ads/AdSlot.vue'
+import { adsForPlacement, adSlotModeFor } from '@/lib/adSlots'
 import MediaUpload from './MediaUpload.vue'
 import SkeletonPost from './SkeletonPost.vue'
 import PostLightbox from './PostLightbox.vue'
@@ -447,15 +448,10 @@ const followRecommended = async (userId: string) => {
 }
 
 // ── Active Ads ───────────────────────────────────────────────────────────────
-// Реклама доступна только на Free (монетизация) и Business (предложение разместить
-// свою рекламу вместо чужой). На Lite/Pro реклама скрыта — это преимущество подписки.
+// Чужая реклама показывается только на Free; на Lite она скрыта совсем, а Pro и Business видят
+// вместо неё предложение разместить свою (со скидкой тарифа 15 % / 30 %).
 const activeAds = ref<any[]>([])
-const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => {
-  const tier = auth.user?.subscription_tier ?? 'free'
-  if (tier === 'lite' || tier === 'pro') return 'hidden'
-  if (tier === 'business') return 'offer'
-  return 'ads'
-})
+const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => adSlotModeFor(auth.user?.subscription_tier ?? 'free'))
 const fetchActiveAds = async () => {
   if (adSlotMode.value !== 'ads') return
   try {
@@ -941,9 +937,9 @@ onDeactivated(() => {
         <template #bottom>
           <div v-if="adSlotMode !== 'hidden'" class="stack-y-3">
             <template v-if="adSlotMode === 'ads'">
-              <AdSlot v-for="ad in activeAds" :key="ad.id" :ad="ad" />
+              <AdSlot v-for="ad in adsForPlacement(activeAds, 'left_menu')" :key="ad.id" :ad="ad" placement="left_menu" />
             </template>
-            <AdSlot v-else-if="adSlotMode === 'offer'" :ad="null" />
+            <AdSlot v-else-if="adSlotMode === 'offer'" :ad="null" placement="left_menu" />
           </div>
         </template>
       </AppSidebar>
@@ -1142,6 +1138,7 @@ onDeactivated(() => {
 
             <!-- Media previews -->
             <MediaUpload
+              documents
               ref="mediaUploadRef"
               type="posts"
               :multiple="true"
@@ -1423,8 +1420,8 @@ onDeactivated(() => {
         </Transition>
 
         <!-- Ad placement -->
-        <AdSlot v-if="adSlotMode === 'offer'" :ad="null" variant="hero" />
-        <AdSlot v-else-if="adSlotMode === 'ads' && activeAds[0]" :ad="activeAds[0]" variant="hero" />
+        <AdSlot v-if="adSlotMode === 'offer'" :ad="null" variant="hero" placement="feed_top" />
+        <AdSlot v-else-if="adSlotMode === 'ads' && adsForPlacement(activeAds, 'feed_top')[0]" :ad="adsForPlacement(activeAds, 'feed_top')[0]" variant="hero" placement="feed_top" />
 
         <!-- Feed -->
         <div v-if="isLoadingPosts" class="stack-y-4">
@@ -1469,8 +1466,8 @@ onDeactivated(() => {
       <aside class="w-80 hidden xl:block sticky top-24 self-start stack-y-6">
 
         <!-- Ad placement -->
-        <AdSlot v-if="adSlotMode === 'offer'" :ad="null" />
-        <AdSlot v-else-if="adSlotMode === 'ads' && (activeAds[1] ?? activeAds[0])" :ad="activeAds[1] ?? activeAds[0]" />
+        <AdSlot v-if="adSlotMode === 'offer'" :ad="null" placement="right_column" />
+        <AdSlot v-else-if="adSlotMode === 'ads' && adsForPlacement(activeAds, 'right_column')[0]" :ad="adsForPlacement(activeAds, 'right_column')[0]" placement="right_column" />
 
         <!-- Trending Hashtags -->
         <div>

@@ -1,26 +1,21 @@
 // Единая конфигурация загрузок. Меняйте лимиты здесь, а не в контроллерах.
 //
-// Потолок 100 МБ задан не произвольно: host nginx (client_max_body_size 100m) режет тело
-// запроса раньше API, поэтому всё, что больше, до обработчика не доходит. Тарифные лимиты
-// чата (до 16 ГБ) при этом до клиента не доезжали, но API готов был буферизовать их в память.
-// Пока nginx не поднят, ограничения выше 100 МБ недостижимы; при поднятии nginx поднимите
-// PLATFORM_MAX_UPLOAD_BYTES и разрешите потоковую запись (см. media/controller.ts).
+// Размеры файлов по тарифам (фото 15/50 МБ, видео 100 МБ…2 ГБ, вложения до 2 ГБ) заданы перками тарифа в
+// modules/payments/plan-perks.ts и применяются в media/controller.ts прямо во время приёма потока.
+// Тело запроса уходит во временный файл на диске и оттуда потоком в MinIO — память не растёт с размером файла.
+//
+// Цепочка прокси должна пропускать такие тела: frontend/nginx.conf и deploy/nginx/bloomly.conf (client_max_body_size,
+// proxy_request_buffering off). ВНИМАНИЕ: Cloudflare на тарифах Free/Pro режет тело запроса на 100 МБ — если домен
+// проксируется через него, одиночные запросы крупнее проходят только в обход Cloudflare (см. docs/uploads.md).
 
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
-/** Верхняя граница тела multipart-запроса на уровне API (совпадает с nginx). */
-export const PLATFORM_MAX_UPLOAD_BYTES = 100 * MB;
-
 /** Запас на заголовки multipart сверх размера файла. */
 export const MULTIPART_OVERHEAD_BYTES = 1 * MB;
 
-/** Лимит размера файла по папкам. Тарифные значения ниже обрезаются до PLATFORM_MAX_UPLOAD_BYTES. */
+/** Жёсткие потолки папок вне тарифной сетки: оформление, служебные файлы. Тариф их не повышает. */
 export const FOLDER_MAX_BYTES: Record<string, number> = {
-  posts: PLATFORM_MAX_UPLOAD_BYTES,
-  comments: PLATFORM_MAX_UPLOAD_BYTES,
-  messages: PLATFORM_MAX_UPLOAD_BYTES,
-  backgrounds: PLATFORM_MAX_UPLOAD_BYTES,
   avatars: 10 * MB,
   banners: 10 * MB,
   stickers: 100 * 1024,
@@ -29,22 +24,26 @@ export const FOLDER_MAX_BYTES: Record<string, number> = {
   verification: 10 * MB,
 };
 
-/** Чат: лимит по тарифу. Значения выше платформенного потолка обрезаются до него. */
-export const MESSAGE_LIMIT_BY_TIER: Record<string, number> = {
-  free: 2 * GB,
-  lite: 4 * GB,
-  pro: 8 * GB,
-  business: 16 * GB,
-};
+/**
+ * Пиксели, которые sharp вправе декодировать (защита от «бомб» сжатия). Фото до 50 МБ у платных тарифов бывают
+ * заметно больше 50 Мпикс (панорамы, сканы), поэтому для них потолок выше; декодирование потоковое
+ * (sequentialRead + shrink-on-load), полный растр в памяти не держится.
+ */
+export const IMAGE_MAX_PIXELS = 50_000_000;
+export const IMAGE_MAX_PIXELS_UNCOMPRESSED = 120_000_000;
 
 /**
- * Изображения декодируются sharp в память, поэтому для них отдельный и меньший лимит.
- * Видео и аудио пишутся на диск и в MinIO потоком, в памяти их не держим.
+ * Чанковая загрузка (media/chunked.ts): файлы крупнее порога уходят частями, чтобы каждый запрос проходил через
+ * Cloudflare (лимит тела 100 МБ на Free/Pro). Порог и размер части клиент берёт из ответа init / lib/uploadMedia.ts.
  */
-export const IMAGE_MAX_BYTES = 25 * MB;
-
-/** Пиксели, которые sharp вправе декодировать (защита от «бомб» сжатия). */
-export const IMAGE_MAX_PIXELS = 50_000_000;
+export const CHUNKED_THRESHOLD_BYTES = 50 * MB;
+export const CHUNK_BYTES = 25 * MB;
+/** Брошенные незавершённые сессии удаляются вместе с временными файлами. */
+export const UPLOAD_SESSION_TTL_MS = 3 * 60 * 60_000;
+export const MAX_UPLOAD_SESSIONS_PER_USER = 3;
+export const MAX_UPLOAD_SESSIONS_GLOBAL = 20;
+/** Запас свободного места на диске сверх размера новой сессии. */
+export const UPLOAD_DISK_RESERVE_BYTES = 2 * GB;
 
 /** Одновременные загрузки одного пользователя. */
 export const MAX_CONCURRENT_UPLOADS_PER_USER = 3;
@@ -53,8 +52,12 @@ export const MAX_CONCURRENT_UPLOADS_GLOBAL = 8;
 /** Одновременная обработка изображений (буфер в памяти) на процесс. */
 export const MAX_CONCURRENT_IMAGE_JOBS = 4;
 
-/** Максимальное время приёма одного файла. Дольше — обрыв, временный файл удаляется. */
-export const UPLOAD_TIMEOUT_MS = 120_000;
+/**
+ * Приём файла: обрыв, если от клиента не пришло ни байта за UPLOAD_IDLE_TIMEOUT_MS (зависшая отправка), и общий
+ * потолок UPLOAD_MAX_DURATION_MS. Один фиксированный таймаут на весь файл рвал бы гигабайтные загрузки на медленном канале.
+ */
+export const UPLOAD_IDLE_TIMEOUT_MS = 60_000;
+export const UPLOAD_MAX_DURATION_MS = 3 * 60 * 60_000;
 
 /** Потолок квоты хранилища по тарифам (null — без лимита на уровне квоты). */
 export const STORAGE_QUOTA_BYTES_BY_TIER: Record<string, number | null> = {

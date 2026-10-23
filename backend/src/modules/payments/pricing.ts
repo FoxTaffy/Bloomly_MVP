@@ -4,15 +4,18 @@
 export type PaidTier = 'lite' | 'pro' | 'business';
 export type BillingPeriod = 'month' | 'year';
 
-/** Цена за месяц в рублях: при помесячной оплате и при годовой (годовая списывается разом ×12). */
-export const PLAN_PRICES: Record<PaidTier, { month: number; year: number }> = {
-  lite:     { month: 149, year: 99 },
-  pro:      { month: 349, year: 249 },
-  business: { month: 899, year: 649 },
+/**
+ * Цена в BLM за месяц (1 BLM = 1 $): при помесячной оплате и при годовой (годовая списывается разом ×12, −25%).
+ * Это обычная цена; ранним пользователям она достаётся со скидкой 50 % (Lite 1, Pro 2, Business 5 BLM/мес).
+ */
+export const PLAN_PRICES_BLM: Record<PaidTier, { month: number; year: number }> = {
+  lite:     { month: 2,  year: 1.5 },
+  pro:      { month: 4,  year: 3 },
+  business: { month: 10, year: 7.5 },
 };
 
-/** Business продаётся только через менеджера (на фронте — «свяжитесь с нами»). */
-export const PURCHASABLE_TIERS: PaidTier[] = ['lite', 'pro'];
+/** Все платные тарифы продаются самостоятельно (Business больше не «через менеджера»). */
+export const PURCHASABLE_TIERS: PaidTier[] = ['lite', 'pro', 'business'];
 
 // Ранние пользователи — зарегистрировались до 1 января 2027, постоянная скидка
 export const EARLY_USER_CUTOFF = new Date('2027-01-01T00:00:00Z');
@@ -23,24 +26,43 @@ export const PERIOD_MONTHS: Record<BillingPeriod, number> = { month: 1, year: 12
 export const TIER_RANK: Record<string, number> = { free: 0, lite: 1, pro: 2, business: 3 };
 
 export function isPaidTier(t: string): t is PaidTier {
-  return t in PLAN_PRICES;
+  return t in PLAN_PRICES_BLM;
 }
 
 export function isEarlyUser(createdAt: Date): boolean {
   return createdAt < EARLY_USER_CUTOFF;
 }
 
-/** Месячная цена с учётом периода и скидки (округление как на фронте). */
-export function monthlyPrice(tier: PaidTier, period: BillingPeriod, earlyUser: boolean): number {
-  const base = PLAN_PRICES[tier][period];
-  return earlyUser ? Math.round(base * (1 - EARLY_USER_DISCOUNT / 100)) : base;
+const cents = (n: number) => Math.round(n * 100) / 100;
+
+/** Цена месяца в BLM с учётом периода и скидки ранних пользователей. */
+export function monthlyPriceBlm(tier: PaidTier, period: BillingPeriod, earlyUser: boolean): number {
+  const base = PLAN_PRICES_BLM[tier][period];
+  return earlyUser ? cents(base * (1 - EARLY_USER_DISCOUNT / 100)) : base;
 }
 
-/** Сумма к оплате за весь период. */
-export function quote(tier: PaidTier, period: BillingPeriod, earlyUser: boolean) {
-  const perMonth = monthlyPrice(tier, period, earlyUser);
+/** Рублей за BLM-сумму по курсу: целые рубли вверх — столько уходит на шлюз. */
+export const blmToRub = (blm: number, rate: number) => Math.ceil(blm * rate - 1e-6);
+
+/** Месячная цена в рублях по курсу (для оценки выручки и показа). */
+export function monthlyPrice(tier: PaidTier, period: BillingPeriod, earlyUser: boolean, rate: number): number {
+  return blmToRub(monthlyPriceBlm(tier, period, earlyUser), rate);
+}
+
+/**
+ * Сумма к оплате за весь период. Цена задана в BLM: с баланса списывается ровно blmAmount, на шлюз уходит
+ * рублёвый эквивалент по текущему курсу (amount). Пользователю показываем оба.
+ */
+export function quote(tier: PaidTier, period: BillingPeriod, earlyUser: boolean, rate: number) {
+  const blmPerMonth = monthlyPriceBlm(tier, period, earlyUser);
   const months = PERIOD_MONTHS[period];
-  return { tier, period, months, perMonth, amount: perMonth * months, discounted: earlyUser };
+  const blmAmount = cents(blmPerMonth * months);
+  return {
+    tier, period, months, discounted: earlyUser,
+    blmPerMonth, blmAmount,
+    perMonth: blmToRub(blmPerMonth, rate), amount: blmToRub(blmAmount, rate),
+    bcAmount: blmAmount,
+  };
 }
 
 /** Размеры пакетов пополнения в BLM (1 BLM = 1 $); рублёвая цена считается по текущему курсу. */

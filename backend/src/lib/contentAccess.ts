@@ -35,9 +35,11 @@ export function readableProfilesWhere(viewerId?: string | null): Prisma.UserWher
       { profile_visibility: { notIn: ['friends', 'nobody', 'only_me'] } },
       ...(viewerId ? [
         { id: viewerId },
+        // Друзья = взаимная подписка. На User: `followers` — строки Follow, где пользователь — тот, на кого подписаны,
+        // `following` — где он сам подписчик. Зритель подписан на автора и автор подписан на зрителя.
         { profile_visibility: 'friends',
-          following: { some: { follower_id: viewerId } },
-          followers: { some: { following_id: viewerId } } },
+          followers: { some: { follower_id: viewerId } },
+          following: { some: { following_id: viewerId } } },
       ] : []),
     ],
   };
@@ -58,7 +60,7 @@ export async function readablePostsWhere(viewerId?: string | null, allowArchived
   ]);
   const personalSubscriber: Prisma.PostWhereInput[] = viewerId ? [
     { author_id: viewerId },
-    { groupPosts: { none: {} }, author: { following: { some: { follower_id: viewerId } } } },
+    { groupPosts: { none: {} }, author: { followers: { some: { follower_id: viewerId } } } },
     { groupPosts: { some: { group: { OR: [
       { owner_id: viewerId }, { members: { some: { user_id: viewerId } } }, { subscribers: { some: { user_id: viewerId } } },
     ] } } } },

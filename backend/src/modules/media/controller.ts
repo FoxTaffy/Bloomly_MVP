@@ -15,17 +15,22 @@ import { viewerFromMediaCookie } from '../../lib/mediaCookie.js';
 import { resolveAccountIdentity } from '../../lib/accountAccess.js';
 import { sniffMatches } from '../../lib/fileSniff.js';
 import {
-  FOLDER_MAX_BYTES, IMAGE_MAX_BYTES, MAX_CONCURRENT_UPLOADS_GLOBAL, MAX_CONCURRENT_UPLOADS_PER_USER,
-  MESSAGE_LIMIT_BY_TIER, PLATFORM_MAX_UPLOAD_BYTES, STORAGE_QUOTA_BYTES_BY_TIER, STORAGE_TRACKED_FOLDERS,
-  UPLOAD_TIMEOUT_MS, MULTIPART_OVERHEAD_BYTES,
+  FOLDER_MAX_BYTES, MAX_CONCURRENT_UPLOADS_GLOBAL, MAX_CONCURRENT_UPLOADS_PER_USER,
+  STORAGE_QUOTA_BYTES_BY_TIER, STORAGE_TRACKED_FOLDERS,
+  UPLOAD_IDLE_TIMEOUT_MS, UPLOAD_MAX_DURATION_MS, MULTIPART_OVERHEAD_BYTES,
 } from '../../config/uploads.js';
+import {
+  ByteLimiter, LimitExceeded, DOCUMENT_MIME_TYPES, TIER_GOVERNED_FOLDERS, uploadKind, limitFor, maxAnyBytes,
+  nextTierFor, requiredTierFor, formatBytes, type UploadKind,
+} from './limits.js';
+import { perksFor } from '../payments/plan-perks.js';
 import { errCode, errMessage } from '../../lib/httpErrors.js';
 
 // Счётчики активных загрузок на процесс. При нескольких инстансах лимит действует на каждый отдельно.
 const activeUploads = new Map<string, number>();
 let activeUploadsTotal = 0;
 
-function acquireUploadSlot(userId: string): boolean {
+export function acquireUploadSlot(userId: string): boolean {
   if (activeUploadsTotal >= MAX_CONCURRENT_UPLOADS_GLOBAL) return false;
   const current = activeUploads.get(userId) ?? 0;
   if (current >= MAX_CONCURRENT_UPLOADS_PER_USER) return false;
@@ -34,7 +39,7 @@ function acquireUploadSlot(userId: string): boolean {
   return true;
 }
 
-function releaseUploadSlot(userId: string): void {
+export function releaseUploadSlot(userId: string): void {
   const current = activeUploads.get(userId) ?? 0;
   if (current <= 1) activeUploads.delete(userId);
   else activeUploads.set(userId, current - 1);
@@ -54,34 +59,30 @@ const REPORTS_ALLOWED_MIME_TYPES = new Set([
   'video/mp4', 'video/webm', 'video/quicktime',
 ]);
 
-const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'reports', 'verification', 'avatar-frames'] as const;
-type Folder = typeof ALLOWED_FOLDERS[number];
+export const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'reports', 'verification', 'avatar-frames'] as const;
+export type Folder = typeof ALLOWED_FOLDERS[number];
 
-const DEFAULT_MAX_BYTES = PLATFORM_MAX_UPLOAD_BYTES;
-
-function formatMaxSize(bytes: number): string {
-  const GB = 1024 * 1024 * 1024;
-  return bytes >= GB ? `${(bytes / GB).toFixed(0)} ГБ` : `${Math.round(bytes / (1024 * 1024))} МБ`;
-}
+export const formatMaxSize = formatBytes;
 
 /**
- * Лимиты для запроса: размер файла по папке и тарифу, квота хранилища.
- * Значения тарифа обрезаются до PLATFORM_MAX_UPLOAD_BYTES (см. config/uploads.ts).
+ * Что можно загружать этому пользователю: тариф, самый большой его лимит (грубая отсечка по Content-Length до
+ * разбора тела) и квота хранилища. Лимит конкретного файла считается позже — когда известен его тип.
  */
-async function resolveUploadLimits(folder: Folder, userId: string): Promise<{
-  maxBytes: number;
+export async function resolveUploadLimits(folder: Folder, userId: string): Promise<{
+  tier: string;
+  maxAny: number;
+  uncompressed: boolean;
   storageQuotaBytes: number | null;
 }> {
-  const folderMax = Math.min(FOLDER_MAX_BYTES[folder] ?? DEFAULT_MAX_BYTES, PLATFORM_MAX_UPLOAD_BYTES);
-  const needsTierInfo = folder === 'messages' || STORAGE_TRACKED_FOLDERS.has(folder);
-  if (!needsTierInfo) return { maxBytes: folderMax, storageQuotaBytes: null };
-
   const tier = (await userLookup.subscriptionTier(userId)) ?? 'free';
-  const maxBytes = folder === 'messages'
-    ? Math.min(MESSAGE_LIMIT_BY_TIER[tier] ?? MESSAGE_LIMIT_BY_TIER.free, PLATFORM_MAX_UPLOAD_BYTES)
-    : folderMax;
-  const storageQuotaBytes = STORAGE_TRACKED_FOLDERS.has(folder) ? (STORAGE_QUOTA_BYTES_BY_TIER[tier] ?? null) : null;
-  return { maxBytes, storageQuotaBytes };
+  // Папки с жёстким потолком: он и есть максимум. Тарифные папки: самый большой лимит тарифа.
+  const maxAny = TIER_GOVERNED_FOLDERS.has(folder) ? maxAnyBytes(tier) : (FOLDER_MAX_BYTES[folder] ?? maxAnyBytes(tier));
+  return {
+    tier,
+    maxAny,
+    uncompressed: perksFor(tier).uncompressedPhotos,
+    storageQuotaBytes: STORAGE_TRACKED_FOLDERS.has(folder) ? (STORAGE_QUOTA_BYTES_BY_TIER[tier] ?? null) : null,
+  };
 }
 
 /** Parses a 0..1 crop fraction from a query param; falls back to `def` if missing/invalid. */
@@ -90,17 +91,41 @@ function parseFraction(raw: unknown, def: number): number {
   return Number.isFinite(n) && n >= 0 && n <= 1 ? n : def;
 }
 
-function isAllowedMime(mime: string, folder: Folder): boolean {
-  return folder === 'reports' ? REPORTS_ALLOWED_MIME_TYPES.has(mime) : ALLOWED_MIME_TYPES.has(mime);
+export function isAllowedMime(mime: string, folder: Folder): boolean {
+  if (folder === 'reports') return REPORTS_ALLOWED_MIME_TYPES.has(mime);
+  // PSD и архивы принимают чат и посты (вложения), и только тарифы с maxAttachmentBytes > 0 — это проверяет лимит
+  if ((folder === 'messages' || folder === 'posts') && DOCUMENT_MIME_TYPES.has(mime)) return true;
+  return ALLOWED_MIME_TYPES.has(mime);
 }
+
+const DOCUMENT_EXT: Record<string, string> = {
+  'application/zip': '.zip', 'application/x-7z-compressed': '.7z', 'application/vnd.rar': '.rar',
+  'application/x-rar-compressed': '.rar', 'application/gzip': '.gz', 'image/vnd.adobe.photoshop': '.psd',
+};
 
 /** A request the upload pipeline refuses; turned into `{ success: false, error }` with `status`. */
-class UploadRejected extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+export class UploadRejected extends Error {
+  constructor(readonly status: number, readonly code: string, message: string, readonly details?: Record<string, unknown>) { super(message); }
 }
 
-const tooLarge = (maxBytes: number) =>
-  new UploadRejected(413, 'FILE_TOO_LARGE', `Файл превышает максимальный размер (${formatMaxSize(maxBytes)})`);
+const KIND_LABEL: Record<UploadKind, string> = { photo: 'Фото', video: 'Видео и аудио', document: 'Файлы и архивы' };
+const TIER_LABEL: Record<string, string> = { lite: 'Lite', pro: 'Pro', business: 'Business' };
+
+/**
+ * Файл больше лимита тарифа: 413 FILE_LIMIT_EXCEEDED с подсказкой, какой тариф нужен (по размеру, если он известен,
+ * иначе — следующий уровень). Тариф без такого типа файлов (лимит 0) получает 403 FILE_TYPE_NOT_IN_PLAN.
+ */
+export function limitError(tier: string, kind: UploadKind, folder: string, limitBytes: number, sizeBytes?: number) {
+  const required = sizeBytes !== undefined ? requiredTierFor(kind, sizeBytes) : null;
+  const needTier = TIER_GOVERNED_FOLDERS.has(folder) ? (required ?? nextTierFor(tier, kind)) : null;
+  const details = { kind, limitBytes, tier, requiredTier: needTier };
+  const upgrade = needTier && needTier !== tier ? `. Нужен тариф ${TIER_LABEL[needTier] ?? needTier}` : '';
+  if (limitBytes === 0) {
+    return new UploadRejected(403, 'FILE_TYPE_NOT_IN_PLAN', `${KIND_LABEL[kind]} недоступны на вашем тарифе${upgrade}`, details);
+  }
+  return new UploadRejected(413, 'FILE_LIMIT_EXCEEDED',
+    `${KIND_LABEL[kind]}: максимум ${formatMaxSize(limitBytes)} на вашем тарифе${upgrade}`, details);
+}
 
 const quotaExceeded = (message = 'Хранилище заполнено. Освободите место или перейдите на тариф выше.') =>
   new UploadRejected(413, 'STORAGE_QUOTA_EXCEEDED', message);
@@ -122,12 +147,13 @@ const readFileBuffer = (filePath: string): Promise<Buffer> => readFile(filePath)
 type MultipartFile = NonNullable<Awaited<ReturnType<FastifyRequest['file']>>>;
 
 /** Opens the multipart file part and checks its declared type is allowed for the folder. */
-async function openUpload(request: FastifyRequest, folder: Folder, maxBytes: number): Promise<MultipartFile> {
+async function openUpload(request: FastifyRequest, folder: Folder, maxAny: number): Promise<MultipartFile> {
   let data;
   try {
-    data = await request.file({ limits: { fileSize: maxBytes } });
+    // Верхняя граница для busboy — самый большой лимит тарифа; точный лимит по виду файла держит ByteLimiter
+    data = await request.file({ limits: { fileSize: maxAny } });
   } catch (err) {
-    if (errCode(err) === 'FST_REQ_FILE_TOO_LARGE') throw tooLarge(maxBytes);
+    if (errCode(err) === 'FST_REQ_FILE_TOO_LARGE') throw new UploadRejected(413, 'FILE_LIMIT_EXCEEDED', `Файл превышает максимальный размер (${formatMaxSize(maxAny)})`);
     throw err;
   }
   if (!data) throw new UploadRejected(400, 'NO_FILE', 'No file uploaded');
@@ -138,34 +164,43 @@ async function openUpload(request: FastifyRequest, folder: Folder, maxBytes: num
 }
 
 /**
- * Приём потоком во временный файл: память не растёт с размером, а таймаут обрывает зависшую отправку.
+ * Приём потоком во временный файл: память не растёт с размером. Байты считаются на лету (ByteLimiter): как только
+ * набралось больше лимита, поток обрывается, недописанный файл удаляется, ответ — 413. Зависшую отправку обрывает
+ * таймаут простоя, а не общий таймаут на весь файл — иначе гигабайтные загрузки на медленном канале не доходили бы.
  * Returns the temp dir (the caller removes it) and the payload's path and size.
  */
-async function receiveToTempFile(data: MultipartFile, maxBytes: number) {
+async function receiveToTempFile(data: MultipartFile, limit: { bytes: number; onExceeded: (received: number) => UploadRejected }) {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'upload-'));
   const filePath = path.join(tmpDir, 'payload');
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  const armIdle = () => { if (idle) clearTimeout(idle); idle = setTimeout(() => controller.abort(), UPLOAD_IDLE_TIMEOUT_MS); };
+  const maxTimer = setTimeout(() => controller.abort(), UPLOAD_MAX_DURATION_MS);
+  armIdle();
+  const limiter = new ByteLimiter(limit.bytes, armIdle);
   try {
-    await pipeline(data.file, createWriteStream(filePath), { signal: controller.signal });
-    if (data.file.truncated) throw tooLarge(maxBytes);
+    await pipeline(data.file, limiter, createWriteStream(filePath), { signal: controller.signal });
+    // busboy обрезал поток ровно на своём пределе: значит, файл больше лимита
+    if (data.file.truncated) throw limit.onExceeded(Math.max(limiter.received, limit.bytes + 1));
     const { size } = await stat(filePath);
     if (size === 0) throw new UploadRejected(400, 'NO_FILE', 'Uploaded file is empty');
     return { tmpDir, filePath, sizeBytes: size };
   } catch (err) {
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    if (errCode(err) === 'FST_REQ_FILE_TOO_LARGE') throw tooLarge(maxBytes);
+    if (err instanceof LimitExceeded) throw limit.onExceeded(err.receivedBytes);
+    if (errCode(err) === 'FST_REQ_FILE_TOO_LARGE') throw limit.onExceeded(Math.max(limiter.received, limit.bytes + 1));
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new UploadRejected(408, 'UPLOAD_TIMEOUT', 'Загрузка заняла слишком много времени');
+      throw new UploadRejected(408, 'UPLOAD_TIMEOUT', 'Загрузка остановилась: от вас давно не приходили данные');
     }
     throw err;
   } finally {
-    clearTimeout(timer);
+    if (idle) clearTimeout(idle);
+    clearTimeout(maxTimer);
   }
 }
 
 /** Content and per-folder format rules checked after the bytes have arrived. */
-async function validateContent(filePath: string, mimetype: string, folder: Folder, sizeBytes: number, maxBytes: number) {
+export async function validateContent(filePath: string, mimetype: string, folder: Folder) {
   // Тип объявляет клиент: проверяем, что содержимое действительно этого формата
   if (!sniffMatches(await readHead(filePath), mimetype)) {
     throw new UploadRejected(415, 'UNSUPPORTED_MEDIA_TYPE', 'Содержимое файла не соответствует его типу');
@@ -179,10 +214,6 @@ async function validateContent(filePath: string, mimetype: string, folder: Folde
   }
   if (folder === 'avatars' && !mimetype.startsWith('image/')) {
     throw new UploadRejected(415, 'UNSUPPORTED_MEDIA_TYPE', 'Аватар может быть только изображением или GIF');
-  }
-  // Изображения декодируются sharp в память, поэтому для них отдельный и меньший лимит
-  if (mimetype.startsWith('image/') && sizeBytes > Math.min(IMAGE_MAX_BYTES, maxBytes)) {
-    throw tooLarge(Math.min(IMAGE_MAX_BYTES, maxBytes));
   }
 }
 
@@ -209,11 +240,11 @@ async function storeGifAvatar(filePath: string, query: Record<string, unknown>, 
  * atomically up front by the source size, then reconciled with what was actually stored;
  * on any failure the written objects are deleted and the held space is returned.
  */
-async function storeWithQuota(opts: {
+export async function storeWithQuota(opts: {
   filePath: string; filename: string; mimetype: string; folder: Folder;
-  userId: string; sizeBytes: number; storageQuotaBytes: number | null;
+  userId: string; sizeBytes: number; storageQuotaBytes: number | null; uncompressed: boolean;
 }) {
-  const { filePath, filename, mimetype, folder, userId, sizeBytes, storageQuotaBytes } = opts;
+  const { filePath, filename, mimetype, folder, userId, sizeBytes, storageQuotaBytes, uncompressed } = opts;
   const tracked = STORAGE_TRACKED_FOLDERS.has(folder);
   if (tracked && !(await reserveStorage(userId, sizeBytes, storageQuotaBytes))) {
     throw quotaExceeded(`Хранилище заполнено (лимит ${formatMaxSize(storageQuotaBytes ?? 0)}). Освободите место или перейдите на тариф выше.`);
@@ -224,8 +255,9 @@ async function storeWithQuota(opts: {
   let held = tracked ? sizeBytes : 0;
   const uploadedUrls: string[] = [];
   try {
-    if (mimetype.startsWith('image/')) {
-      const uploaded = await uploadFile(await readFileBuffer(filePath), filename, mimetype, folder);
+    if (mimetype.startsWith('image/') && !DOCUMENT_MIME_TYPES.has(mimetype)) { // PSD — документ, не декодируем
+      // Файл с диска: sharp читает его последовательно, оригинал уходит в MinIO потоком — без Buffer на весь файл
+      const uploaded = await uploadFile({ filePath }, filename, mimetype, folder, { uncompressed });
       uploadedUrls.push(uploaded.url);
       if (uploaded.originalUrl) uploadedUrls.push(uploaded.originalUrl);
 
@@ -247,7 +279,15 @@ async function storeWithQuota(opts: {
       return { url: uploaded.url, originalUrl: uploaded.originalUrl };
     }
 
-    const uploaded = await uploadStreamedFile({ filePath, originalName: filename, mimeType: mimetype, folder });
+    const isDocument = DOCUMENT_MIME_TYPES.has(mimetype);
+    // Документы не должны открываться в браузере: расширение выбираем сами, тип — octet-stream, отдача — вложением
+    const uploaded = await uploadStreamedFile({
+      filePath,
+      originalName: isDocument ? `file${DOCUMENT_EXT[mimetype]}` : filename,
+      mimeType: isDocument ? 'application/octet-stream' : mimetype,
+      folder,
+      asAttachment: isDocument ? path.basename(filename) : undefined,
+    });
     uploadedUrls.push(uploaded.url);
     await recordMediaOwner(uploaded.url, userId, folder, uploaded.sizeBytes);
     return { url: uploaded.url, isSilentVideo: uploaded.isSilentVideo };
@@ -266,16 +306,19 @@ export const uploadFileHandler = async (
   const { id: userId } = request.user;
   const rawFolder = request.query.folder ?? 'posts';
   const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder as Folder) ? (rawFolder as Folder) : 'posts';
-  const fail = (status: number, code: string, message: string) =>
-    reply.code(status).send({ success: false, data: null, error: { code, message } });
+  const fail = (status: number, code: string, message: string, details?: Record<string, unknown>) => {
+    // Тело запроса ещё не дочитано: закрываем соединение, чтобы клиент не гнал остаток гигабайтов впустую
+    if (status === 413 || status === 403 || status === 408) reply.header('Connection', 'close');
+    return reply.code(status).send({ success: false, data: null, error: { code, message, ...(details ? { details } : {}) } });
+  };
 
-  const { maxBytes, storageQuotaBytes } = await resolveUploadLimits(folder, userId);
+  const { tier, maxAny, uncompressed, storageQuotaBytes } = await resolveUploadLimits(folder, userId);
 
   // Отсекаем заведомо большой запрос по заголовку до приёма тела
   const declaredBytes = Number(request.headers['content-length'] ?? 0);
-  if (declaredBytes > maxBytes + MULTIPART_OVERHEAD_BYTES) {
-    const r = tooLarge(maxBytes);
-    return fail(r.status, r.code, r.message);
+  if (declaredBytes > maxAny + MULTIPART_OVERHEAD_BYTES) {
+    const r = limitError(tier, 'video', folder, maxAny, declaredBytes);
+    return fail(r.status, r.code, r.message, r.details);
   }
 
   // Слоты ограничивают одновременную работу: и на пользователя, и на процесс целиком
@@ -285,19 +328,26 @@ export const uploadFileHandler = async (
 
   let tmpDir: string | null = null;
   try {
-    const data = await openUpload(request, folder, maxBytes);
-    const received = await receiveToTempFile(data, maxBytes);
+    const data = await openUpload(request, folder, maxAny);
+    // Лимит этого файла: по виду (фото / видео / документ) и тарифу; в служебных папках — их жёсткий потолок
+    const kind = uploadKind(data.mimetype);
+    const limitBytes = limitFor(tier, kind, folder, FOLDER_MAX_BYTES[folder]);
+    if (limitBytes === 0) throw limitError(tier, kind, folder, 0);
+    const received = await receiveToTempFile(data, {
+      bytes: limitBytes,
+      onExceeded: (got) => limitError(tier, kind, folder, limitBytes, got),
+    });
     tmpDir = received.tmpDir;
     const { filePath, sizeBytes } = received;
 
-    await validateContent(filePath, data.mimetype, folder, sizeBytes, maxBytes);
+    await validateContent(filePath, data.mimetype, folder);
 
     const result = folder === 'avatars' && data.mimetype === 'image/gif'
       ? await storeGifAvatar(filePath, request.query, userId)
-      : await storeWithQuota({ filePath, filename: data.filename, mimetype: data.mimetype, folder, userId, sizeBytes, storageQuotaBytes });
+      : await storeWithQuota({ filePath, filename: data.filename, mimetype: data.mimetype, folder, userId, sizeBytes, storageQuotaBytes, uncompressed });
     return reply.send({ success: true, data: result, error: null });
   } catch (err) {
-    if (err instanceof UploadRejected) return fail(err.status, err.code, err.message);
+    if (err instanceof UploadRejected) return fail(err.status, err.code, err.message, err.details);
     if (err instanceof UploadValidationError) return fail(422, err.code, err.message);
     request.log.error({ err }, 'Media upload failed');
     return fail(500, 'UPLOAD_ERROR', errMessage(err));

@@ -10,7 +10,10 @@ const pay = (user_id: string, over: Record<string, unknown>) => prisma.payment.c
 
 describe('админка: финансы и Premium', () => {
   beforeAll(() => getApp());
-  beforeEach(() => resetDb());
+  beforeEach(async () => {
+    await resetDb();
+    await prisma.blmRate.create({ data: { usd_rub: 90 } }); // MRR считается по курсу BLM — фиксируем
+  });
 
   it('только для админа', async () => {
     const user = await createUser();
@@ -62,9 +65,9 @@ describe('админка: финансы и Premium', () => {
 
     const pro = d.premium.tiers.find((t: { tier: string }) => t.tier === 'pro');
     const lite = d.premium.tiers.find((t: { tier: string }) => t.tier === 'lite');
-    expect(pro).toMatchObject({ revenue: 175, payments: 1, active: 1, autoRenew: 1, mrr: 175, newSubscribers: 1 });
+    expect(pro).toMatchObject({ revenue: 175, payments: 1, active: 1, autoRenew: 1, mrr: 180, newSubscribers: 1 });
     expect(lite).toMatchObject({ revenue: 0, walletPayments: 1 });
-    expect(d.premium).toMatchObject({ mrr: 175, activePaid: 1, expectedRenewals7d: 175, expectedRenewals7dCount: 1 });
+    expect(d.premium).toMatchObject({ mrr: 180, activePaid: 1, expectedRenewals7d: 180, expectedRenewals7dCount: 1 });
     expect(d.subscribers[d.subscribers.length - 1].pro).toBe(1);
 
     expect(d.autoRenew).toMatchObject({ ok: 0, failed: 1 });

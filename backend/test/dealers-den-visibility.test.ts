@@ -5,8 +5,10 @@ import { dealersDenService } from '../src/modules/dealers-den/service.js';
 const ADULT = new Date('1990-01-01');
 
 async function makeListing(sellerId: string, over: Record<string, unknown> = {}) {
+  // Карточка уже прошла кулдаун и стоит в общей ленте (без этого общий каталог её не показывает)
+  const inFeed = over.status === undefined || over.status === 'active' ? { feed_published_at: new Date(), feed_at: new Date() } : {};
   return prisma.dealerListing.create({
-    data: { seller_id: sellerId, title: 'Test lot', price: 10, currency: 'USD', ...over } as any,
+    data: { seller_id: sellerId, title: 'Test lot', price: 10, currency: 'USD', ...inFeed, ...over } as any,
   });
 }
 
@@ -76,10 +78,14 @@ describe('dealers den: tags', () => {
   beforeEach(resetDb);
 
   it('теги при создании приводятся к нижнему регистру, пробелы и дубли убираются', async () => {
-    const { auth } = await createUser({ is_verified: true, verification_type: 'artist' });
+    const { user, auth } = await createUser({ is_verified: true, verification_type: 'artist' });
+    // Лоты создаются от имени группы владельца с подключённым Dealers Den
+    const group = await prisma.group.create({
+      data: { owner_id: user.id, name: 'Shop', slug: `g-${user.id.slice(0, 8)}`, type: 'creative', den_enabled: true, den_agreed_at: new Date() },
+    });
     const res = await api('POST', '/api/dealers-den', {
       headers: auth,
-      body: { title: 'Lot', price: 5, tags: ['Fursuit', ' fursuit ', 'Art'] },
+      body: { groupId: group.id, title: 'Lot', price: 5, tags: ['Fursuit', ' fursuit ', 'Art'] },
     });
     expect(res.status).toBe(201);
     expect(res.json.data.listing.tags).toEqual(['fursuit', 'art']);

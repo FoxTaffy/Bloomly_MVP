@@ -11,9 +11,16 @@ async function makeRaffle(sellerId: string, over: Record<string, unknown> = {}) 
   });
 }
 
+/** Продавец Dealers Den: верифицированный владелец группы с подключённым Dealers Den (лоты создаются от имени группы). */
 async function seller() {
-  return createUser({ is_verified: true, verification_type: 'artist' });
+  const u = await createUser({ is_verified: true, verification_type: 'artist' });
+  const group = await prisma.group.create({
+    data: { owner_id: u.user.id, name: 'Shop', slug: `g-${u.user.id.slice(0, 8)}`, type: 'creative', den_enabled: true, den_agreed_at: new Date() },
+  });
+  return { ...u, group };
 }
+const createLot = (s: Awaited<ReturnType<typeof seller>>, body: Record<string, unknown>) =>
+  api('POST', '/api/dealers-den', { headers: s.auth, body: { groupId: s.group.id, ...body } });
 
 describe('dealers den: raffle tickets and draw', () => {
   beforeAll(() => getApp());
@@ -108,25 +115,18 @@ describe('dealers den: input validation', () => {
 
   it('аукцион без даты окончания отклоняется', async () => {
     const s = await seller();
-    const res = await api('POST', '/api/dealers-den', {
-      headers: s.auth, body: { title: 'A', price: 5, listingKind: 'auction' },
-    });
+    const res = await createLot(s, { title: 'A', price: 5, listingKind: 'auction' });
     expect(res.status).toBe(400);
   });
 
   it('очередь комиссий без слотов отклоняется, с слотами — создаётся', async () => {
     const s = await seller();
-    const bad = await api('POST', '/api/dealers-den', {
-      headers: s.auth, body: { title: 'C', price: 20, listingKind: 'commission_queue' },
-    });
+    const bad = await createLot(s, { title: 'C', price: 20, listingKind: 'commission_queue' });
     expect(bad.status).toBe(400);
 
-    const ok = await api('POST', '/api/dealers-den', {
-      headers: s.auth,
-      body: {
-        title: 'C', price: 20, listingKind: 'commission_queue', commissionSlotsTotal: 3,
-        commissionFormFields: [{ label: 'Reference', required: true, type: 'text' }],
-      },
+    const ok = await createLot(s, {
+      title: 'C', price: 20, listingKind: 'commission_queue', commissionSlotsTotal: 3,
+      commissionFormFields: [{ label: 'Reference', required: true, type: 'text' }],
     });
     expect(ok.status).toBe(201);
   });
@@ -139,7 +139,7 @@ describe('dealers den: input validation', () => {
       { title: 'A', price: '' },
       { title: 'A', price: 5, listingKind: 'lottery' },
     ]) {
-      const res = await api('POST', '/api/dealers-den', { headers: s.auth, body });
+      const res = await createLot(s, body);
       expect(res.status).toBe(400);
     }
   });
@@ -151,9 +151,7 @@ describe('dealers den: input validation', () => {
 
   it('у продавца нельзя поставить срок аукциона в прошлое при редактировании', async () => {
     const s = await seller();
-    const created = await api('POST', '/api/dealers-den', {
-      headers: s.auth, body: { title: 'A', price: 5, listingKind: 'auction', auctionEndsAt: future() },
-    });
+    const created = await createLot(s, { title: 'A', price: 5, listingKind: 'auction', auctionEndsAt: future() });
     const res = await api('PATCH', `/api/dealers-den/${created.json.data.listing.id}`, {
       headers: s.auth, body: { auctionEndsAt: new Date(Date.now() - 1000).toISOString() },
     });

@@ -23,8 +23,8 @@
                   <BIcon name="Megaphone" class="w-4 h-4 text-brand-accent" />
                 </div>
                 <div>
-                  <h3 class="text-sm font-extrabold text-white leading-none">Заявка на рекламу</h3>
-                  <p class="text-[11px] text-white/35 mt-0.5">Рассмотрим и разместим вручную</p>
+                  <h3 class="text-sm font-extrabold text-white leading-none">Разместить рекламу</h3>
+                  <p class="text-[11px] text-white/35 mt-0.5">Оплата в BLM, запуск после модерации</p>
                 </div>
               </div>
               <button
@@ -44,8 +44,8 @@
                     <BIcon name="CheckCircle2" class="w-8 h-8 text-emerald-400" />
                   </div>
                 </div>
-                <h4 class="text-white font-extrabold text-base mb-1">Заявка отправлена</h4>
-                <p class="text-white/40 text-sm">Мы свяжемся с вами после модерации</p>
+                <h4 class="text-white font-extrabold text-base mb-1">Оплачено, баннер на модерации</h4>
+                <p class="text-white/40 text-sm">Срок показа начнётся с момента одобрения. Если откажем, вернём {{ paidPrice }} BLM на баланс</p>
               </div>
 
               <!-- Logged out -->
@@ -57,15 +57,42 @@
 
               <!-- Form -->
               <div v-else key="form" class="p-4 stack-y-3 max-h-[70vh] overflow-y-auto overscroll-contain">
-                <div class="bg-white/3 border border-white/8 rounded-2xl px-3.5 py-2.5">
-                  <p class="text-[10px] font-bold text-white/30 uppercase tracking-wide mb-1.5">Ориентировочные цены</p>
-                  <div class="text-[11px] text-white/50 stack-y-0.5">
-                    <p>Верх ленты — от 1500 ₽ / нед.</p>
-                    <p>Страница «Группы» — от 1200 ₽ / нед.</p>
-                    <p>Левое меню — от 800 ₽ / нед.</p>
-                    <p>Правая колонка — от 600 ₽ / нед.</p>
+                <div class="stack-y-2">
+                  <p class="text-[10px] font-bold text-white/30 uppercase tracking-wide">Место размещения</p>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button v-for="p in placementOptions" :key="p.placement" type="button" @click="placement = p.placement"
+                      class="text-left px-3 py-2 rounded-2xl border transition-all"
+                      :class="placement === p.placement ? 'border-brand-accent/60 bg-brand-accent/10' : 'border-white/10 bg-white/5 hover:border-white/20'">
+                      <span class="block text-xs font-bold text-white/85">{{ PLACEMENT_LABEL[p.placement] }}</span>
+                      <span class="block text-[10px] text-white/40 mt-0.5">от {{ p.prices.day }} BLM / сут.</span>
+                    </button>
                   </div>
-                  <p class="text-[10px] text-white/25 mt-1.5">Точную стоимость и место размещения обсудим после заявки</p>
+                  <div class="flex gap-2">
+                    <button v-for="b in (['day', 'week'] as const)" :key="b" type="button" @click="setBilling(b)"
+                      class="flex-1 py-2 rounded-xl border text-xs font-bold transition-all"
+                      :class="billing === b ? 'border-brand-accent/60 bg-brand-accent/10 text-white' : 'border-white/10 bg-white/5 text-white/55'">
+                      {{ b === 'day' ? 'Сутки' : 'Неделя' }}
+                    </button>
+                    <div class="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-1">
+                      <button type="button" class="w-7 h-8 text-white/60 hover:text-white disabled:opacity-30" :disabled="periods <= 1" @click="periods--">−</button>
+                      <span class="w-8 text-center text-sm font-bold text-white tabular-nums">{{ periods }}</span>
+                      <button type="button" class="w-7 h-8 text-white/60 hover:text-white disabled:opacity-30" :disabled="periods >= maxPeriods" @click="periods++">+</button>
+                    </div>
+                  </div>
+                  <div v-if="pricing" class="rounded-2xl border border-white/8 bg-white/3 px-3.5 py-2.5 text-[11px] text-white/55">
+                    <div class="flex items-center justify-between">
+                      <span>{{ periods }} {{ billing === 'week' ? 'нед.' : 'сут.' }} · {{ PLACEMENT_LABEL[placement] }}</span>
+                      <span class="flex items-center gap-1.5">
+                        <span v-if="pricing.discountPct > 0" class="line-through text-white/30">{{ quote.base }}</span>
+                        <span class="text-sm font-extrabold text-white">{{ quote.price }} BLM</span>
+                      </span>
+                    </div>
+                    <p v-if="pricing.discountPct > 0" class="text-emerald-400 mt-1">Скидка тарифа −{{ pricing.discountPct }}% уже учтена</p>
+                    <p v-if="localPrice" class="text-white/35 mt-0.5">≈ {{ localPrice }}</p>
+                    <p class="mt-1" :class="canAfford ? 'text-white/40' : 'text-rose-400'">
+                      На балансе {{ pricing.balance.toFixed(2) }} BLM<template v-if="pricing.promoBalance > 0"> + {{ pricing.promoBalance.toFixed(2) }} Promo (тратится первым)</template>
+                    </p>
+                  </div>
                 </div>
 
                 <input
@@ -92,13 +119,6 @@
                   placeholder="Как с вами связаться (Telegram, e-mail…)"
                   maxlength="200"
                 />
-                <input
-                  v-model="priceLabel"
-                  class="ad-req-input"
-                  placeholder="Ваш бюджет / готовы платить (необязательно)"
-                  maxlength="60"
-                />
-
                 <div v-if="imageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/8 rounded-2xl">
                   <img :src="imageUrl" class="w-16 h-12 object-cover rounded-xl shrink-0 border border-white/10" />
                   <p class="text-[10px] text-white/30 truncate flex-1">{{ imageUrl }}</p>
@@ -122,13 +142,13 @@
                   <button
                     type="button"
                     @click="submit"
-                    :disabled="!title.trim() || !linkUrl.trim() || isSending"
+                    :disabled="!title.trim() || !linkUrl.trim() || isSending || !pricing || !canAfford"
                     class="flex-2 flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-extrabold disabled:opacity-30 transition-all hover:opacity-90 active:scale-[0.98]"
                     style="background: linear-gradient(135deg, #FF6B9D, #7c3aed)"
                   >
                     <span v-if="isSending" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <BIcon v-else name="Send" class="w-4 h-4" />
-                    {{ isSending ? 'Отправка…' : 'Отправить заявку' }}
+                    <BIcon v-else name="Lock" class="w-4 h-4" />
+                    {{ isSending ? 'Оплата…' : `Оплатить ${quote.price} BLM` }}
                   </button>
                 </div>
               </div>
@@ -141,63 +161,115 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import BIcon from '../BIcon.vue'
 import MediaUpload from '../MediaUpload.vue'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useWalletStore } from '@/stores/wallet'
+import { apiErrorCode, apiErrorMessage } from '@/lib/apiError'
+import { adPrice, type AdBilling, type AdPlacement, type AdPricing } from '@/lib/adPricing'
+import { blmLocal } from '@/lib/format'
 
-const props = defineProps<{ modelValue: boolean }>()
+const props = defineProps<{ modelValue: boolean; placement?: AdPlacement }>()
 const emit = defineEmits<{ (e: 'update:modelValue', val: boolean): void }>()
 
 const auth = useAuthStore()
+const walletStore = useWalletStore()
+
+const PLACEMENT_LABEL: Record<AdPlacement, string> = {
+  feed_top: 'Верх ленты',
+  groups_page: 'Страница «Группы»',
+  left_menu: 'Левое меню',
+  right_column: 'Правая колонка',
+}
 
 const title = ref('')
 const description = ref('')
 const linkUrl = ref('')
 const contactInfo = ref('')
-const priceLabel = ref('')
 const imageUrl = ref('')
 const sent = ref(false)
 const isSending = ref(false)
 const errorMsg = ref('')
+const paidPrice = ref(0)
+
+const pricing = ref<AdPricing | null>(null)
+const placement = ref<AdPlacement>(props.placement ?? 'feed_top')
+const billing = ref<AdBilling>('week')
+const periods = ref(1)
+
+const placementOptions = computed(() => pricing.value?.placements ?? [])
+const maxPeriods = computed(() => pricing.value?.maxPeriods[billing.value] ?? 1)
+const quote = computed(() => {
+  const base = pricing.value?.placements.find(p => p.placement === placement.value)?.prices[billing.value] ?? 0
+  return adPrice(base, periods.value, pricing.value?.discountPct ?? 0)
+})
+const canAfford = computed(() => !!pricing.value && pricing.value.balance + pricing.value.promoBalance + 1e-9 >= quote.value.price)
+const localPrice = computed(() => blmLocal(quote.value.price))
+
+function setBilling(b: AdBilling) {
+  billing.value = b
+  periods.value = Math.min(periods.value, pricing.value?.maxPeriods[b] ?? 1)
+}
+
+async function loadPricing() {
+  try {
+    const res = await api.get('/admin/ads/pricing')
+    pricing.value = res.data.data
+  } catch {
+    errorMsg.value = 'Не удалось загрузить цены. Попробуйте позже.'
+  }
+}
 
 watch(() => props.modelValue, (v) => {
-  if (!v) {
-    setTimeout(() => {
-      title.value = ''
-      description.value = ''
-      linkUrl.value = ''
-      contactInfo.value = ''
-      priceLabel.value = ''
-      imageUrl.value = ''
-      sent.value = false
-      errorMsg.value = ''
-    }, 300)
+  if (v) {
+    if (props.placement) placement.value = props.placement
+    if (auth.isAuthenticated) void loadPricing()
+    return
   }
+  setTimeout(() => {
+    title.value = ''
+    description.value = ''
+    linkUrl.value = ''
+    contactInfo.value = ''
+    imageUrl.value = ''
+    sent.value = false
+    errorMsg.value = ''
+    periods.value = 1
+  }, 300)
 })
 
 function close() {
   emit('update:modelValue', false)
 }
 
+const ERROR_TEXT: Record<string, string> = {
+  INSUFFICIENT_FUNDS: 'Недостаточно BLM — пополните баланс',
+  INVALID_AD_LINK: 'Недопустимая ссылка: разрешены только http(s), mailto и tel',
+}
+
 async function submit() {
-  if (!title.value.trim() || !linkUrl.value.trim() || isSending.value) return
+  if (!title.value.trim() || !linkUrl.value.trim() || isSending.value || !canAfford.value) return
   isSending.value = true
   errorMsg.value = ''
   try {
-    await api.post('/admin/ads', {
+    const res = await api.post('/admin/ads', {
       title: title.value.trim(),
       description: description.value.trim() || undefined,
       imageUrl: imageUrl.value || undefined,
       linkUrl: linkUrl.value.trim(),
       contactInfo: contactInfo.value.trim() || undefined,
-      priceLabel: priceLabel.value.trim() || undefined,
+      placement: placement.value,
+      billing: billing.value,
+      periods: periods.value,
     })
+    paidPrice.value = Number(res.data.data.quote.price)
+    void walletStore.fetchBalance().catch(() => {})
     sent.value = true
-    setTimeout(() => close(), 2800)
-  } catch {
-    errorMsg.value = 'Не удалось отправить заявку. Попробуйте позже.'
+    setTimeout(() => close(), 3500)
+  } catch (e) {
+    errorMsg.value = ERROR_TEXT[apiErrorCode(e) ?? ''] ?? apiErrorMessage(e) ?? 'Не удалось оплатить рекламу. Попробуйте позже.'
   } finally {
     isSending.value = false
   }

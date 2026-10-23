@@ -15,6 +15,7 @@ import {
   listFairsAdminHandler, createFairAdminHandler, updateFairParticipantAdminHandler,
   createApplicationHandler, getMyApplicationHandler, listGroupApplicationsHandler,
   groupApplicationsCountHandler, updateApplicationHandler, applicationCharacterOptionsHandler,
+  getBumpInfoHandler, bumpListingHandler, setAutoBumpHandler,
 } from './controller.js';
 import { requireAdminRole } from '../../lib/authHooks.js';
 
@@ -33,6 +34,11 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof createListingHandler>>('/',     auth,   createListingHandler);
   fastify.patch<RouteGenericOf<typeof updateListingHandler>>('/:id', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, updateListingHandler);
   fastify.delete<RouteGenericOf<typeof deleteListingHandler>>('/:id', auth,  deleteListingHandler);
+
+  // ── Общая лента: поднятия (за BLM или из лимита подписки) и автоподнятие ──
+  fastify.get('/bump-info', auth, getBumpInfoHandler);
+  fastify.post('/:id/bump', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, bumpListingHandler);
+  fastify.put('/:id/auto-bump', auth, setAutoBumpHandler);
 
   // ── Applications: заявка на лот уходит только в группу-продавца ──
   fastify.post('/:listingId/application', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, createApplicationHandler);

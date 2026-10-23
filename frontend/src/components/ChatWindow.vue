@@ -367,7 +367,7 @@
           <span class="flex-1 h-px bg-brand-accent/30" />
         </div>
         <!-- Date divider -->
-        <div v-if="shouldShowDateDivider(idx)" class="sticky top-1 z-5 flex items-center justify-center my-3 select-none">
+        <div v-if="shouldShowDateDivider(idx)" class="flex items-center justify-center my-3 select-none">
           <span class="px-3 py-1 rounded-full bg-brand-card/80 backdrop-blur-md border border-white/10 text-[10px] font-bold text-white/60 tracking-wide uppercase shadow-lg">
             {{ formatDateDivider(msg.created_at) }}
           </span>
@@ -718,7 +718,7 @@
             <div v-else-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip', 'order_card', 'order_update'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
-                'relative px-3 py-[7px] rounded-2xl text-sm leading-relaxed wrap-break-word min-w-[60px] transition-shadow',
+                'relative px-3 py-[7px] rounded-2xl text-sm leading-relaxed wrap-anywhere max-w-full min-w-[60px] transition-shadow',
                 isMine(msg)
                   ? 'bg-linear-to-br/srgb from-brand-accent to-[#3d56b8] text-white rounded-br-md shadow-[0_6px_18px_rgba(76,103,207,0.28)]'
                   : 'bg-brand-card/90 text-brand-offwhite border border-white/[0.07] rounded-bl-md shadow-xs backdrop-blur-xs',
@@ -1211,7 +1211,7 @@
           <BIcon v-if="isUploading" name="Loader2" class="w-4 h-4 animate-spin" />
           <BIcon v-else name="Paperclip" class="w-4.5 h-4.5" />
         </button>
-        <input ref="fileInputEl" type="file" multiple accept="image/*,video/*,audio/*" class="sr-only" @change="onFileChange" />
+        <input ref="fileInputEl" type="file" multiple accept="image/*,video/*,audio/*,.zip,.7z,.rar,.gz,.psd" class="sr-only" @change="onFileChange" />
 
         <!-- Emoji button -->
         <button type="button"
@@ -1350,8 +1350,10 @@
             <BIcon name="Mic" class="w-4 h-4" />
           </button>
           <!-- Send: shown when there's text or at least one uploaded attachment -->
+          <!-- pointerdown.prevent: тап по кнопке не отнимает фокус у поля, и клавиатура остаётся открытой -->
           <button v-else key="send"
             type="submit"
+            @pointerdown.prevent
             :disabled="(!draft.trim() && !pendingAttachments.some((a) => a.uploadedUrl && !a.failed)) || isUploading"
             class="shrink-0 w-10 h-10 rounded-2xl bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-30 transition-all shadow-lg shadow-brand-accent/20 active:scale-95 flex items-center justify-center"
             :title="langStore.t.send">
@@ -1789,6 +1791,7 @@ function forwardMsgPreview(msg: Message): string {
   if (msg.type === 'sticker') return langStore.t.stickerPreview
   if (msg.type === 'voice') return langStore.t.voiceMessagePreview
   if (msg.type === 'audio') return langStore.t.chatAudioPreview
+  if (msg.type === 'file') return '📎'
   if (msg.type === 'post_share') return langStore.t.chatPostPreview
   if (msg.type === 'group_share') return langStore.t.chatGroupInvitePreview
   if (msg.type === 'order_card') return '📦 Заказ'
@@ -2187,6 +2190,8 @@ async function submit() {
     store.sendMessage(props.convId, text, fileUrl, kind === 'file' ? undefined : kind, rId)
   }
   scrollToBottom(true)
+  // Клавиатура должна остаться открытой после отправки (в том же жесте, иначе мобильный браузер её закроет)
+  inputEl.value?.focus({ preventScroll: true })
 }
 
 function retrySend(msg: Message) {

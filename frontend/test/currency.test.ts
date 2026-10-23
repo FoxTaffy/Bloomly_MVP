@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { detectRegionFromLocale, displayCurrency, displayRates, setDisplayRegion } from '../src/lib/displayCurrency'
-import { formatBlm, formatPrice } from '../src/lib/format'
+import { blmLocal, formatBlm, formatPrice } from '../src/lib/format'
 
 // ₽ за единицу валюты: 1 BLM = 1 $ = 90 ₽
 const RATES = { RUB: 1, USD: 90, EUR: 100, CNY: 12.5, INR: 1.1, BRL: 16, KZT: 0.18 }
@@ -132,5 +132,17 @@ describe('setDisplayRegion: явный регион против автоопр�
     vi.stubGlobal('navigator', { languages: ['ja-JP'], language: 'ja-JP' })
     setDisplayRegion(undefined)
     expect(displayCurrency.value).toBeNull()
+  })
+})
+
+describe('blmLocal: цена BLM только в валюте региона', () => {
+  afterEach(() => { displayCurrency.value = null; displayRates.value = {} })
+
+  it('для страницы тарифов: 3.75 BLM → 338 ₽, без валюты или для нуля — null', () => {
+    show('RU')
+    expect(plain(blmLocal(3.75)!)).toBe('338 ₽') // 337.5 округляется вверх
+    expect(blmLocal(0)).toBeNull()
+    show('GLOBAL')
+    expect(blmLocal(3.75)).toBeNull()
   })
 })

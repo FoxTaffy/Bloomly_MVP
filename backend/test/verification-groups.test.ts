@@ -94,9 +94,13 @@ describe('ручная верификация и тематические гру
     const created = await api('POST', '/api/groups', { headers: owner.auth, body: { name: 'Shop', slug: 'shop', type: 'shop' } });
     const groupId = created.json.data.group.id;
     await prisma.groupMember.create({ data: { group_id: groupId, user_id: member.user.id, role: 'admin' } });
+    // Продавать можно после подключения Dealers Den в группе (подтверждение правил) — и только владельцу
+    expect((await api('GET', '/api/dealers-den/eligibility', { headers: owner.auth })).json.data.canSell).toBe(false);
+    expect((await api('POST', `/api/dealers-den/groups/${groupId}/connect`, { headers: member.auth, body: { confirmNotScammer: true } })).status).toBe(403);
+    expect((await api('POST', `/api/dealers-den/groups/${groupId}/connect`, { headers: owner.auth, body: { confirmNotScammer: true } })).status).toBe(200);
     expect((await api('GET', '/api/dealers-den/eligibility', { headers: owner.auth })).json.data.canSell).toBe(true);
     expect((await api('GET', '/api/dealers-den/eligibility', { headers: member.auth })).json.data.canSell).toBe(false);
-    const body = { title: 'Handmade', description: 'Craft', price: 100, category: 'craft', type: 'physical', listingKind: 'fixed', images: [] };
+    const body = { title: 'Handmade', description: 'Craft', price: 100, category: 'craft', type: 'physical', listingKind: 'fixed', images: [], groupId };
     expect((await api('POST', '/api/dealers-den', { headers: owner.auth, body })).status).toBe(201);
     expect((await api('POST', '/api/dealers-den', { headers: member.auth, body })).status).toBe(403);
     await prisma.user.update({ where: { id: owner.user.id }, data: { den_frozen: true } });

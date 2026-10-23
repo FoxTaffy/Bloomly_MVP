@@ -115,6 +115,7 @@ export const updateUserSchema = {
       groups_visibility:        { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
       groups_pinned_only:       { type: 'boolean' },
       payment_region:           { type: 'string', maxLength: 10, nullable: true },
+      commissions_status:       { type: 'string', enum: ['none', 'open', 'waitlist', 'closed'] },
     },
     additionalProperties: false,
   },

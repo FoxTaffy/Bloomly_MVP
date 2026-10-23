@@ -5,6 +5,7 @@ import { useWalletStore } from '@/stores/wallet'
 import { usePaymentsStore, type PayMethod, type BillingPeriod, type PlanQuote } from '@/stores/payments'
 import { apiErrorCode } from '@/lib/apiError'
 import BIcon from '@/components/BIcon.vue'
+import { blmLocal } from '@/lib/format'
 
 const props = defineProps<{
   plan: { id: string; label: string; color: string; gradient: string; features: string[] }
@@ -33,10 +34,13 @@ const recurringEnabled = ref(false)
 const autoRenew = ref(true)
 const canAutoRenew = computed(() => recurringEnabled.value && (method.value !== 'wallet' || hasSavedMethod.value))
 
-// Пока сервер не ответил — показываем цену со страницы тарифов
-const perMonth = computed(() => quoteRes.value?.perMonth ?? props.price)
-const total    = computed(() => quoteRes.value?.amount ?? props.price * (props.period === 'year' ? 12 : 1))
-const totalBc  = computed(() => quoteRes.value?.bcAmount ?? Math.ceil((total.value / 90) * 100) / 100)
+// Пока сервер не ответил — показываем цену со страницы тарифов (в BLM)
+const months   = computed(() => (props.period === 'year' ? 12 : 1))
+const perMonth = computed(() => quoteRes.value?.blmPerMonth ?? props.price)
+const totalBc  = computed(() => quoteRes.value?.blmAmount ?? Math.round(props.price * months.value * 100) / 100)
+// На шлюз (карта, ЮMoney) уходит рублёвый эквивалент по текущему курсу — известен только от сервера
+const totalRub = computed(() => quoteRes.value?.amount ?? null)
+const localTotal = computed(() => blmLocal(totalBc.value))
 const canPayFromWallet = computed(() => walletStore.balance >= totalBc.value)
 
 const METHODS = computed(() => [
@@ -147,13 +151,13 @@ function close() {
                     {{ plan.label }}
                   </span>
                   <div class="flex items-center gap-2">
-                    <span v-if="discounted && originalPrice" class="text-xs text-white/30 line-through">{{ originalPrice }} ₽</span>
-                    <span class="text-sm font-extrabold text-white">{{ perMonth }} ₽{{ langStore.t.subPerMonth }}</span>
+                    <span v-if="discounted && originalPrice" class="text-xs text-white/30 line-through">{{ originalPrice }} BLM</span>
+                    <span class="text-sm font-extrabold text-white">{{ perMonth }} BLM{{ langStore.t.subPerMonth }}</span>
                   </div>
                 </div>
                 <div class="flex items-center justify-between text-xs">
                   <span class="text-white/40">{{ period === 'year' ? langStore.t.payPeriodYear : langStore.t.payPeriodMonth }}</span>
-                  <span class="text-white/70 font-bold">{{ langStore.t.payTotal }}: {{ total }} ₽</span>
+                  <span class="text-white/70 font-bold">{{ langStore.t.payTotal }}: {{ totalBc }} BLM<template v-if="localTotal"> ≈ {{ localTotal }}</template></span>
                 </div>
               </div>
 
@@ -200,7 +204,7 @@ function close() {
                   style="background: linear-gradient(135deg, #4C67CF 0%, #7C6FDB 55%, #CD83F5 100%);">
                   <BIcon v-if="sending" name="Loader2" class="w-5 h-5 animate-spin" />
                   <BIcon v-else name="Lock" class="w-4 h-4" />
-                  {{ sending ? langStore.t.payModalProcessing : `${langStore.t.payModalPayBtn} ${total} ₽` }}
+                  {{ sending ? langStore.t.payModalProcessing : `${langStore.t.payModalPayBtn} ${method === 'wallet' || totalRub === null ? `${totalBc} BLM` : `${totalRub} ₽`}` }}
                 </button>
               </template>
 

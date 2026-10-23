@@ -5,12 +5,14 @@ import { usePaymentsStore } from '@/stores/payments'
 import { useLangStore } from '@/stores/lang'
 import { apiErrorMessage } from '@/lib/apiError'
 import BIcon from '@/components/BIcon.vue'
+import AdRequestModal from '@/components/ads/AdRequestModal.vue'
 
 const walletStore = useWalletStore()
 const paymentsStore = usePaymentsStore()
 const langStore = useLangStore()
 
 const showModal = ref(false)
+const showAdModal = ref(false)
 const showTopupPicker = ref(false)
 const toppingUp = ref(false)
 const customTopup = ref<number | null>(null)
@@ -94,6 +96,9 @@ async function topupWallet(amount: number) {
                 <BIcon name="Flower2" class="w-3.5 h-3.5" /> BLM
               </p>
               <p class="text-[11px] text-white/45 mt-1 relative">1 BLM = $1</p>
+              <p v-if="walletStore.promoBalance > 0" class="text-[11px] text-amber-300/90 mt-2 relative" :title="'Бонусные BLM тратятся только на услуги площадки: баннеры, поднятия, бусты. Вывести их нельзя'">
+                + {{ walletStore.promoBalance.toFixed(2) }} Promo BLM
+              </p>
             </div>
 
             <div v-if="showTopupPicker" class="bg-brand-bg border border-brand-border rounded-2xl p-4 stack-y-3">
@@ -130,6 +135,10 @@ async function topupWallet(amount: number) {
                 <span class="text-xs font-bold text-white/55">{{ langStore.t.withdrawBtn }}</span>
               </button>
             </div>
+            <button v-if="!showTopupPicker" @click="showModal = false; showAdModal = true"
+              class="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border border-brand-border bg-brand-bg/50 hover:border-brand-accent/50 text-xs font-bold text-white/80 transition-all">
+              <BIcon name="Megaphone" class="w-4 h-4 text-brand-accent" /> Разместить рекламу
+            </button>
             <p class="text-center text-[11px] text-white/35">
               {{ paymentsStore.config?.enabled ? langStore.t.profileTopupDisclaimerReal : langStore.t.profileTopupDisclaimer }}
             </p>
@@ -138,4 +147,5 @@ async function topupWallet(amount: number) {
       </div>
     </Transition>
   </Teleport>
+  <AdRequestModal v-model="showAdModal" />
 </template>

@@ -9,6 +9,7 @@ import { pushService } from '../push/service.js';
 import { notificationService } from '../notifications/service.js';
 import { debitWallet } from '../wallet/ledger.js';
 import { amountToBlm } from '../payments/rate.js';
+import { perksFor } from '../payments/plan-perks.js';
 
 // Group roles that answer the group's inbox (group DMs) on its behalf.
 import { ensureGroupThread } from '../../lib/groupThread.js';
@@ -150,13 +151,12 @@ function inferFileType(fileUrl: string, mediaType?: string): string {
   if (mediaType === 'gif') return 'gif';
   if (/\.(?:mp4|webm|mov|avi|mkv)$/i.test(fileUrl)) return 'video';
   if (/\.(?:mp3|wav|ogg|m4a|flac|aac)$/i.test(fileUrl)) return 'audio';
+  // Документы и исходники (PSD, архивы) — вложение-файл, скачивается, не показывается
+  if (/\.(?:zip|7z|rar|gz|psd)$/i.test(fileUrl)) return 'file';
   return 'image';
 }
 
 const MAX_ALBUM_FILES = 10;
-
-// Free-tier daily message cap advertised on the subscription page (Lite+ is unlimited).
-const FREE_DAILY_MESSAGE_LIMIT = 50;
 
 // ── Service ───────────────────────────────────────────────────────────────────
 export const messageService = {
@@ -491,14 +491,16 @@ export const messageService = {
     for (const url of fileUrls) await assertOwnedMedia(url, senderId);
 
     const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { subscription_tier: true } });
-    if ((sender?.subscription_tier ?? 'free') === 'free') {
+    // Суточный лимит сообщений задаёт тариф (payments/plan-perks.ts); null — без ограничений
+    const dailyLimit = perksFor(sender?.subscription_tier ?? 'free').dailyMessageLimit;
+    if (dailyLimit !== null) {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
       const sentToday = await prisma.message.count({
         // Удалённые тоже считаются: иначе лимит обходится «отправил — удалил — отправил».
         where: { sender_id: senderId, created_at: { gte: startOfDay } },
       });
-      if (sentToday >= FREE_DAILY_MESSAGE_LIMIT) {
+      if (sentToday >= dailyLimit) {
         throw Object.assign(new Error('DAILY_MESSAGE_LIMIT_REACHED'), { statusCode: 402 });
       }
     }
@@ -1404,7 +1406,7 @@ export const messageService = {
       });
     }
 
-    const validTypes = ['image', 'video', 'audio', 'voice'];
+    const validTypes = ['image', 'video', 'audio', 'voice', 'file'];
     if (!validTypes.includes(mediaType)) return [];
 
     return prisma.message.findMany({

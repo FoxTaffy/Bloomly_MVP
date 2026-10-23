@@ -195,6 +195,8 @@ model User {
   groups_pinned_only             Boolean                   @default(false)
   last_seen_at                   DateTime?
   payment_region                 String?                   @db.VarChar(10)
+  /// Плашка «Заказы открыты» (Pro и Business): none | open | waitlist | closed. Сбрасывается в none, когда тариф перестаёт её давать
+  commissions_status             String                    @default("none") @db.VarChar(10)
   paymentMethods                 PaymentMethod[]
   subscriptionPlans              SubscriptionPlan[]
   payments                       Payment[]
@@ -349,6 +351,9 @@ model Post {
   is_ai_generated     Boolean             @default(false)
   // Лот Dealers' Den, прикреплённый к посту «Обновление заказа» (карточка внизу поста)
   listing_id          String?             @db.Uuid
+  /// Платное/тарифное продвижение в ленту: пока boosted_until в будущем, пост получает охват сверху ленты
+  boosted_at          DateTime?
+  boosted_until       DateTime?
   comments            Comment[]
   favourites          Favourite[]
   author              User                @relation("PostAuthor", fields: [author_id], references: [id])
@@ -362,9 +367,11 @@ model Post {
   views               PostView[]
   notInterested       PostNotInterested[]
   listing             DealerListing?      @relation(fields: [listing_id], references: [id], onDelete: SetNull)
+  boosts              PostBoost[]
 
   @@index([author_id])
   @@index([listing_id])
+  @@index([boosted_until])
   @@index([deleted_at, created_at])
   @@index([rating])
   // Лента: ORDER BY created_at DESC LIMIT n — без этого индекса планировщик читал все посты
@@ -632,7 +639,7 @@ model WalletTransaction {
   amount        Decimal  @db.Decimal(18, 2)
   balance_after Decimal  @db.Decimal(18, 2) // остаток того баланса, что изменился (см. balance_type)
   balance_type  String   @default("main") @db.VarChar(8) // main | promo
-  kind          String   @db.VarChar(30) // topup | subscription | sticker_purchase | sticker_sale | shop_purchase | group_donation | dev_topup | order_escrow | order_payout | order_refund | promo_grant | promo_spend
+  kind          String   @db.VarChar(30) // topup | subscription | sticker_purchase | sticker_sale | shop_purchase | group_donation | dev_topup | order_escrow | order_payout | order_refund | promo_grant | promo_spend | den_bump | ad_banner | ad_refund | post_boost
   ref_id        String?  @db.VarChar(100) // платёж / пак / товар / группа
   created_at    DateTime @default(now())
 
@@ -751,6 +758,16 @@ model Advertisement {
   clicks       Int       @default(0)
   starts_at    DateTime?
   ends_at      DateTime?
+  // ── Покупка за BLM: место, срок и что списано (null у старых заявок без оплаты) ──
+  placement    String?   @db.VarChar(20) // feed_top | groups_page | left_menu | right_column; null — старая реклама, показывается везде
+  billing      String?   @db.VarChar(5)  // day | week
+  periods      Int?      // сколько суток/недель куплено
+  duration_days Int?     // срок показа с момента одобрения
+  price_blm    Decimal?  @db.Decimal(18, 2) // итог к оплате с учётом скидки тарифа
+  discount_pct Int       @default(0)         // скидка тарифа на момент покупки
+  paid_main_blm  Decimal @default(0) @db.Decimal(18, 2) // списано с основного баланса
+  paid_promo_blm Decimal @default(0) @db.Decimal(18, 2) // списано с промо-баланса (возврат уходит туда же)
+  refunded_at  DateTime?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @default(now()) @updatedAt
   deleted_at   DateTime?
@@ -1534,6 +1551,14 @@ model DealerListing {
   commission_form_fields Json?     @default("[]")
   commission_details     Json?     // { formats, addons, draws, doesntDraw, sections, terms }
   views_count            Int       @default(0)
+  // ── Общая лента Dealers Den: кулдаун публикации и поднятия ──────────────────
+  /// Когда карточка попала в общую ленту. null — ждёт кулдауна (в магазине группы видна сразу). Считается кулдауном на группу.
+  feed_published_at      DateTime? @db.Timestamp(6)
+  /// Ключ сортировки общей ленты: время публикации или последнего поднятия
+  feed_at                DateTime? @db.Timestamp(6)
+  last_bumped_at         DateTime? @db.Timestamp(6)
+  /// Автоподнятие (по тарифу): раз в сутки карточка сама возвращается наверх ленты
+  auto_bump              Boolean   @default(false)
   // ────────────────────────────────────────────────────────────────────────────
   created_at             DateTime  @default(now()) @db.Timestamp(6)
   updated_at             DateTime  @default(now()) @updatedAt @db.Timestamp(6)
@@ -1541,6 +1566,7 @@ model DealerListing {
 
   seller           User                   @relation(fields: [seller_id], references: [id], onDelete: Cascade)
   group            Group?                 @relation(fields: [group_id], references: [id], onDelete: SetNull)
+  bumps            DenBump[]
   bids             DealerBid[]
   comments         DealerListingComment[]
   reviews          DenReview[]
@@ -1560,6 +1586,39 @@ model DealerListing {
   @@index([listing_kind])
   @@index([auction_ends_at])
   @@index([created_at(sort: Desc)])
+  @@index([feed_at(sort: Desc)])
+}
+
+/// Журнал бустов постов: по записи на каждый, чтобы считать месячный лимит тарифа и кулдаун
+model PostBoost {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  post_id    String   @db.Uuid
+  user_id    String   @db.Uuid
+  kind       String   @db.VarChar(10) // free (лимит тарифа) | paid (BLM)
+  cost_blm   Decimal  @default(0) @db.Decimal(18, 2)
+  created_at DateTime @default(now())
+
+  post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, kind, created_at])
+  @@index([post_id, created_at])
+}
+
+/// Журнал поднятий карточек в общей ленте: по записи на каждое, чтобы считать лимиты подписки и интервалы автоподнятия.
+model DenBump {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id String   @db.Uuid
+  user_id    String   @db.Uuid
+  group_id   String?  @db.Uuid
+  kind       String   @db.VarChar(10) // free (лимит подписки) | paid (BLM) | auto
+  cost_blm   Decimal  @default(0) @db.Decimal(18, 2)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  listing DealerListing @relation(fields: [listing_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, kind, created_at])
+  @@index([group_id, kind, created_at])
+  @@index([listing_id])
 }
 
 // Заявка покупателя на лот Dealers' Den. Уходит только в группу-продавца (не в личные сообщения):

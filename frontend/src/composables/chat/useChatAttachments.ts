@@ -1,7 +1,9 @@
 import { apiErrorMessage } from '@/lib/apiError'
 import { onUnmounted, reactive, ref, type Ref } from 'vue'
-import api from '@/api'
+import { uploadMedia } from '@/lib/uploadMedia'
 import { useLangStore } from '@/stores/lang'
+import { useUploadPrecheck } from '@/composables/useUploadPrecheck'
+import { effectiveMime } from '@/lib/uploadLimits'
 
 // Multiple attachments can be queued at once (e.g. a photo + a video sent together)
 export interface PendingAttachment {
@@ -19,9 +21,11 @@ export interface PendingAttachment {
 export const MAX_ATTACHMENTS = 10
 
 function fileKind(file: File): 'image' | 'video' | 'audio' | 'file' {
-  if (file.type.startsWith('image/')) return 'image'
-  if (file.type.startsWith('video/')) return 'video'
-  if (file.type.startsWith('audio/')) return 'audio'
+  const type = effectiveMime(file) // PSD и архивы браузер часто отдаёт без типа — определяем по расширению
+  if (type === 'image/vnd.adobe.photoshop') return 'file'
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('video/')) return 'video'
+  if (type.startsWith('audio/')) return 'audio'
   return 'file'
 }
 
@@ -32,13 +36,23 @@ const revokePreview = (a: PendingAttachment) => {
 /** Composer attachment queue: each file uploads on its own as soon as it is added. */
 export function useChatAttachments(fileInputEl: Ref<HTMLInputElement | null>) {
   const langStore = useLangStore()
+  const { precheck, fromServerError } = useUploadPrecheck()
   const pendingAttachments = ref<PendingAttachment[]>([])
   const uploadError = ref<string | null>(null)
   let uploadErrorTimer: ReturnType<typeof setTimeout> | null = null
   let attachSeq = 0
 
+  function showUploadError(message: string) {
+    uploadError.value = message
+    if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
+    uploadErrorTimer = setTimeout(() => { uploadError.value = null }, 6000)
+  }
+
   function addPendingFile(file: File) {
     if (pendingAttachments.value.length >= MAX_ATTACHMENTS) return
+    // Файл больше лимита тарифа (или такого типа на тарифе нет) — объясняем сразу, не отправляя гигабайты зря
+    const tooBig = precheck(file)
+    if (tooBig) { showUploadError(tooBig); return }
     const kind = fileKind(file)
     // Must be reactive() *before* pushing — mutating a plain object kept only via this
     // outer `item` reference bypasses Vue's reactive array proxy entirely, so progress/
@@ -58,26 +72,21 @@ export function useChatAttachments(fileInputEl: Ref<HTMLInputElement | null>) {
 
     ;(async () => {
       try {
-        const form = new FormData()
-        form.append('file', file)
-        const res = await api.post('/media/upload?folder=messages', form, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          onUploadProgress: (ev: any) => {
-            item.progress = ev.total ? Math.round((ev.loaded / ev.total) * 100) : 50
-          },
+        // Файлы крупнее 50 МБ уходят частями, остальные — одним запросом (lib/uploadMedia.ts); тип PSD/архивов — по расширению
+        const res = await uploadMedia(file, {
+          folder: 'messages',
+          onProgress: (f) => { item.progress = Math.round(f * 100) },
         })
-        const url = res.data?.data?.url ?? null
+        const url = res.url ?? null
         if (!url) throw new Error('no url')
         // A video with no audio track behaves like a GIF — render it with the lightweight
         // autoplay/pause UI instead of the full player (seek bar, volume, speed, etc).
-        if (item.kind === 'video' && res.data?.data?.isSilentVideo) item.kind = 'gif'
+        if (item.kind === 'video' && res.isSilentVideo) item.kind = 'gif'
         item.uploadedUrl = url
         item.progress = 100
       } catch (err) {
         item.failed = true
-        uploadError.value = apiErrorMessage(err) || langStore.t.chatFileUploadFailedError
-        if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
-        uploadErrorTimer = setTimeout(() => { uploadError.value = null }, 4000)
+        showUploadError(fromServerError(err) ?? apiErrorMessage(err) ?? langStore.t.chatFileUploadFailedError)
         setTimeout(() => removePendingAttachment(item.id), 1500)
       } finally {
         item.uploading = false

@@ -2,12 +2,18 @@
 import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { X, Image, Plus } from 'lucide-vue-next'
+import BIcon from '@/components/BIcon.vue'
 import api from '@/api'
+import { useUploadPrecheck } from '@/composables/useUploadPrecheck'
+import { uploadMedia } from '@/lib/uploadMedia'
+import { effectiveMime, uploadKind } from '@/lib/uploadLimits'
 
 const props = defineProps<{
   type?: 'posts' | 'avatars' | 'banners'
   folder?: string
   accept?: string
+  /** Разрешить PSD и архивы (Pro и Business; на других тарифах выбор объяснит, что нужен тариф) — для постов */
+  documents?: boolean
   multiple?: boolean
   maxFiles?: number
   maxSizeMb?: number
@@ -18,9 +24,15 @@ const props = defineProps<{
   streaming?: boolean
 }>()
 
+const { precheck, fromServerError, uncompressedPhotos } = useUploadPrecheck()
+// Папки со своими жёсткими потолками (аватары, баннеры…) тарифом не меняются — их проверяет сервер
+const TIER_FOLDERS = ['posts', 'comments', 'messages', 'backgrounds']
+const tierGoverned = () => TIER_FOLDERS.includes(props.folder || props.type || 'posts')
+const BIG_FILE_BYTES = 20 * 1024 * 1024
+
 const emit = defineEmits<{ (e: 'uploaded', urls: string[], originalUrls: string[], hasVideo: boolean): void }>()
 
-type PreviewEntry = { id: number; localUrl: string; uploading: boolean; converting: boolean; progress: number; finalUrl?: string; finalOriginalUrl?: string; name: string; size: number; isVideo: boolean }
+type PreviewEntry = { id: number; localUrl: string; isFile?: boolean; uploading: boolean; converting: boolean; progress: number; finalUrl?: string; finalOriginalUrl?: string; name: string; size: number; isVideo: boolean }
 
 let nextPreviewId = 0
 const previews = ref<PreviewEntry[]>([])
@@ -32,10 +44,13 @@ let rejectedTimer: ReturnType<typeof setTimeout> | null = null
 // Native <input accept> only filters the OS file picker — drag/drop and
 // clipboard paste bypass it entirely, so re-check every file against the
 // same allow-list before it's queued for upload.
-const acceptPatterns = () => (props.accept ?? 'image/*,video/*').split(',').map(p => p.trim()).filter(Boolean)
+const DOCUMENT_ACCEPT = '.zip,.7z,.rar,.gz,.psd'
+const acceptAttr = () => `${props.accept ?? 'image/*,video/*'}${props.documents ? `,${DOCUMENT_ACCEPT}` : ''}`
+const acceptPatterns = () => acceptAttr().split(',').map(p => p.trim()).filter(Boolean)
 
 function isFileAccepted(file: File): boolean {
   return acceptPatterns().some(pattern => {
+    if (pattern.startsWith('.')) return file.name.toLowerCase().endsWith(pattern) // расширения: PSD и архивы
     if (pattern.endsWith('/*')) return file.type.startsWith(pattern.slice(0, -1))
     return file.type === pattern
   })
@@ -144,10 +159,14 @@ const processFiles = (files: FileList | File[] | null) => {
   Array.from(files).forEach((file) => {
     if (props.maxFiles && previews.value.length >= props.maxFiles) { capped = true; return }
     if (!isFileAccepted(file)) { rejected = true; return }
+    // Не гоним по сети файл, который тариф всё равно не пропустит: сразу объясняем и предлагаем тариф
+    const tooBig = tierGoverned() ? precheck(file) : null
+    if (tooBig) { flashMessage(tooBig); return }
     // Content-based dedup: skip if same name+size is already queued
     if (previews.value.some(p => p.name === file.name && p.size === file.size)) return
     const id = nextPreviewId++
-    previews.value.push({ id, localUrl: URL.createObjectURL(file), uploading: true, converting: file.type.startsWith('image/'), progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
+    const isFile = uploadKind(effectiveMime(file)) === 'document'
+    previews.value.push({ id, localUrl: isFile ? '' : URL.createObjectURL(file), isFile, uploading: true, converting: !isFile && file.type.startsWith('image/'), progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
     uploadFile(file, id)
   })
   if (rejected) flashRejected()
@@ -156,30 +175,29 @@ const processFiles = (files: FileList | File[] | null) => {
 
 const uploadFile = async (file: File, id: number) => {
   const entry = () => previews.value.find(p => p.id === id)
+  let fakeTimer: ReturnType<typeof setInterval> | null = null
   try {
-    let compressed = await compressImage(file)
+    // Lite+ грузят фото как есть: браузер не пережимает, оригинал сохранится на сервере. Free — стандартное сжатие
+    let compressed = tierGoverned() && uncompressedPhotos() ? file : await compressImage(file)
     const maxBudgetBytes = props.maxSizeMb ? props.maxSizeMb * 1024 * 1024 : null
     if (maxBudgetBytes && compressed.size > maxBudgetBytes) {
       compressed = await compressToTarget(compressed, maxBudgetBytes)
     }
     const e0 = entry()
     if (e0) e0.converting = false
-    const formData = new FormData()
-    formData.append('file', compressed)
-
-    // Smooth fake progress (Cloudflare buffers the request, real progress events unreliable)
-    let fakeTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
+    // Для больших файлов — только настоящий прогресс: «плавающая» полоса на гигабайтах вводила бы в заблуждение
+    const big = compressed.size > BIG_FILE_BYTES
+    fakeTimer = big ? null : setInterval(() => {
       const e = entry()
       if (e && e.progress < 90) e.progress = Math.min(90, e.progress + Math.random() * 8 + 2)
     }, 150)
 
-    const res = await api.post(`/media/upload?folder=${props.folder || props.type || 'posts'}`, formData, {
-      headers: { 'Content-Type': undefined },
-      onUploadProgress: (p) => {
+    // Файлы крупнее 50 МБ уходят частями (обход лимита тела Cloudflare), остальные — одним запросом
+    const data = await uploadMedia(compressed, {
+      folder: props.folder || props.type || 'posts',
+      onProgress: (f) => {
         const e = entry()
-        if (e && p.total && p.total > 0) {
-          e.progress = Math.min(92, Math.round((p.loaded / p.total) * 95))
-        }
+        if (e) e.progress = Math.min(big ? 99 : 92, Math.round(f * (big ? 100 : 95)))
       },
     })
 
@@ -187,21 +205,22 @@ const uploadFile = async (file: File, id: number) => {
     const e = entry()
     if (!e) return // removed while uploading
     e.progress = 100
-    e.finalUrl = res.data.data.url
-    e.finalOriginalUrl = res.data.data.originalUrl || res.data.data.url
+    e.finalUrl = data.url
+    e.finalOriginalUrl = data.originalUrl || data.url
     if (props.streaming) {
       previews.value.splice(previews.value.indexOf(e), 1)
-      emit('uploaded', [res.data.data.url], [res.data.data.originalUrl || res.data.data.url], e.isVideo)
+      emit('uploaded', [data.url], [data.originalUrl || data.url], e.isVideo)
       return
     }
     setTimeout(() => { const e2 = entry(); if (e2) e2.uploading = false }, 350)
     emitAll()
   } catch (err: any) {
+    if (fakeTimer) { clearInterval(fakeTimer); fakeTimer = null } // иначе таймер прогресса тикал бы вечно после ошибки
     // Drop the stuck preview instead of leaving a dead thumbnail behind, and
     // actually tell the user something failed — this used to fail silently.
     const idx = previews.value.findIndex(p => p.id === id)
     if (idx !== -1) previews.value.splice(idx, 1)
-    const serverMessage = apiErrorMessage(err)
+    const serverMessage = fromServerError(err) ?? apiErrorMessage(err)
     flashMessage(typeof serverMessage === 'string' && serverMessage ? serverMessage : 'Не удалось загрузить файл. Попробуйте ещё раз.')
     console.error('Upload failed:', err?.response?.data ?? errorMessage(err))
   }
@@ -287,7 +306,7 @@ onUnmounted(() => document.removeEventListener('paste', onPaste))
 
 const hintLabel = () => {
   const maxMB = props.maxSizeMb ?? 100
-  const kinds = acceptPatterns().every(p => p.startsWith('image/')) ? 'Фото, GIF' : 'Фото, GIF, видео'
+  const kinds = acceptPatterns().every(p => p.startsWith('image/')) ? 'Фото, GIF' : props.documents ? 'Фото, GIF, видео, PSD, архивы' : 'Фото, GIF, видео'
   const limit = props.maxFiles ? `до ${maxMB} МБ, макс. ${props.maxFiles} файлов` : `до ${maxMB} МБ`
   return `${kinds} · ${limit}`
 }
@@ -311,7 +330,7 @@ defineExpose({
       type="file"
       class="hidden"
       @change="(e) => { const el = e.target as HTMLInputElement; const snapshot = Array.from(el.files ?? []); el.value = ''; processFiles(snapshot) }"
-      :accept="accept ?? 'image/*,video/*'"
+      :accept="acceptAttr()"
       :multiple="multiple !== false"
     />
 
@@ -357,7 +376,11 @@ defineExpose({
           :class="dragOverIdx === idx && draggedIdx !== idx ? 'border-violet-500/70 scale-95' : 'border-white/10'"
           :style="draggedIdx === idx ? 'opacity: 0.4' : ''"
         >
-          <video v-if="p.isVideo" :src="p.localUrl" muted playsinline class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
+          <div v-if="p.isFile" class="w-full h-full flex flex-col items-center justify-center gap-1 px-1 transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'">
+            <BIcon name="FileText" class="w-6 h-6 text-brand-accent" />
+            <span class="text-[9px] font-extrabold text-white/70 uppercase truncate max-w-full">{{ p.name.split('.').pop() }}</span>
+          </div>
+          <video v-else-if="p.isVideo" :src="p.localUrl" muted playsinline class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
           <img v-else :src="p.localUrl" class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
           <div v-if="p.isVideo" class="absolute bottom-1 right-1 w-4 h-4 bg-black/60 rounded-full flex items-center justify-center pointer-events-none">
             <svg viewBox="0 0 24 24" class="w-2.5 h-2.5 text-white" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>

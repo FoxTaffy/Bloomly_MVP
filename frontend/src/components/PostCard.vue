@@ -86,12 +86,16 @@
               <h4 class="font-bold text-white truncate hover:text-brand-accent transition-colors">
                 {{ effectiveGroupContext ? effectiveGroupContext.name : (post.author?.display_name || post.author?.username || 'Аноним') }}
               </h4>
+              <span v-if="isBoostedNow" class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-brand-accent bg-brand-accent/10 border border-brand-accent/30 px-1.5 py-0.5 rounded-md"
+                :title="langStore.t.postBoostActive">🚀 {{ langStore.t.postBoostActive }}</span>
               <!-- Verification badge — only for user posts -->
               <template v-if="!effectiveGroupContext && post.author">
                 <span v-if="post.author.deceased_at" title="Светлая память" class="shrink-0">🪦</span>
                 <VerificationBadge v-if="post.author.is_verified"
                   :type="post.author.verification_type"
                   icon-class="w-4 h-4 shrink-0" />
+                <CommissionsBadge v-if="post.author.commissions_status && post.author.commissions_status !== 'none'"
+                  :status="post.author.commissions_status" :username="post.author.username" link />
                 <!-- AD badge -->
                 <span v-if="post.author?.role === 'ad'"
                   class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
@@ -151,6 +155,11 @@
               <button v-if="isEditable" @click="startEdit"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
                 <BIcon name="Pencil" class="w-4 h-4 text-brand-accent" /> Редактировать
+              </button>
+              <button v-if="isOwn && !post.is_archived" @click="doBoost" :disabled="isBoosting"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5 disabled:opacity-50 whitespace-nowrap">
+                <BIcon name="Rocket" class="w-4 h-4 text-brand-accent" /> {{ langStore.t.postBoostMenu }}
+                <span class="ml-auto text-[11px] text-white/45">{{ boostHint }}</span>
               </button>
               <button v-if="isOwn" @click="openStats"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
@@ -323,9 +332,12 @@
           </button>
         </div>
 
+        <!-- ── Вложения-файлы (PSD, архивы) ──────────────────────── -->
+        <PostFileAttachments :urls="fileUrls" :locked="isPaywalled || (!!post.is_nsfw && !nsfwEnabled)" />
+
         <!-- ── Media carousel ────────────────────────────────────── -->
         <div
-          v-if="post.media_urls && post.media_urls.length"
+          v-if="mediaUrls && mediaUrls.length"
           data-post-interactive
           class="relative mt-3 rounded-2xl overflow-hidden group/carousel"
           :class="adMode ? 'select-none' : ''"
@@ -342,7 +354,7 @@
             <div
               v-if="isPhotoGrid"
               class="photo-grid"
-              :class="`photo-grid--${Math.min(post.media_urls.length, 4)}`"
+              :class="`photo-grid--${Math.min(mediaUrls.length, 4)}`"
             >
               <div
                 v-for="(url, i) in gridUrls"
@@ -360,7 +372,7 @@
             <!-- Slide -->
             <div v-else class="carousel-track" :style="{ transform: `translateX(-${carouselIndex * 100}%)` }">
               <div
-                v-for="(url, i) in post.media_urls"
+                v-for="(url, i) in mediaUrls"
                 :key="i"
                 class="carousel-slide"
                 :style="isImg(url) ? { '--blur-url': `url(${url})` } : {}"
@@ -375,22 +387,22 @@
 
             <!-- Counter badge -->
             <div
-              v-if="!isPhotoGrid && post.media_urls.length > 1"
+              v-if="!isPhotoGrid && mediaUrls.length > 1"
               class="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-xs border border-white/10 select-none"
             >
-              {{ carouselIndex + 1 }}&thinsp;/&thinsp;{{ post.media_urls.length }}
+              {{ carouselIndex + 1 }}&thinsp;/&thinsp;{{ mediaUrls.length }}
             </div>
 
             <!-- Prev / Next arrows -->
             <button
-              v-if="!isPhotoGrid && post.media_urls.length > 1 && carouselIndex > 0"
+              v-if="!isPhotoGrid && mediaUrls.length > 1 && carouselIndex > 0"
               @click.stop="carouselIndex--"
               class="carousel-arrow left-2 opacity-0 group-hover/carousel:opacity-100"
             >
               <BIcon name="ChevronLeft" class="w-5 h-5" />
             </button>
             <button
-              v-if="!isPhotoGrid && post.media_urls.length > 1 && carouselIndex < post.media_urls.length - 1"
+              v-if="!isPhotoGrid && mediaUrls.length > 1 && carouselIndex < mediaUrls.length - 1"
               @click.stop="carouselIndex++"
               class="carousel-arrow right-2 opacity-0 group-hover/carousel:opacity-100"
             >
@@ -399,11 +411,11 @@
 
             <!-- Dots -->
             <div
-              v-if="!isPhotoGrid && post.media_urls.length > 1"
+              v-if="!isPhotoGrid && mediaUrls.length > 1"
               class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 flex gap-1.5 select-none"
             >
               <button
-                v-for="(_, i) in post.media_urls"
+                v-for="(_, i) in mediaUrls"
                 :key="i"
                 @click.stop="carouselIndex = i"
                 class="w-1.5 h-1.5 rounded-full transition-all duration-200"
@@ -779,6 +791,12 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useAutoTranslate } from '@/composables/useAutoTranslate'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import VerificationBadge from '@/components/VerificationBadge.vue'
+import PostFileAttachments from '@/components/PostFileAttachments.vue'
+import { isDocUrl, visualMedia, fileMedia } from '@/lib/postMedia'
+import CommissionsBadge from '@/components/CommissionsBadge.vue'
+import { useWalletStore } from '@/stores/wallet'
+import { apiErrorCode } from '@/lib/apiError'
+import * as fmt from '@/lib/format'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import PostListingCard from '@/components/PostListingCard.vue'
@@ -1016,7 +1034,7 @@ let _carouselTouchX = 0
 function carouselTouchStart(e: TouchEvent) { _carouselTouchX = e.touches[0].clientX }
 function carouselTouchEnd(e: TouchEvent) {
   const diff = _carouselTouchX - e.changedTouches[0].clientX
-  const total = props.post.media_urls?.length ?? 1
+  const total = mediaUrls.value.length || 1
   if (diff > 50 && carouselIndex.value < total - 1) carouselIndex.value++
   else if (diff < -50 && carouselIndex.value > 0) carouselIndex.value--
 }
@@ -1150,25 +1168,28 @@ const isPaywalled = computed(() =>
   (props.post.subscriber_only || props.post.is_paid) && props.post.can_view_content !== true && !isOwn.value
 )
 
-const lightboxUrls = computed<string[]>(() =>
-  props.post.media_urls ?? []
-)
+// Картинки/видео — в карусель и лайтбокс, PSD и архивы — отдельными плашками скачивания
+const mediaUrls = computed<string[]>(() => visualMedia(props.post.media_urls))
+const fileUrls = computed<string[]>(() => fileMedia(props.post.media_urls))
+
+const lightboxUrls = computed<string[]>(() => mediaUrls.value)
 
 const lightboxOriginalUrls = computed<string[]>(() => {
-  const urls: string[] = props.post.media_urls ?? []
+  const all: string[] = props.post.media_urls ?? []
   const originals: string[] | undefined = props.post.media_original_urls
-  if (!originals || originals.length !== urls.length) return urls
-  return urls.map((u: string, i: number) => originals[i] || u)
+  const aligned = !!originals && originals.length === all.length
+  // Оригиналы выровнены по индексам полного списка — файлы-вложения выбрасываем вместе с их парами
+  return all.flatMap((u: string, i: number) => (isDocUrl(u) ? [] : [aligned ? (originals![i] || u) : u]))
 })
 
 // VK-style photo grid: only when every attachment is a plain image (no video/gif/audio)
 const isPhotoGrid = computed(() => {
-  const urls = props.post.media_urls
-  return !!urls && urls.length > 1 && urls.every(isImg)
+  const urls = mediaUrls.value
+  return urls.length > 1 && urls.every(isImg)
 })
-const gridUrls = computed(() => (props.post.media_urls ?? []).slice(0, 4))
+const gridUrls = computed(() => mediaUrls.value.slice(0, 4))
 const gridExtraCount = computed(() =>
-  Math.max(0, (props.post.media_urls?.length ?? 0) - 4)
+  Math.max(0, mediaUrls.value.length - 4)
 )
 
 type Seg = PostSeg
@@ -1294,7 +1315,7 @@ function openLightbox(index: number) {
 }
 
 function openLightboxByUrl(url: string) {
-  const index = (props.post.media_urls ?? []).indexOf(url)
+  const index = mediaUrls.value.indexOf(url)
   openLightbox(index !== -1 ? index : 0)
 }
 
@@ -1392,6 +1413,35 @@ function openStats() {
   } else {
     router.push('/subscriptions')
   }
+}
+
+// ── Буст поста в ленту: бесплатный лимит тарифа или BLM (с Promo-баланса в первую очередь) ──
+const isBoosting = ref(false)
+const boostInfo = ref<{ priceBlm: number; freeLeft: number } | null>(null)
+const isBoostedNow = computed(() => !!props.post.boosted_until && new Date(props.post.boosted_until as string).getTime() > Date.now())
+const boostHint = computed(() => {
+  const info = boostInfo.value
+  if (!info) return ''
+  return info.freeLeft > 0 ? `${langStore.t.postBoostFreeLeft} ${info.freeLeft}` : fmt.formatBlm(info.priceBlm)
+})
+watch(showMenu, async (open) => {
+  if (!open || !isOwn.value || boostInfo.value) return
+  try { boostInfo.value = (await api.get('/posts/boost-info')).data.data } catch {}
+})
+async function doBoost() {
+  if (isBoosting.value) return
+  isBoosting.value = true
+  showMenu.value = false
+  try {
+    const r = await api.post(`/posts/${props.post.id}/boost`)
+    Object.assign(props.post, { boosted_at: r.data.data.post.boosted_at, boosted_until: r.data.data.post.boosted_until })
+    boostInfo.value = null
+    if (r.data.data.boost.kind === 'paid') void useWalletStore().fetchBalance().catch(() => {})
+    alert(langStore.t.postBoostDone)
+  } catch (e) {
+    const code = apiErrorCode(e)
+    alert(code === 'BOOST_TOO_SOON' ? langStore.t.postBoostTooSoon : code === 'INSUFFICIENT_FUNDS' ? langStore.t.postBoostNoFunds : langStore.t.postBoostFailed)
+  } finally { isBoosting.value = false }
 }
 
 async function doToggleArchive() {

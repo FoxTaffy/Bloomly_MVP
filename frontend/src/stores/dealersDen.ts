@@ -196,6 +196,11 @@ export interface DealerListing {
   commission_form_fields: { label: string; required: boolean; type: string }[] | null
   commission_details?: CommissionDetails | null
   views_count?: number
+  // Общая лента: null у feed_published_at — карточка ждёт кулдауна (в магазине группы видна)
+  feed_published_at?: string | null
+  feed_at?: string | null
+  last_bumped_at?: string | null
+  auto_bump?: boolean
   created_at: string
   updated_at: string
   seller: ListingSeller
@@ -251,6 +256,15 @@ export interface ListingsParams {
   minPrice?: number; maxPrice?: number; currency?: string
   onlyDiscount?: string; priceRanges?: string
   listingKind?: string; sort?: string; excludeNsfw?: string
+}
+
+export interface BumpInfo {
+  priceBlm: number
+  freeTotal: number
+  freeLeft: number
+  minIntervalHours: number
+  canAutoBump: boolean
+  cooldownHours: number
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -316,6 +330,34 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     const { data } = await api.get('/dealers-den/me')
     myListings.value = data.data.listings
     return myListings.value
+  }
+
+  // ── Поднятия в общей ленте ────────────────────────────────────────────────
+  const bumpInfo = ref<BumpInfo | null>(null)
+
+  async function loadBumpInfo() {
+    const { data } = await api.get('/dealers-den/bump-info')
+    bumpInfo.value = data.data as BumpInfo
+    return bumpInfo.value
+  }
+
+  /** Поднять карточку: бесплатно из лимита подписки или за BLM. Обновляет карточку и счётчики. */
+  async function bumpListing(id: string) {
+    const { data } = await api.post(`/dealers-den/${id}/bump`)
+    const { listing, bump } = data.data as { listing: Pick<DealerListing, 'feed_at' | 'feed_published_at' | 'last_bumped_at'>; bump: { kind: 'free' | 'paid'; costBlm: number; freeLeft: number } }
+    for (const arr of [listings.value, myListings.value]) {
+      const item = arr.find(l => l.id === id)
+      if (item) Object.assign(item, listing)
+    }
+    if (bumpInfo.value) bumpInfo.value.freeLeft = bump.freeLeft
+    return bump
+  }
+
+  async function setAutoBump(id: string, enabled: boolean) {
+    const { data } = await api.put(`/dealers-den/${id}/auto-bump`, { enabled })
+    const item = myListings.value.find(l => l.id === id)
+    if (item) item.auto_bump = data.data.listing.auto_bump
+    return data.data.listing.auto_bump as boolean
   }
 
   async function createListing(input: CreateListingInput) {
@@ -564,6 +606,8 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     listings, currentListing, myListings, wishlist, weeklyTop, isLoading, isLoadingMore, total,
     // Listings
     loadListings, loadMoreListings, loadListing, loadMyListings, createListing, updateListing, deleteListing,
+    // Feed bumps
+    bumpInfo, loadBumpInfo, bumpListing, setAutoBump,
     // Auction/Raffle
     placeBid, getBids, buyRaffleTicket, drawRaffle,
     // Comments

@@ -6,7 +6,7 @@ import {
   getPostsAdminHandler, deletePostAdminHandler,
   getReportsHandler, getReportEvidenceHandler, submitReportHandler, resolveReportHandler, resolveReportsBatchHandler, resolveReportIssueHandler,
   getAppealsHandler, decideAppealHandler,
-  getAdsHandler, getActiveAdsHandler, submitAdHandler, reviewAdHandler, deleteAdHandler,
+  getAdsHandler, getActiveAdsHandler, submitAdHandler, getAdPricingHandler, reviewAdHandler, deleteAdHandler,
   trackImpressionHandler, trackClickHandler,
   getBannersHandler, getActiveBannersHandler, createBannerHandler, updateBannerHandler, deleteBannerHandler,
   getAutoModLogsHandler, unfreezeUserHandler, freezeUserHandler, clearWarnsHandler, warnUserHandler,
@@ -121,6 +121,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Ads
   fastify.get<RouteGenericOf<typeof getAdsHandler>>('/ads',              auth, getAdsHandler);
   fastify.get<RouteGenericOf<typeof getActiveAdsHandler>>('/ads/active',       getActiveAdsHandler);
+  fastify.get('/ads/pricing', auth, getAdPricingHandler);
   fastify.post<RouteGenericOf<typeof submitAdHandler>>('/ads',             { onRequest: [fastify.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler);
   fastify.patch<RouteGenericOf<typeof reviewAdHandler>>('/ads/:id/review', auth, reviewAdHandler);
   fastify.delete<RouteGenericOf<typeof deleteAdHandler>>('/ads/:id',       auth, deleteAdHandler);

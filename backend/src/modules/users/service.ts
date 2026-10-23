@@ -10,6 +10,8 @@ import sharp from 'sharp';
 import { freeDeletedUsername } from '../auth/unverifiedRelease.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
 import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
+import { searchScore } from '../../lib/searchRank.js';
+import { perksFor } from '../payments/plan-perks.js';
 import { bugHunterProgress } from '../../lib/bugHunter.js';
 
 const MUSIC_MAX_BYTES = 15 * 1024 * 1024;
@@ -38,7 +40,7 @@ function cleanSocialLinks(links: Record<string, unknown>): Record<string, string
 const MONTH_DAY_SENTINEL_YEAR = 2000;
 
 /** Null out a profile status bubble once its expiresAt timestamp has passed. */
-function liveProfileStatus(status: unknown): unknown {
+export function liveProfileStatus(status: unknown): unknown {
   const s = status as { expiresAt?: number } | null;
   if (!s || typeof s !== 'object') return null;
   if (s.expiresAt && s.expiresAt < Date.now()) return null;
@@ -113,6 +115,7 @@ const PUBLIC_SELECT = {
   fav_artist:           true,
   fav_film:             true,
   subscription_tier:    true,
+  commissions_status:   true,
   profile_theme:        true,
   profile_bg_url:       true,
   profile_frame:        true,
@@ -120,10 +123,10 @@ const PUBLIC_SELECT = {
   equippedFrame:        { select: { id: true, image_url: true, name: true } },
   is_verified:          true,
   is_sponsor:           true,
+  bugs_confirmed:       true,
   verified_at:          true,
   verification_type:    true,
   deceased_at:          true,
-  bugs_confirmed:       true,
   frozen_at:            true,
   artist_since:         true,
   onboarding_done:      true,
@@ -206,6 +209,11 @@ async function assertCustomizationAllowed(id: string, d: Record<string, any>) {
     if (wantsTheme && tier === 'free') throw Object.assign(new Error('LITE_REQUIRED'), { statusCode: 402 });
     if ((wantsFrame || wantsBg) && !['pro', 'business'].includes(tier)) throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
   }
+  // Плашка «Заказы открыты» — перк Pro и Business; выключить (none) можно всегда, в том числе после понижения тарифа
+  if (typeof d.commissions_status === 'string' && d.commissions_status !== 'none') {
+    const u = await prisma.user.findUnique({ where: { id, deleted_at: null }, select: { subscription_tier: true } });
+    if (!perksFor(u?.subscription_tier ?? 'free').commissionsBadge) throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
+  }
   if (d.profile_frame_id !== undefined && d.profile_frame_id !== null) {
     const owns = await prisma.userAvatarFrame.findFirst({
       where: { user_id: id, frame_id: d.profile_frame_id, frame: { deleted_at: null } },
@@ -251,6 +259,7 @@ export const usersService = {
     }
 
     (raw as any).profile_status = liveProfileStatus((raw as any).profile_status);
+    (raw as any).bug_hunter = bugHunterProgress(raw.bugs_confirmed);
 
     // Total likes received on the user's live posts (shown in the profile stats block)
     (raw as any).likes_count = await prisma.vote.count({
@@ -259,7 +268,6 @@ export const usersService = {
 
     if (viewerId === raw.id) {
       return { ...raw, badge_level: getUserBadgeLevel(raw.artist_since) };
-    (raw as any).bug_hunter = bugHunterProgress(raw.bugs_confirmed);
     }
 
     // Wallet balance is private financial data — never expose it to anyone but the owner.
@@ -425,7 +433,7 @@ export const usersService = {
   /**
    * Поиск людей: все слова запроса должны найтись в нике или имени (с учётом раскладки), плюс близкие
    * по написанию ники (опечатки). Порядок: точное совпадение ника > начало ника/имени > вхождение.
-   * Приоритет платных тарифов (Lite+) — это бонус к оценке, а не безусловное «выше всех».
+   * Приоритет Pro и Business — бонус к оценке (lib/searchRank.ts): точное совпадение остаётся впереди, а не «выше всех».
    */
   async searchUsers(query: string, limit = 8, page = 1) {
     const parsed = parseSearchQuery(query.trim().replace(/^@/, ''));
@@ -466,7 +474,6 @@ export const usersService = {
       orderBy: { created_at: 'desc' },
     });
 
-    const tierBonus: Record<string, number> = { business: 6, pro: 4, lite: 2, free: 0 };
     const fuzzySet = new Set(fuzzyIds);
     const scored = candidates.map((u) => {
       let score = 0;
@@ -478,7 +485,7 @@ export const usersService = {
         score += best;
       }
       if (score === 0 && fuzzySet.has(u.id)) score = 3; // нашёлся только по близости написания
-      return { u, score: score + (tierBonus[u.subscription_tier] ?? 0) };
+      return { u, score: searchScore(score, parsed.terms.length, u.subscription_tier) };
     });
     scored.sort((a, b) => b.score - a.score); // стабильно: при равенстве — новые выше
     return scored.slice(skip, skip + limit).map((x) => x.u);
@@ -674,7 +681,11 @@ export const usersService = {
       prisma.user.update({
         where: { id: userId, deleted_at: null },
         // Ручная смена (админ или dev) — бессрочно; оплаченные периоды выдаёт модуль payments
-        data: { subscription_tier: tier, subscription_expires_at: null },
+        data: {
+          subscription_tier: tier, subscription_expires_at: null,
+          // Плашка «Заказы открыты» живёт только на тарифах, которые её дают
+          ...(perksFor(tier).commissionsBadge ? {} : { commissions_status: 'none' }),
+        },
         select: { id: true, subscription_tier: true },
       }),
       prisma.subscriptionPlan.create({ data: { user_id: userId, tier } }),

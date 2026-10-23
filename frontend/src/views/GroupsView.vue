@@ -9,6 +9,7 @@ import EventCard from '@/components/groups/EventCard.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import CreateGroupModal from '@/components/groups/CreateGroupModal.vue'
 import AdSlot from '@/components/ads/AdSlot.vue'
+import { adsForPlacement, adSlotModeFor } from '@/lib/adSlots'
 import { useGroupsStore, type GroupType } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useMessagesStore } from '@/stores/messages'
@@ -136,12 +137,7 @@ async function loadStaticData() {
 }
 
 const activeAds = ref<any[]>([])
-const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => {
-  const tier = authStore.user?.subscription_tier ?? 'free'
-  if (tier === 'lite' || tier === 'pro') return 'hidden'
-  if (tier === 'business') return 'offer'
-  return 'ads'
-})
+const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => adSlotModeFor(authStore.user?.subscription_tier ?? 'free'))
 async function loadActiveAds() {
   if (adSlotMode.value !== 'ads') return
   try {
@@ -300,8 +296,8 @@ function fmtMembers(n: number): string {
 
         <!-- ════════ AD SLOT ════════ -->
         <div v-if="adSlotMode !== 'hidden'" class="mb-6">
-          <AdSlot v-if="adSlotMode === 'offer'" variant="hero" :ad="null" />
-          <AdSlot v-else-if="activeAds[0]" variant="hero" :ad="activeAds[0]" />
+          <AdSlot v-if="adSlotMode === 'offer'" variant="hero" :ad="null" placement="groups_page" />
+          <AdSlot v-else-if="adsForPlacement(activeAds, 'groups_page')[0]" variant="hero" :ad="adsForPlacement(activeAds, 'groups_page')[0]" placement="groups_page" />
         </div>
 
         <!-- ════════ SEARCH + CATEGORIES + CREATE ════════ -->

@@ -9,6 +9,8 @@ export async function getApp(): Promise<FastifyInstance> {
   if (!app) {
     app = (await import('../src/server.js')).default as FastifyInstance;
     await app.ready();
+    // Для test/setup-teardown.ts: закрыть сервер после файла, чтобы сокеты и пулы не копились между файлами
+    (globalThis as { __bloomlyApp?: FastifyInstance }).__bloomlyApp = app;
   }
   return app;
 }

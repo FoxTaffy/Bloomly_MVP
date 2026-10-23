@@ -46,12 +46,12 @@
         Здесь может быть ваша реклама
       </p>
       <p class="text-white/25 mt-0.5" :class="variant === 'hero' ? 'text-xs' : 'text-[11px]'">
-        Разместите объявление на Bloomly — нажмите, чтобы оставить заявку
+        Разместите баннер на Bloomly за BLM — нажмите, чтобы выбрать срок
       </p>
     </div>
   </button>
 
-  <AdRequestModal v-model="showRequestModal" />
+  <AdRequestModal v-model="showRequestModal" :placement="placement" />
 </template>
 
 <script setup lang="ts">
@@ -64,6 +64,8 @@ import api from '@/api'
 const props = defineProps<{
   ad?: { id: string; title: string; description?: string | null; image_url?: string | null; link_url: string } | null
   variant?: 'sidebar' | 'hero'
+  /** Место этого слота — окно покупки откроется сразу на нём */
+  placement?: 'feed_top' | 'groups_page' | 'left_menu' | 'right_column'
 }>()
 
 const showRequestModal = ref(false)

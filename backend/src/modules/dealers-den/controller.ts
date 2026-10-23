@@ -12,7 +12,8 @@ import type {
 import { isAdmin as isAdminRole } from '../../lib/roles.js';
 import { requestIsAdult } from '../../lib/age.js';
 import { validateListingInput } from './validation.js';
-import { errMessage } from '../../lib/httpErrors.js';
+import { errMessage, errStatus, errCode } from '../../lib/httpErrors.js';
+import { getBumpInfo, bumpListing, setAutoBump } from './feed.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -692,5 +693,47 @@ export async function applicationCharacterOptionsHandler(req: FastifyRequest, re
   } catch (err) {
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to load characters' });
+  }
+}
+
+// ── Общая лента: поднятия ─────────────────────────────────────────────────────
+
+function feedError(req: FastifyRequest, reply: FastifyReply, err: unknown, fallback: string) {
+  const status = errStatus(err);
+  if (status && status < 500) {
+    const details = (err as { details?: unknown }).details;
+    return reply.status(status).send({ success: false, error: errMessage(err), code: errCode(err), ...(details ? { details } : {}) });
+  }
+  req.log.error(err);
+  return reply.status(500).send({ success: false, error: fallback });
+}
+
+export async function getBumpInfoHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    return reply.send({ success: true, data: await getBumpInfo(req.user.id) });
+  } catch (err) {
+    return feedError(req, reply, err, 'Failed to load bump info');
+  }
+}
+
+export async function bumpListingHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = req.params as { id: string };
+  if (!UUID_RE.test(id)) return reply.status(404).send({ success: false, error: 'Listing not found or not yours' });
+  try {
+    return reply.send({ success: true, data: await bumpListing(req.user.id, id) });
+  } catch (err) {
+    return feedError(req, reply, err, 'Failed to bump listing');
+  }
+}
+
+export async function setAutoBumpHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = req.params as { id: string };
+  const { enabled } = (req.body ?? {}) as { enabled?: unknown };
+  if (!UUID_RE.test(id)) return reply.status(404).send({ success: false, error: 'Listing not found or not yours' });
+  if (typeof enabled !== 'boolean') return reply.status(400).send({ success: false, error: 'enabled must be boolean' });
+  try {
+    return reply.send({ success: true, data: { listing: await setAutoBump(req.user.id, id, enabled) } });
+  } catch (err) {
+    return feedError(req, reply, err, 'Failed to update auto-bump');
   }
 }

@@ -32,6 +32,8 @@ import type {
 import { logError } from '../../lib/logger.js';
 import { debitWallet, creditWallet } from '../wallet/ledger.js';
 import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
+import { searchScore } from '../../lib/searchRank.js';
+import { firstVisualMedia } from '../../lib/postMedia.js';
 import { POST_LISTING_INCLUDE, assertListingAttachable, withPublicListing } from '../../lib/postListing.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -1632,7 +1634,7 @@ export const groupService = {
       id: post.id,
       title: post.title?.trim() || post.content.trim().split('\n')[0].slice(0, 120),
       category: post.category,
-      image: post.media_urls[0] ?? null,
+      image: firstVisualMedia(post.media_urls) ?? null,
       created_at: post.created_at,
     }));
   },
@@ -1951,10 +1953,15 @@ export const groupService = {
           ...(fuzzyIds.length ? [{ id: { in: fuzzyIds } }] : []),
         ],
       },
-      select: { id: true, name: true, slug: true, avatar_url: true, type: true, members_count: true, is_verified: true },
+      select: { id: true, name: true, slug: true, avatar_url: true, type: true, members_count: true, is_verified: true, owner_id: true },
       orderBy: [{ is_verified: 'desc' }, { members_count: 'desc' }],
       take: overfetch,
     });
+    // Приоритет Pro и Business — по тарифу владельца группы
+    const ownerTiers = new Map((await prisma.user.findMany({
+      where: { id: { in: [...new Set(candidates.map((g) => g.owner_id))] } },
+      select: { id: true, subscription_tier: true },
+    })).map((u) => [u.id, u.subscription_tier]));
 
     const fuzzySet = new Set(fuzzyIds);
     const scored = candidates.map((g) => {
@@ -1965,11 +1972,12 @@ export const groupService = {
         score += best;
       }
       if (score === 0 && fuzzySet.has(g.id)) score = 3;
+      score = searchScore(score, parsed.terms.length, ownerTiers.get(g.owner_id) ?? 'free');
       score += (g.is_verified ? 2 : 0) + Math.log1p(Math.max(0, g.members_count ?? 0)) * 0.4;
       return { g, score };
     });
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(skip, skip + limit).map((x) => x.g);
+    return scored.slice(skip, skip + limit).map(({ g: { owner_id: _owner, ...g } }) => g);
   },
 
   // ── Discover ──────────────────────────────────────────────────────────────

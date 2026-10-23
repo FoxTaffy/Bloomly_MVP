@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { creditWallet, debitWallet } from '../wallet/ledger.js';
+import { creditWallet, creditPromo, debitPromo, debitWallet } from '../wallet/ledger.js';
 import {
   yookassaConfig, TOPUP_MIN, TOPUP_STEP, TOPUP_MAX, DONATE_MIN, DONATE_MAX, PENDING_TTL_MS,
   CARD_BINDING_AMOUNT, RENEW_AHEAD_MS, RENEW_RETRY_MS, RENEW_MAX_ATTEMPTS, RENEW_GRACE_MS,
@@ -11,11 +11,12 @@ import {
   type PayMethod, type YookassaNotification, type YookassaPayment, type YookassaPaymentMethod,
 } from './yookassa.js';
 import {
-  PLAN_PRICES, PURCHASABLE_TIERS, PERIOD_MONTHS, isPaidTier, isEarlyUser, quote,
-  topupPackages, rubToBlm, rubToBlmCharge, legacyRubToBc,
+  PLAN_PRICES_BLM, PURCHASABLE_TIERS, PERIOD_MONTHS, isPaidTier, isEarlyUser, quote,
+  topupPackages, rubToBlm, legacyRubToBc,
   type PaidTier, type BillingPeriod,
 } from './pricing.js';
 import { getBlmRate } from './rate.js';
+import { PLAN_PERKS, perksFor } from './plan-perks.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -30,12 +31,6 @@ const topupBlm = (p: { amount: Prisma.Decimal; blm_amount: Prisma.Decimal | null
 /** Для пополнения добавляем зачисленные BLM (amount хранится в рублях). */
 const withBc = <T extends { purpose: string; amount: Prisma.Decimal; blm_amount: Prisma.Decimal | null }>(p: T) =>
   ({ ...p, bc: p.purpose === 'wallet_topup' ? topupBlm(p) : null });
-
-/** Цена подписки в рублях + эквивалент в BC для оплаты с баланса. */
-const quoteWithBc = (tier: PaidTier, period: BillingPeriod, early: boolean, rate: number) => {
-  const q = quote(tier, period, early);
-  return { ...q, bcAmount: rubToBlmCharge(q.amount, rate) };
-};
 
 const PUBLIC_SELECT = {
   id: true, provider: true, purpose: true, status: true, amount: true, currency: true,
@@ -129,7 +124,7 @@ async function openGatewayPayment(
  *   (апгрейд lite→pro с 30 оставшимися днями даст ~13 дополнительных дней pro);
  * - иначе период считается от текущего момента.
  */
-async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period: BillingPeriod, now = new Date()) {
+async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period: BillingPeriod, paymentId: string, now = new Date()) {
   const months = PERIOD_MONTHS[period];
   // Разные платежи могут продлевать один аккаунт одновременно: блокируем строку до расчёта срока.
   // NO KEY UPDATE, а не UPDATE: вставка платежа уже держит KEY SHARE на User (внешний ключ),
@@ -149,8 +144,8 @@ async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period:
     } else {
       // Остаток переводится по тому, сколько в месяц платил пользователь (с учётом годовой скидки), к цене нового тарифа
       // за выбранный период — иначе годовую скидку можно «перекачать» в чужой тариф.
-      const paidPerMonth = PLAN_PRICES[current][u.subscription_period === 'year' ? 'year' : 'month'];
-      bonusMs = Math.floor((expires.getTime() - now.getTime()) * paidPerMonth / PLAN_PRICES[tier][period]);
+      const paidPerMonth = PLAN_PRICES_BLM[current][u.subscription_period === 'year' ? 'year' : 'month'];
+      bonusMs = Math.floor((expires.getTime() - now.getTime()) * paidPerMonth / PLAN_PRICES_BLM[tier][period]);
     }
   }
   const expiresAt = new Date(addMonths(start, months).getTime() + bonusMs);
@@ -161,10 +156,15 @@ async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period:
     where: { id: userId },
     data: {
       subscription_tier: tier, subscription_expires_at: expiresAt, subscription_period: period,
+      ...(perksFor(tier).commissionsBadge ? {} : { commissions_status: 'none' }),
       // Период оплачен — счётчик неудачных автосписаний обнуляется
       subscription_renew_attempts: 0, subscription_next_renew_at: null,
     },
   });
+  // Кэшбэк промо-BLM за каждый оплаченный месяц (Business +2 BLM). Вызывается один раз на платёж —
+  // fulfill переводит платёж в succeeded атомарно, повторный webhook сюда не доходит.
+  const cashback = perksFor(tier).promoCashbackBlm * months;
+  if (cashback > 0) await creditPromo(tx, userId, cashback, { kind: 'promo_grant', refId: paymentId });
   return { tier, expiresAt };
 }
 
@@ -188,7 +188,7 @@ async function fulfill(paymentId: string, extra: Prisma.PaymentUpdateManyMutatio
     if (p.purpose === 'wallet_topup') {
       await creditWallet(tx, p.user_id, topupBlm(p), { kind: 'topup', refId: p.id });
     } else if (p.purpose === 'subscription' && p.tier && isPaidTier(p.tier)) {
-      await applySubscription(tx, p.user_id, p.tier, parsePeriod(p.period));
+      await applySubscription(tx, p.user_id, p.tier, parsePeriod(p.period), p.id);
     } else if (p.purpose === 'donation') {
       // Успешный донат (≥ DONATE_MIN проверено при создании) — выдаём значок спонсора
       await tx.user.update({ where: { id: p.user_id }, data: { is_sponsor: true } });
@@ -400,6 +400,13 @@ async function handleRefund(remotePaymentId: string) {
       if (take < bc) note = `refund: clawed back ${take} of ${bc} BC, user already spent the rest`;
     } else if (payment.purpose === 'subscription') {
       await tx.user.update({ where: { id: payment.user_id }, data: { subscription_auto_renew: false, subscription_next_renew_at: null } });
+      // Кэшбэк за возвращённый платёж отзываем: сколько промо осталось — столько и снимаем (потраченное не вернуть)
+      const granted = await tx.walletTransaction.findFirst({ where: { user_id: payment.user_id, kind: 'promo_grant', balance_type: 'promo', ref_id: payment.id } });
+      if (granted) {
+        const rows = await tx.$queryRaw<{ promo_balance: Prisma.Decimal }[]>`SELECT promo_balance FROM "Wallet" WHERE user_id = ${payment.user_id}::uuid FOR UPDATE`;
+        const take = Math.min(Number(rows[0]?.promo_balance ?? 0), Number(granted.amount));
+        if (take > 0) await debitPromo(tx, payment.user_id, take, { kind: 'promo_spend', refId: payment.id });
+      }
       note = 'refund: subscription left as is, autorenew off — review manually';
     } else if (payment.purpose === 'donation') {
       const other = await tx.payment.count({ where: { user_id: payment.user_id, purpose: 'donation', status: 'succeeded', id: { not: payment.id } } });
@@ -433,9 +440,12 @@ export const paymentsService = {
       donate: { min: DONATE_MIN, max: DONATE_MAX },
       plans: PURCHASABLE_TIERS.map((tier) => ({
         tier,
-        month: quoteWithBc(tier, 'month', early, rate),
-        year: quoteWithBc(tier, 'year', early, rate),
+        month: quote(tier, 'month', early, rate),
+        year: quote(tier, 'year', early, rate),
       })),
+      // Что входит в каждый тариф (комиссии, скидки, поднятия) — фронт рисует по этим значениям
+      perks: PLAN_PERKS,
+      earlyUser: early,
       subscription: {
         tier: user.subscription_tier,
         expiresAt: user.subscription_expires_at,
@@ -448,7 +458,7 @@ export const paymentsService = {
 
   quote: async (userId: string, tier: unknown, period: unknown) => {
     const user = await loadBuyer(userId);
-    return quoteWithBc(parseTier(tier), parsePeriod(period), isEarlyUser(user.created_at), await getBlmRate());
+    return quote(parseTier(tier), parsePeriod(period), isEarlyUser(user.created_at), await getBlmRate());
   },
 
   createTopup: async (userId: string, rawAmount: unknown, rawMethod: unknown) => {
@@ -495,21 +505,21 @@ export const paymentsService = {
     const period = parsePeriod(rawPeriod);
     const user = await loadBuyer(userId);
     assertNotComped(user);
-    const q = quote(tier, period, isEarlyUser(user.created_at));
+    const rate = await getBlmRate();
+    const q = quote(tier, period, isEarlyUser(user.created_at), rate);
     const label = subscriptionLabel(tier, period);
 
     if (rawMethod === 'wallet') {
-      const rate = await getBlmRate();
-      const bcCharge = rubToBlmCharge(q.amount, rate);
+      // С баланса списывается ровно цена в BLM; amount — рублёвый эквивалент для отчётности
       return prisma.$transaction(async (tx) => {
         const payment = await tx.payment.create({
           data: {
             user_id: userId, provider: 'wallet', purpose: 'subscription', status: 'succeeded',
-            amount: q.amount, tier, period, paid_at: new Date(), blm_amount: bcCharge, blm_rate: rate,
+            amount: q.amount, tier, period, paid_at: new Date(), blm_amount: q.blmAmount, blm_rate: rate,
           },
         });
-        await debitWallet(tx, userId, bcCharge, { kind: 'subscription', refId: payment.id });
-        const sub = await applySubscription(tx, userId, tier, period);
+        await debitWallet(tx, userId, q.blmAmount, { kind: 'subscription', refId: payment.id });
+        const sub = await applySubscription(tx, userId, tier, period, payment.id);
         if (autoRenew && await tx.paymentMethod.count({ where: { user_id: userId, ...CHARGEABLE } })) {
           await tx.user.update({ where: { id: userId }, data: { subscription_auto_renew: true } });
         }
@@ -523,7 +533,7 @@ export const paymentsService = {
     const payment = await prisma.payment.create({
       data: {
         user_id: userId, provider: 'yookassa', purpose: 'subscription', amount: q.amount, method, tier, period,
-        save_method: autoRenew && cfg.recurring,
+        blm_amount: q.blmAmount, blm_rate: rate, save_method: autoRenew && cfg.recurring,
       },
     });
     const checkout = await openGatewayPayment(cfg, payment, q.amount, label);
@@ -708,7 +718,8 @@ export const paymentsService = {
     let fix: Prisma.PaymentUpdateManyMutationInput = {};
     if (paid + 0.001 < Number(payment.amount)) {
       if (payment.purpose !== 'wallet_topup') throw httpError('UNDERPAID', 409);
-      fix = { amount: paid }; // пополнение — по фактической сумме
+      // пополнение — по фактической сумме: и рубли, и BLM пересчитываются по курсу, зафиксированному при создании платежа
+      fix = { amount: paid, blm_amount: rubToBlm(paid, payment.blm_rate != null ? Number(payment.blm_rate) : await getBlmRate()) };
     }
     if (!await fulfill(paymentId, fix, true)) throw httpError('NOT_IN_REVIEW', 409);
     logger.warn({ paymentId, adminId, paid }, '[payments] review payment approved');
@@ -755,7 +766,7 @@ export const paymentsService = {
         const res = await tx.user.updateMany({
           where: { id, ...expiredWhere },
           data: {
-            subscription_tier: 'free', subscription_expires_at: null,
+            subscription_tier: 'free', subscription_expires_at: null, commissions_status: 'none',
             subscription_auto_renew: false, subscription_renew_attempts: 0, subscription_next_renew_at: null,
           },
         });
@@ -819,10 +830,12 @@ export const paymentsService = {
 
       const tier = u.subscription_tier as PaidTier;
       const period: BillingPeriod = u.subscription_period === 'year' ? 'year' : 'month';
-      const q = quote(tier, period, isEarlyUser(u.created_at));
+      // Продление идёт по текущей цене в BLM и текущему курсу
+      const rate = await getBlmRate();
+      const q = quote(tier, period, isEarlyUser(u.created_at), rate);
       const payment = await prisma.payment.create({
         data: {
-          user_id: u.id, provider: 'yookassa', purpose: 'subscription', amount: q.amount,
+          user_id: u.id, provider: 'yookassa', purpose: 'subscription', amount: q.amount, blm_amount: q.blmAmount, blm_rate: rate,
           method: method.type === 'yoo_money' ? 'PC' : 'AC', tier, period, recurring: true,
         },
       });

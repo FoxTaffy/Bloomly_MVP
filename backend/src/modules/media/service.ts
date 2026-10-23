@@ -6,12 +6,15 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { createReadStream, statSync } from 'fs';
+import { canStripMetadata, stripImageMetadata, UnsupportedImage } from '../../lib/stripMetadata.js';
 import type { Readable } from 'stream';
 import os from 'os';
 import prisma from '../../config/prisma.js';
 import { isModerator } from '../../lib/roles.js';
 import {
   IMAGE_MAX_PIXELS,
+  IMAGE_MAX_PIXELS_UNCOMPRESSED,
+  MAX_CONCURRENT_IMAGE_JOBS,
   PRIVATE_FOLDERS,
   PRIVATE_KEY_PREFIX,
   STORAGE_TRACKED_FOLDERS,
@@ -127,12 +130,80 @@ async function hasNoAudioStream(filePath: string): Promise<boolean> {
 /** Лимит файла стикера по правилам Telegram */
 export const STICKER_MAX_BYTES = 512 * 1024;
 
+/** Источник изображения: буфер (небольшие служебные файлы) или файл на диске (приём потоком — память не растёт с размером). */
+export type ImageSource = Buffer | { filePath: string };
+
+// Декодирование изображений ограничено по числу одновременных задач: 50-мегабайтные фото тяжелы по памяти
+let imageJobs = 0;
+const imageQueue: (() => void)[] = [];
+async function withImageSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (imageJobs >= MAX_CONCURRENT_IMAGE_JOBS) await new Promise<void>((resolve) => imageQueue.push(resolve));
+  imageJobs += 1;
+  try { return await fn(); } finally {
+    imageJobs -= 1;
+    imageQueue.shift()?.();
+  }
+}
+
+/**
+ * Сохраняет оригинал фото для скачивания в полном качестве. Метаданные (GPS, EXIF, XMP) вырезаются без пережатия
+ * пикселей и цветового профиля (lib/stripMetadata.ts), чтобы домашние координаты не уходили вместе с файлом.
+ * GIF сохраняется как есть (GPS в нём не бывает). Форматы, из которых метаданные без перекодирования не убрать (AVIF),
+ * и файлы, которые стриппер не разобрал, оригинала не получают — остаётся только отображаемая копия.
+ */
+async function saveOriginal(args: { buffer: Buffer | null; filePath: string | null; mimeType: string; originalName: string }) {
+  const { buffer, filePath, mimeType, originalName } = args;
+  const ext = path.extname(originalName).toLowerCase() || '.bin';
+  const key = objectKeyFor('posts/originals', ext);
+  let dir: string | null = null;
+  try {
+    let uploadPath = filePath;
+    let size = buffer ? buffer.length : statSync(filePath!).size;
+    if (canStripMetadata(mimeType)) {
+      dir = await mkdtemp(path.join(os.tmpdir(), 'orig-'));
+      let src = filePath;
+      if (!src) { src = path.join(dir, 'src'); await writeFile(src, buffer!); }
+      uploadPath = path.join(dir, 'stripped');
+      size = (await stripImageMetadata(src, uploadPath, mimeType)).sizeBytes;
+    } else if (!mimeType.includes('gif')) {
+      logger.warn({ mimeType }, 'Original not kept: metadata cannot be stripped losslessly');
+      return null;
+    } else if (!uploadPath) {
+      dir = await mkdtemp(path.join(os.tmpdir(), 'orig-'));
+      uploadPath = path.join(dir, 'src');
+      await writeFile(uploadPath, buffer!);
+    }
+    const stream = createReadStream(uploadPath!);
+    try {
+      await minioClient.putObject(BUCKET, key, stream, size, { 'Content-Type': mimeType });
+    } finally {
+      stream.destroy();
+    }
+    return { url: `${PUBLIC_URL}/${BUCKET}/${key}`, sizeBytes: size };
+  } catch (err) {
+    if (err instanceof UnsupportedImage) {
+      logger.warn({ err }, 'Original not kept: unsupported image structure');
+      return null;
+    }
+    throw err;
+  } finally {
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function uploadFile(
-  buffer: Buffer,
+  source: ImageSource,
   originalName: string,
   mimeType: string,
   folder: 'posts' | 'comments' | 'avatars' | 'banners' | 'messages' | 'backgrounds' | 'stickers' | 'reports' | 'verification' | 'avatar-frames' = 'posts',
+  opts: { uncompressed?: boolean } = {},
 ): Promise<{ url: string; sizeBytes: number; originalUrl?: string; originalSizeBytes?: number }> {
+  const buffer = Buffer.isBuffer(source) ? source : null;
+  const filePath = buffer ? null : (source as { filePath: string }).filePath;
+  // Фото с диска sharp читает сам и последовательно (sequentialRead + shrink-on-load у JPEG), без Buffer на весь файл
+  const sharpInput: Buffer | string = buffer ?? filePath!;
+  const sharpOpts = { limitInputPixels: opts.uncompressed ? IMAGE_MAX_PIXELS_UNCOMPRESSED : IMAGE_MAX_PIXELS, sequentialRead: true };
+  const sourceSize = buffer ? buffer.length : statSync(filePath!).size;
   // Размеры возвращаем фактические: отображаемая копия и, если есть, оригинал
   // Await only if the startup promise hasn't resolved yet (no-op on subsequent calls)
   await bucketReady;
@@ -140,6 +211,7 @@ export async function uploadFile(
   // ── Sticker validation (Telegram rules) ───────────────────────────────
   // PNG или WEBP с прозрачным фоном, одна сторона ровно 512 px, другая не больше, файл до 512 КБ
   if (folder === 'stickers') {
+    const buffer = Buffer.isBuffer(source) ? source : await readFile(filePath!); // стикер ≤ 512 КБ
     if (mimeType !== 'image/png' && mimeType !== 'image/webp') {
       throw new UploadValidationError('STICKER_FORMAT', 'Стикер должен быть в формате PNG или WEBP');
     }
@@ -169,11 +241,7 @@ export async function uploadFile(
     throw new Error('uploadFile принимает только изображения; видео и аудио — через uploadStreamedFile');
   }
 
-  if (!mimeType.startsWith('image/')) {
-    throw new Error('uploadFile принимает только изображения; видео и аудио — через uploadStreamedFile');
-  }
-
-  let finalBuffer = buffer;
+  let finalBuffer: Buffer | null = null;
   let finalMimeType = mimeType;
   let finalExt = path.extname(originalName).toLowerCase() || '.bin';
   let originalUrl: string | undefined;
@@ -182,41 +250,26 @@ export async function uploadFile(
   // Process images with sharp (ignore GIFs to preserve animation if needed)
   if (!mimeType.includes('gif')) {
     try {
-      const image = sharp(buffer, { limitInputPixels: IMAGE_MAX_PIXELS });
+      finalBuffer = await withImageSlot(async () => {
+        // rotate() без аргументов применяет EXIF Orientation: оригинал без пережатия (Lite+) приходит «как с телефона»
+        const image = sharp(sharpInput, sharpOpts).rotate();
+        if (folder === 'avatars') return image.resize(500, 500, { fit: 'cover' }).webp({ quality: 80 }).toBuffer();
+        if (folder === 'banners') return image.resize(1500, 500, { fit: 'cover' }).webp({ quality: 80 }).toBuffer();
+        if (folder === 'backgrounds') return image.resize(2560, 1440, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+        // posts / comments / messages. Тарифы с «фото без сжатия»: отображаемая копия крупнее и качественнее,
+        // оригинал сохраняется как есть; иначе стандартное сжатие
+        return (opts.uncompressed
+          ? image.resize(3840, 3840, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 92 })
+          : image.resize(2000, 2000, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 })
+        ).toBuffer();
+      });
 
-      if (folder === 'avatars') {
-        finalBuffer = await image
-          .resize(500, 500, { fit: 'cover' })
-          .webp({ quality: 80 })
-          .toBuffer();
-      } else if (folder === 'banners') {
-        finalBuffer = await image
-          .resize(1500, 500, { fit: 'cover' })
-          .webp({ quality: 80 })
-          .toBuffer();
-      } else if (folder === 'backgrounds') {
-        finalBuffer = await image
-          .resize(2560, 1440, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 82 })
-          .toBuffer();
-      } else {
-        // posts / messages
-        finalBuffer = await image
-          .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 85 })
-          .toBuffer();
-
-        // Keep the pre-compression source so it can be offered as a full-quality
-        // download later — the display copy above is always the lossy WebP.
-        if (folder === 'posts') {
-          const origExt = path.extname(originalName).toLowerCase() || '.bin';
-          const originalObjectName = objectKeyFor('posts/originals', origExt);
-          await minioClient.putObject(BUCKET, originalObjectName, buffer, buffer.length, {
-            'Content-Type': mimeType,
-          });
-          originalUrl = `${PUBLIC_URL}/${BUCKET}/${originalObjectName}`;
-          originalSizeBytes = buffer.length;
-        }
+      // Keep the pre-compression source so it can be offered as a full-quality
+      // download later — the display copy above is always the lossy WebP.
+      // Оригинал уходит в хранилище потоком с диска (или из буфера для небольших служебных вызовов).
+      if (folder === 'posts') {
+        const saved = await saveOriginal({ buffer, filePath, mimeType, originalName });
+        if (saved) { originalUrl = saved.url; originalSizeBytes = saved.sizeBytes; }
       }
       finalMimeType = 'image/webp';
       finalExt = '.webp';
@@ -230,12 +283,17 @@ export async function uploadFile(
 
   const objectName = objectKeyFor(folder, finalExt);
 
-  await minioClient.putObject(BUCKET, objectName, finalBuffer, finalBuffer.length, {
-    'Content-Type': finalMimeType,
-  });
+  // GIF не перекодируется (анимация): уходит как есть, потоком
+  const putSize = finalBuffer ? finalBuffer.length : sourceSize;
+  const putBody = finalBuffer ?? buffer ?? createReadStream(filePath!);
+  try {
+    await minioClient.putObject(BUCKET, objectName, putBody, putSize, { 'Content-Type': finalMimeType });
+  } finally {
+    if (!finalBuffer && !buffer) (putBody as ReturnType<typeof createReadStream>).destroy();
+  }
 
   // URL structure: <public_base>/<bucket>/<object>
-  return { url: `${PUBLIC_URL}/${BUCKET}/${objectName}`, sizeBytes: finalBuffer.length, originalUrl, originalSizeBytes };
+  return { url: `${PUBLIC_URL}/${BUCKET}/${objectName}`, sizeBytes: putSize, originalUrl, originalSizeBytes };
 }
 
 /**
@@ -247,6 +305,8 @@ export async function uploadStreamedFile(args: {
   originalName: string;
   mimeType: string;
   folder: string;
+  /** Имя для Content-Disposition: файл отдаётся вложением (скачивание), а не показывается в браузере. */
+  asAttachment?: string;
 }): Promise<{ url: string; sizeBytes: number; isSilentVideo?: boolean }> {
   await bucketReady;
   const ext = path.extname(args.originalName).toLowerCase() || '.bin';
@@ -256,7 +316,10 @@ export async function uploadStreamedFile(args: {
 
   const stream = createReadStream(args.filePath);
   try {
-    await minioClient.putObject(BUCKET, objectName, stream, sizeBytes, { 'Content-Type': args.mimeType });
+    await minioClient.putObject(BUCKET, objectName, stream, sizeBytes, {
+      'Content-Type': args.mimeType,
+      ...(args.asAttachment ? { 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(args.asAttachment)}` } : {}),
+    });
   } finally {
     stream.destroy();
   }

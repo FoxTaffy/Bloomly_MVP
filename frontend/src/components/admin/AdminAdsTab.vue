@@ -59,7 +59,9 @@ const deleteAd = async (adId: string) => {
 const reviewAd = async (adId: string, status: 'active' | 'rejected') => {
   try {
     const body: any = { status }
-    if (status === 'active') {
+    // Оплаченная реклама сама получает срок от момента одобрения; даты по умолчанию — только для старых заявок
+    const target = ads.value.find(a => a.id === adId)
+    if (status === 'active' && !target?.duration_days) {
       body.startsAt = new Date().toISOString()
       body.endsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     }
@@ -317,6 +319,9 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
             </span>
             <span class="text-[10px] text-white/30">{{ ad.impressions ?? 0 }} {{ langStore.t.adminImpressionsSuffix }} · {{ ad.clicks ?? 0 }} {{ langStore.t.adminClicksSuffix }}</span>
             <span v-if="ad.price_label" class="text-[10px] font-bold text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ ad.price_label }}</span>
+            <span v-if="ad.price_blm != null" class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              {{ ad.placement }} · {{ ad.periods }}{{ ad.billing === 'week' ? ' нед.' : ' сут.' }} · {{ ad.price_blm }} BLM<template v-if="ad.discount_pct"> (−{{ ad.discount_pct }}%)</template>
+            </span>
           </div>
           <p class="font-bold text-sm text-white">{{ ad.title }}</p>
           <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-1">{{ ad.description }}</p>

@@ -9,10 +9,32 @@ export interface PlanQuote {
   tier: string
   period: BillingPeriod
   months: number
+  /** Рублей в месяц / за период — столько уйдёт на шлюз */
   perMonth: number
   amount: number
+  /** Цена в BLM (с баланса списывается ровно она) */
+  blmPerMonth?: number
+  blmAmount?: number
   bcAmount?: number
   discounted: boolean
+}
+
+export interface PlanPerks {
+  maxPhotoBytes: number
+  maxVideoBytes: number
+  maxAttachmentBytes: number
+  uncompressedPhotos: boolean
+  dailyMessageLimit: number | null
+  groupSalesFeePct: number
+  withdrawFeePct: number
+  adDiscountPct: number
+  denCooldownHours: number
+  freeBumpsPerMonth: number
+  autoBump: boolean
+  commissionsBadge: boolean
+  searchBonus: number
+  postBoostsPerMonth: number
+  promoCashbackBlm: number
 }
 
 export interface PaymentsConfig {
@@ -25,6 +47,8 @@ export interface PaymentsConfig {
   topup: { min: number; max: number; step: number; packages: { bc: number; rub: number; popular?: boolean }[] }
   donate: { min: number; max: number }
   plans: { tier: string; month: PlanQuote; year: PlanQuote }[]
+  perks: Record<'free' | 'lite' | 'pro' | 'business', PlanPerks>
+  earlyUser: boolean
   subscription: { tier: string; expiresAt: string | null; period: BillingPeriod | null; autoRenew: boolean }
   /** Есть привязанная через ЮKassa карта/кошелёк — по нему идёт автопродление */
   hasSavedMethod: boolean

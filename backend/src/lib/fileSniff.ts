@@ -30,6 +30,18 @@ export function sniffMatches(buf: Buffer, mime: string): boolean {
       return ascii(buf, 'OggS');
     case 'audio/wav':
       return ascii(buf, 'RIFF') && ascii(buf, 'WAVE', 8);
+    // Документы и исходники для вложений чата
+    case 'application/zip':
+      return buf[0] === 0x50 && buf[1] === 0x4b && (buf[2] === 3 || buf[2] === 5) && (buf[3] === 4 || buf[3] === 6);
+    case 'application/x-7z-compressed':
+      return buf.subarray(0, 6).equals(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]));
+    case 'application/vnd.rar':
+    case 'application/x-rar-compressed':
+      return ascii(buf, 'Rar!\x1a\x07');
+    case 'application/gzip':
+      return buf[0] === 0x1f && buf[1] === 0x8b;
+    case 'image/vnd.adobe.photoshop':
+      return ascii(buf, '8BPS');
     case 'audio/mpeg':
       // ID3-тег или кадр MPEG (синхрослово 11 бит)
       return ascii(buf, 'ID3') || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0);

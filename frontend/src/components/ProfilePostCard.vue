@@ -120,8 +120,11 @@
         </template>
       </p>
 
+      <!-- Вложения-файлы (PSD, архивы) -->
+      <PostFileAttachments :urls="fileUrls" :locked="isPaywalled || (!!post.is_nsfw && !nsfwEnabled)" class="mb-3" />
+
       <!-- Media -->
-      <div v-if="post.media_urls && post.media_urls.length"
+      <div v-if="mediaUrls.length"
         class="relative mb-3 rounded-xl overflow-hidden"
       >
         <!-- Blurred media grid -->
@@ -129,10 +132,10 @@
           class="transition-all duration-300"
           :class="[
             (post.is_nsfw && !nsfwEnabled) || (isPaywalled && !paidRevealed) ? 'blur-xl scale-110 pointer-events-none select-none' : '',
-            post.media_urls.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'
+            mediaUrls.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'
           ]"
         >
-          <template v-for="(url, i) in post.media_urls" :key="i">
+          <template v-for="(url, i) in mediaUrls" :key="i">
             <CustomPlayer :src="url" @click-image="showLightboxUrl = url" class="w-full h-full object-cover"
               :disable-autoplay="(post.is_nsfw && !nsfwEnabled) || (isPaywalled && !paidRevealed)" />
           </template>
@@ -245,6 +248,8 @@
 
 <script setup lang="ts">
 import PostEditExtras from '@/components/PostEditExtras.vue'
+import PostFileAttachments from '@/components/PostFileAttachments.vue'
+import { visualMedia, fileMedia } from '@/lib/postMedia'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed } from 'vue'
@@ -321,8 +326,13 @@ const isEditable = computed(() =>
 )
 const canPin = computed(() => props.isOwnProfile && isOwn.value)
 const isPinnedThis = computed(() => props.pinnedPostId === props.post.id)
+// Бэкенд отдаёт пост только тому, кому он доступен, и помечает can_view_content: true (как в PostCard).
+// Раньше здесь замок ставился всем, кроме автора, — подписчик видел «закрыто» на открытом для него посте.
+// Картинки/видео — в сетку и лайтбокс, PSD и архивы — отдельными плашками скачивания
+const mediaUrls = computed<string[]>(() => visualMedia(props.post.media_urls))
+const fileUrls = computed<string[]>(() => fileMedia(props.post.media_urls))
 const isPaywalled = computed(() =>
-  (props.post.subscriber_only || props.post.is_paid) && !isOwn.value
+  (props.post.subscriber_only || props.post.is_paid) && props.post.can_view_content !== true && !isOwn.value
 )
 
 type Seg = PostSeg
@@ -398,8 +408,8 @@ async function toggleRepaw() {
 function openFullscreen() {
   showMenu.value = false
   // Navigate to post permalink or open lightbox if media present
-  if (props.post.media_urls?.length) {
-    showLightboxUrl.value = props.post.media_urls[0]
+  if (mediaUrls.value.length) {
+    showLightboxUrl.value = mediaUrls.value[0]
   } else {
     router.push(`/post/${props.post.id}`)
   }

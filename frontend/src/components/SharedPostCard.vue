@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { visualMedia } from '@/lib/postMedia'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -69,7 +70,7 @@ const thumbnailLocked = computed(() => {
   return false
 })
 
-const firstMedia = computed(() => post.value?.media_urls?.[0] ?? null)
+const firstMedia = computed(() => visualMedia(post.value?.media_urls)[0] ?? null) // вложения-файлы миниатюрой не бывают
 
 function open() {
   router.push(`/post/${props.postId}`)

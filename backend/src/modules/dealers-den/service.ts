@@ -8,6 +8,9 @@ import { notificationService } from '../notifications/service.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { errCode } from '../../lib/httpErrors.js';
 import { logError } from '../../lib/logger.js';
+import { placeInFeed } from './feed.service.js';
+import { parseSearchQuery, textScore } from '../../lib/searchQuery.js';
+import { searchScore } from '../../lib/searchRank.js';
 
 // Tags are matched case-insensitively (search lowercases its query), so store them lowercased.
 function normalizeTags(tags: string[] | undefined): string[] {
@@ -48,6 +51,10 @@ const LISTING_SELECT = {
   commission_form_fields: true,
   commission_details: true,
   views_count: true,
+  feed_published_at: true,
+  feed_at: true,
+  last_bumped_at: true,
+  auto_bump: true,
   created_at: true,
   updated_at: true,
   seller: {
@@ -58,6 +65,7 @@ const LISTING_SELECT = {
       avatar_url: true,
       is_verified: true,
       verification_type: true,
+      commissions_status: true,
     },
   },
   group: { select: { id: true, slug: true, name: true, avatar_url: true } },
@@ -121,6 +129,10 @@ export const dealersDenService = {
     if (query.groupId)     where.group_id    = query.groupId;
     if (query.excludeNsfw === '1') where.is_nsfw = false;
 
+    // Общая лента (без магазина и продавца): только карточки, прошедшие кулдаун. В магазине группы и у продавца видны все.
+    const isMainFeed = !query.sellerId && !query.groupId;
+    if (isMainFeed) where.feed_published_at = { not: null };
+
     if (query.currency) where.currency = query.currency;
     if (query.onlyDiscount === '1') where.discount_percent = { gt: 0 };
 
@@ -158,7 +170,31 @@ export const dealersDenService = {
       query.sort === 'price_asc'  ? { price: 'asc' } :
       query.sort === 'price_desc' ? { price: 'desc' } :
       query.sort === 'popular'    ? [{ bid_count: 'desc' }, { created_at: 'desc' }] :
-                                    { created_at: 'desc' };
+                                    isMainFeed ? [{ feed_at: 'desc' }, { created_at: 'desc' }] : { created_at: 'desc' };
+
+    // Поиск по умолчанию (без явной сортировки): релевантность названия плюс приоритет Pro и Business продавца.
+    // Ранжируем окно свежих совпадений, как в поиске людей и групп.
+    if (query.search && !query.sort) {
+      const parsed = parseSearchQuery(query.search);
+      const overfetch = Math.min(200, Math.max((skip + limit) * 5, limit * 5));
+      const [candidates, total] = await Promise.all([
+        prisma.dealerListing.findMany({ where, select: LISTING_SELECT, orderBy: isMainFeed ? [{ feed_at: 'desc' }, { created_at: 'desc' }] : { created_at: 'desc' }, take: overfetch }),
+        prisma.dealerListing.count({ where }),
+      ]);
+      const tiers = new Map((await prisma.user.findMany({
+        where: { id: { in: [...new Set(candidates.map(l => l.seller_id))] } },
+        select: { id: true, subscription_tier: true },
+      })).map(u => [u.id, u.subscription_tier]));
+      const scored = candidates.map((l, i) => {
+        let relevance = 0;
+        for (const t of parsed.terms) {
+          relevance += Math.max(0, ...[t.text, ...t.variants].map(w => textScore(l.title, w)));
+        }
+        return { l, i, score: searchScore(relevance, parsed.terms.length, tiers.get(l.seller_id) ?? 'free') };
+      });
+      scored.sort((a, b) => b.score - a.score || a.i - b.i); // при равенстве — прежний порядок (свежие выше)
+      return { listings: await this.withWishlistInfo(scored.slice(skip, skip + limit).map(x => x.l), viewerId), total, page, limit };
+    }
 
     const [listings, total] = await Promise.all([
       prisma.dealerListing.findMany({ where, select: LISTING_SELECT, orderBy, skip, take: limit }),
@@ -266,7 +302,7 @@ export const dealersDenService = {
     if (input.bidIncrement !== undefined && input.bidIncrement <= 0) throw new Error('INVALID_BID_INCREMENT');
     const kind = input.listingKind ?? 'fixed';
     for (const url of input.images ?? []) await assertOwnedMedia(url, sellerId);
-    return prisma.dealerListing.create({
+    const created = await prisma.dealerListing.create({
       data: {
         seller_id:    sellerId,
         group_id:     input.groupId,
@@ -296,6 +332,16 @@ export const dealersDenService = {
       },
       select: LISTING_SELECT,
     });
+    return this.enterFeed(created);
+  },
+
+  /** Активная карточка просится в общую ленту; если кулдаун группы не прошёл, остаётся в очереди (feed_published_at = null). */
+  async enterFeed<T extends { id: string; status: string }>(listing: T) {
+    if (listing.status !== 'active') return listing;
+    const published = await placeInFeed(listing.id);
+    if (!published) return listing;
+    const feed = await prisma.dealerListing.findUnique({ where: { id: listing.id }, select: { feed_published_at: true, feed_at: true } });
+    return { ...listing, ...feed };
   },
 
   // ── update ──────────────────────────────────────────────────────────────────
@@ -330,7 +376,9 @@ export const dealersDenService = {
     if (input.commissionFormFields !== undefined) data.commission_form_fields = input.commissionFormFields;
     if (input.commissionDetails    !== undefined) data.commission_details     = (input.commissionDetails as any) ?? Prisma.DbNull;
 
-    const updated = await prisma.dealerListing.update({ where: { id }, data, select: LISTING_SELECT });
+    let updated = await prisma.dealerListing.update({ where: { id }, data, select: LISTING_SELECT });
+    // Черновик или архив стали активными — карточка просится в общую ленту (уже побывавшая в ней остаётся на своём месте)
+    if (data.status === 'active' && existing.status !== 'active') updated = await this.enterFeed(updated);
 
     if (input.images !== undefined) {
       const removed = existing.images.filter((url) => !input.images!.includes(url));
@@ -1022,7 +1070,7 @@ export const dealersDenService = {
       where: { username },
       select: {
         id: true, username: true, display_name: true, avatar_url: true,
-        is_verified: true, badge_type: true, created_at: true,
+        is_verified: true, badge_type: true, created_at: true, commissions_status: true,
         denTrustScore: true,
         den_frozen: true,
       },
@@ -1053,6 +1101,7 @@ export const dealersDenService = {
         denTrustScore: user.denTrustScore,
         createdAt: user.created_at,
         den_frozen: user.den_frozen,
+        commissions_status: user.commissions_status,
       },
       stats: {
         totalSales,

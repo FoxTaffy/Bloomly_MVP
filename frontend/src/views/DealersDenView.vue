@@ -14,6 +14,7 @@ import AppSidebar   from '@/components/AppSidebar.vue'
 import ListingDetailsEditor from '@/components/ListingDetailsEditor.vue'
 import { emptyDraft, draftFrom, cleanDraft, type DetailsDraft } from '@/lib/listingDetails'
 import WalletCard from '@/components/WalletCard.vue'
+import { useWalletStore } from '@/stores/wallet'
 import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
@@ -33,6 +34,7 @@ const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
 const store  = useDealersDenStore()
+const walletStore = useWalletStore()
 const { confirmDialog } = useConfirm()
 const { nsfwEnabled, canUseNsfw, enableNsfw } = useNsfwMode()
 
@@ -186,6 +188,7 @@ async function loadData() {
   await Promise.all([
     store.loadListings(listingsFilters()),
     auth.user ? store.loadMyListings() : Promise.resolve(),
+    auth.user ? store.loadBumpInfo().catch(() => {}) : Promise.resolve(),
     auth.user ? store.loadMyWishlist().catch(() => {}) : Promise.resolve(),
   ])
 }
@@ -465,6 +468,36 @@ async function submitEdit() {
     editError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? langStore.t.dealersDenSaveChangesFailed
   } finally { isUpdating.value = false }
 }
+// ── Поднятия в общей ленте ─────────────────────────────────────────────────────
+const bumpingId = ref('')
+const isQueued = (l: DealerListing) => l.status === 'active' && !l.feed_published_at
+const bumpTitle = (l: DealerListing) => {
+  const info = store.bumpInfo
+  if (!info) return langStore.t.dealersDenBump
+  return info.freeLeft > 0
+    ? `${langStore.t.dealersDenBump} (${langStore.t.dealersDenBumpFreeLeft} ${info.freeLeft})`
+    : `${langStore.t.dealersDenBump} — ${fmt.formatBlm(info.priceBlm)}`
+}
+async function bumpListing(l: DealerListing) {
+  if (bumpingId.value) return
+  bumpingId.value = l.id
+  try {
+    const bump = await store.bumpListing(l.id)
+    if (bump.kind === 'paid') void walletStore.fetchBalance()
+    alert(langStore.t.dealersDenBumpDone)
+  } catch (err: any) {
+    const code = err?.response?.data?.code
+    alert(code === 'BUMP_TOO_SOON' ? langStore.t.dealersDenBumpTooSoon
+      : code === 'INSUFFICIENT_FUNDS' ? langStore.t.dealersDenBumpNoFunds
+      : err?.response?.data?.error ?? langStore.t.dealersDenBumpFailed)
+  } finally { bumpingId.value = '' }
+}
+async function toggleAutoBump(l: DealerListing) {
+  if (!store.bumpInfo?.canAutoBump) { alert(langStore.t.dealersDenAutoBumpPlan); return }
+  try { await store.setAutoBump(l.id, !l.auto_bump) }
+  catch (err: any) { alert(err?.response?.data?.error ?? langStore.t.dealersDenBumpFailed) }
+}
+
 async function deleteListing(id: string) {
   if (!(await confirmDialog(langStore.t.dealersDenDeleteListingConfirm, { danger: true }))) return
   try {
@@ -872,7 +905,21 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
 
               <!-- My controls -->
+              <div v-if="activeTab === 'my' && isQueued(listing)" class="absolute top-2 left-2 z-10" :title="langStore.t.dealersDenFeedQueuedHint">
+                <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full backdrop-blur-xs bg-black/60 text-brand-yellow">{{ langStore.t.dealersDenFeedQueued }}</span>
+              </div>
               <div v-if="activeTab === 'my' || activeTab === 'drafts'" class="absolute bottom-2 right-2 flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" @click.stop>
+                <button v-if="activeTab === 'my' && listing.status === 'active'" @click="toggleAutoBump(listing)"
+                  :title="store.bumpInfo?.canAutoBump ? langStore.t.dealersDenAutoBump : langStore.t.dealersDenAutoBumpPlan"
+                  class="w-7 h-7 backdrop-blur-xs rounded-full flex items-center justify-center transition-all"
+                  :class="[listing.auto_bump ? 'bg-brand-accent' : 'bg-black/60 hover:bg-brand-accent', store.bumpInfo?.canAutoBump ? '' : 'opacity-50']">
+                  <BIcon name="RefreshCw" class="w-3.5 h-3.5 text-white" />
+                </button>
+                <button v-if="activeTab === 'my' && listing.status === 'active'" @click="bumpListing(listing)" :disabled="bumpingId === listing.id"
+                  :title="bumpTitle(listing)"
+                  class="w-7 h-7 bg-black/60 backdrop-blur-xs rounded-full flex items-center justify-center hover:bg-brand-accent transition-all disabled:opacity-50">
+                  <BIcon name="ArrowUp" class="w-3.5 h-3.5 text-white" />
+                </button>
                 <button @click="openEdit(listing)"
                   class="w-7 h-7 bg-black/60 backdrop-blur-xs rounded-full flex items-center justify-center hover:bg-brand-accent transition-all">
                   <BIcon name="Pencil" class="w-3.5 h-3.5 text-white" />

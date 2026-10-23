@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { normalizeSafeLink, requireSafeLink, sanitizeLinkRecord } from '../src/lib/safeLink.js';
-import { createUser, resetDb, api } from './helpers.js';
+import { createUser, resetDb, api, prisma } from './helpers.js';
 
 describe('safeLink: схемы ссылок', () => {
   it('разрешает http, https, mailto, tel и ссылки без схемы', () => {
@@ -40,9 +40,10 @@ describe('ads: ссылка рекламы проходит проверку н�
     const { auth } = await createUser({ subscription_tier: 'business' });
     const res = await api('POST', '/api/admin/ads', {
       headers: auth,
-      body: { title: 'Реклама', linkUrl: "javascript:fetch('/api/auth/refresh')" },
+      body: { title: 'Реклама', linkUrl: "javascript:fetch('/api/auth/refresh')", placement: 'feed_top', billing: 'week', periods: 1 },
     });
     expect(res.status).toBe(400);
     expect(res.json.error.code).toBe('INVALID_AD_LINK');
+    expect(await prisma.advertisement.count()).toBe(0);
   });
 });

@@ -111,18 +111,24 @@ export function fractionDigitsFor(currency: string): number {
   return WHOLE_CURRENCIES.has(currency) ? 0 : 2
 }
 
+/** Сумма в BLM в валюте региона («180 ₽»); null, если валюта показа не выбрана или курсов ещё нет. */
+export function blmLocal(amount: string | number): string | null {
+  const n = parseFloat(String(amount))
+  const conv = Number.isFinite(n) && n > 0 ? blmToDisplay(n) : null
+  if (!conv) return null
+  const frac = fractionDigitsFor(conv.currency)
+  return formatMoney(conv.amount, conv.currency, { minimumFractionDigits: frac, maximumFractionDigits: frac })
+}
+
 /**
  * Цена в BLM с пересчётом в валюту региона: «2 BLM ≈ 180 ₽». Нет валюты показа или курсов — просто «2 BLM».
  * Это только показ: списывается всегда BLM.
  */
 export function formatBlm(amount: string | number): string {
   const n = parseFloat(String(amount))
-  const value = Number.isFinite(n) ? n : 0
-  const base = `${Math.round(value * 100) / 100} BLM`
-  const conv = value > 0 ? blmToDisplay(value) : null
-  if (!conv) return base
-  const frac = fractionDigitsFor(conv.currency)
-  return `${base} ≈ ${formatMoney(conv.amount, conv.currency, { minimumFractionDigits: frac, maximumFractionDigits: frac })}`
+  const base = `${Math.round((Number.isFinite(n) ? n : 0) * 100) / 100} BLM`
+  const local = blmLocal(amount)
+  return local ? `${base} ≈ ${local}` : base
 }
 
 function formatMoney(n: number, currency: string, opts: Intl.NumberFormatOptions): string {

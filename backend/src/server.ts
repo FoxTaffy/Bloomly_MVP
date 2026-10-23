@@ -46,6 +46,7 @@ import { registerAuth } from './plugins/auth.js';
 import { isDevEnv } from './lib/env.js';
 import { logger } from './lib/logger.js';
 import { registerErrorHandling } from './plugins/errors.js';
+import { getMaxRequestBytes } from './modules/media/limits.js';
 
 dotenv.config();
 
@@ -72,12 +73,10 @@ if (!process.env.ALLOWED_ORIGINS && !isDevEnv()) {
   process.exit(1);
 }
 
-// 4300 MB ceiling — covers the largest chat-attachment tier (4 GB) with headroom for
-// multipart overhead. Per-tier caps (2 GB free / 4 GB lite+) are enforced in the upload
-// handler itself; this is just the outer limit fastify/busboy will allow through at all.
-// NOTE: if a reverse proxy (nginx, etc.) sits in front of this API, its own body-size
-// limit (e.g. client_max_body_size) must be raised to match, or it will 413 first.
-const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
+// Внешний потолок multipart: самый большой лимит среди тарифов (maxPhotoBytes / maxVideoBytes / maxAttachmentBytes)
+// плюс запас на служебные части. Точные лимиты по тарифу и виду файла применяет media/controller.ts на лету.
+// NOTE: reverse proxy перед API (frontend/nginx.conf, deploy/nginx/bloomly.conf) должен пропускать такие тела.
+const MAX_UPLOAD_BYTES = getMaxRequestBytes();
 
 // Доверяем X-Forwarded-For только от своих прокси (loopback — nginx на хосте, uniquelocal —
 // docker-сеть). При trustProxy: true Fastify брал самый левый IP из заголовка, а его клиент

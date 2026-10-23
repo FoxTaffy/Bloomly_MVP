@@ -200,7 +200,8 @@ export async function getFinanceReport(rawDays: number) {
     tier, active: 0, granted: 0, autoRenew: 0, mrr: 0, revenue: 0, refunded: 0, payments: 0, walletPayments: 0, walletRub: 0,
     newSubscribers: 0, month: 0, year: 0, renewals: 0, manual: 0,
   });
-  for (const t of ['lite', 'pro']) tierRow(t);
+  const rate = await getBlmRate();
+  for (const t of ['lite', 'pro', 'business']) tierRow(t);
   let expectedRenewals = 0, expectedRenewalsCount = 0, churnRisk = 0, autoRenewActive = 0;
   for (const r of activeRows) {
     const t = tierRow(r.tier);
@@ -208,11 +209,11 @@ export async function getFinanceReport(rawDays: number) {
     t.active += r.cnt;
     if (isPaidTier(r.tier) && (PURCHASABLE_TIERS as string[]).includes(r.tier)) {
       const period: BillingPeriod = r.period === 'year' ? 'year' : 'month';
-      t.mrr += r.cnt * monthlyPrice(r.tier as PaidTier, period, r.early);
+      t.mrr += r.cnt * monthlyPrice(r.tier as PaidTier, period, r.early, rate);
       if (r.auto) {
         t.autoRenew += r.cnt;
         autoRenewActive += r.cnt;
-        if (r.soon) { expectedRenewals += r.cnt * quote(r.tier as PaidTier, period, r.early).amount; expectedRenewalsCount += r.cnt; }
+        if (r.soon) { expectedRenewals += r.cnt * quote(r.tier as PaidTier, period, r.early, rate).amount; expectedRenewalsCount += r.cnt; }
       } else if (r.soon) churnRisk += r.cnt;
     }
   }

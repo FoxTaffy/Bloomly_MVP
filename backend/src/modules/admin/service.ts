@@ -5,6 +5,8 @@ import { notificationService } from '../notifications/service.js';
 import { getStorageStats } from '../media/service.js';
 import { applyAction, type TargetSnapshot } from '../automod/service.js';
 import { normalizeSafeLink } from '../../lib/safeLink.js';
+import { firstVisualMedia } from '../../lib/postMedia.js';
+import { refundAd, reviewPaidAd } from '../ads/ads.service.js';
 
 /** Одобренная реклама в текущем окне показа (для счётчиков показов и кликов). */
 function liveAdWhere(adId: string) {
@@ -602,7 +604,7 @@ export const adminService = {
         postId = targetId;
         snapshot = {
           label: post.content ? post.content.slice(0, 80) : 'Публикация',
-          thumbnail: Array.isArray(post.media_urls) && post.media_urls.length ? String(post.media_urls[0]) : undefined,
+          thumbnail: firstVisualMedia(post.media_urls),
           date: post.created_at.toISOString(),
         };
       }
@@ -658,6 +660,8 @@ export const adminService = {
         AND: [{ OR: [{ ends_at: null }, { ends_at: { gte: now } }] }],
       },
       orderBy: { created_at: 'desc' },
+      // Публично отдаём только то, что нужно для показа: контакты и оплата рекламодателя остаются у админов
+      select: { id: true, title: true, description: true, image_url: true, link_url: true, placement: true, starts_at: true, ends_at: true },
     });
   },
 
@@ -677,7 +681,12 @@ export const adminService = {
   },
 
   async deleteAd(adId: string) {
-    return prisma.advertisement.update({ where: { id: adId }, data: { deleted_at: new Date() } });
+    // Непоказанная оплаченная заявка при удалении возвращает деньги
+    return prisma.$transaction(async (tx) => {
+      const ad = await tx.advertisement.findUniqueOrThrow({ where: { id: adId } });
+      if (ad.status === 'pending') await refundAd(tx, ad.id);
+      return tx.advertisement.update({ where: { id: adId }, data: { deleted_at: new Date() } });
+    });
   },
 
   async reviewAd(
@@ -685,14 +694,7 @@ export const adminService = {
     status: 'active' | 'rejected',
     options?: { startsAt?: Date; endsAt?: Date },
   ) {
-    return prisma.advertisement.update({
-      where: { id: adId },
-      data:  {
-        status, reviewed_by: reviewerId,
-        starts_at: options?.startsAt, ends_at: options?.endsAt,
-        updated_at: new Date(),
-      },
-    });
+    return reviewPaidAd(adId, reviewerId, status, options);
   },
 
   // Счётчики растут только у активной рекламы в её окне показа: без этого любой мог накручивать

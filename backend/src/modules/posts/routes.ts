@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
-import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, searchTagsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, getMyPostsLikedByHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler, setNotInterestedHandler } from './controller.js';
+import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, searchTagsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, getMyPostsLikedByHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler, setNotInterestedHandler, getBoostInfoHandler, boostPostHandler } from './controller.js';
 import { createScheduledPostHandler, listScheduledPostsHandler, updateScheduledPostHandler, cancelScheduledPostHandler, publishNowScheduledPostHandler } from './scheduledController.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
@@ -92,6 +92,7 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getTrendingTagsHandler>>('/trending-tags', getTrendingTagsHandler);
   fastify.get<RouteGenericOf<typeof suggestTagsHandler>>('/tags/suggest', suggestTagsHandler);
   fastify.get<RouteGenericOf<typeof getUserPostStatusHandler>>('/status', auth, getUserPostStatusHandler);
+  fastify.get('/boost-info', auth, getBoostInfoHandler);
 
   // ── Private "me" routes (must come before /user/:userId) ────────────────
   fastify.get<RouteGenericOf<typeof getMyBookmarksHandler>>('/me/bookmarks', auth, getMyBookmarksHandler);
@@ -128,6 +129,7 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getCommentsHandler>>('/:id/comments',   { onRequest: [fastify.tryAuthenticate] }, getCommentsHandler);
   fastify.post<RouteGenericOf<typeof recordPostViewHandler>>('/:id/view',      tryAuth, recordPostViewHandler);
   fastify.post<RouteGenericOf<typeof toggleArchivePostHandler>>('/:id/archive',   auth, toggleArchivePostHandler);
+  fastify.post<RouteGenericOf<typeof boostPostHandler>>('/:id/boost', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, boostPostHandler);
   fastify.post<RouteGenericOf<typeof toggleCommentsDisabledHandler>>('/:id/comments-toggle', auth, toggleCommentsDisabledHandler);
   fastify.post<RouteGenericOf<typeof setNotInterestedHandler>>('/:id/not-interested', { schema: notInterestedSchema, onRequest: [fastify.authenticate] }, setNotInterestedHandler);
   fastify.get<RouteGenericOf<typeof getPostStatsHandler>>('/:id/stats',      auth, getPostStatsHandler);

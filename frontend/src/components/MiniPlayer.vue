@@ -25,6 +25,7 @@ const type = computed(() => {
   if (props.msgType === 'gif') return 'gif'
   if (props.msgType === 'video') return 'video'
   if (props.msgType === 'sticker') return 'sticker'
+  if (props.msgType === 'file') return 'file'
   const u = props.src.toLowerCase().split('?')[0]
   // GIFs get uploaded with msgType 'image' (mime type image/gif), so the extension
   // check must win over the generic 'image' shortcut to get the pausable gif UI.
@@ -32,8 +33,12 @@ const type = computed(() => {
   if (props.msgType === 'image') return 'image'
   if (/\.(mp4|webm|mov|mkv|ogv)$/.test(u)) return 'video'
   if (/\.(mp3|wav|ogg|m4a|flac|aac)$/.test(u)) return 'audio'
+  if (/\.(zip|7z|rar|gz|psd)$/.test(u)) return 'file'
   return 'image'
 })
+
+// Файл-вложение (PSD, архив): расширение берём из ссылки, скачивается как есть
+const fileExt = computed(() => (props.src.toLowerCase().split('?')[0].split('.').pop() ?? 'file').toUpperCase())
 
 // A "gif" is either a real animated .gif image (frozen via canvas, since <img> can't
 // be paused natively) or a silent video reclassified as gif-like (a real <video> we
@@ -201,6 +206,17 @@ watch(() => props.src, async (newSrc) => {
   <div v-if="type === 'sticker'" class="w-[120px] h-[120px] flex items-center justify-center text-[72px] leading-none p-2">
     {{ src }}
   </div>
+
+  <!-- file: PSD / архив — скачивание -->
+  <a v-else-if="type === 'file'" :href="src" download rel="noopener noreferrer"
+    class="flex items-center gap-3 px-3 py-3 w-[240px] hover:brightness-110 transition"
+    :class="isMine ? 'bg-brand-accent text-white' : 'bg-brand-card text-white'">
+    <span class="w-10 h-10 rounded-xl bg-black/20 flex items-center justify-center shrink-0"><BIcon name="FileText" class="w-5 h-5" /></span>
+    <span class="min-w-0 flex-1">
+      <span class="block text-sm font-bold truncate">{{ fileExt }}</span>
+      <span class="block text-[11px] opacity-70">↓</span>
+    </span>
+  </a>
 
   <!-- image -->
   <img v-else-if="type === 'image'"

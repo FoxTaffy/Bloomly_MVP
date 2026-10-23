@@ -14,6 +14,10 @@ import SafeMedia from './SafeMedia.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { usePostDiscussion } from '@/composables/usePostDiscussion'
 import * as fmt from '@/lib/format'
+import { useUploadPrecheck } from '@/composables/useUploadPrecheck'
+import { uploadMedia } from '@/lib/uploadMedia'
+
+const { precheck: precheckUpload, fromServerError: uploadLimitMessage } = useUploadPrecheck()
 
 const props = defineProps<{ postId: string; commentsDisabled?: boolean; fullscreen?: boolean; overlayTarget?: HTMLElement | null; previewLimit?: number }>()
 
@@ -151,6 +155,8 @@ let commentUploadController: AbortController | null = null
 async function uploadCommentFile(file: File) {
   if (!auth.user || props.commentsDisabled || submitting.value) return
   removeCommentFile()
+  const tooBig = precheckUpload(file) // лимит тарифа — до отправки, с подсказкой тарифа
+  if (tooBig) { actionError.value = tooBig; return }
   const generation = commentUploadGeneration
   commentUploadController = new AbortController()
   commentFileType.value = detectMediaType(file)
@@ -158,16 +164,14 @@ async function uploadCommentFile(file: File) {
   commentFileUploading.value = true
   actionError.value = ''
   try {
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await api.post('/media/upload?folder=comments', fd, { signal: commentUploadController.signal, headers: { 'Content-Type': 'multipart/form-data' } })
+    const res = await uploadMedia(file, { folder: 'comments', signal: commentUploadController.signal })
     if (disposed || generation !== commentUploadGeneration) return
-    if (!res.data.success || !res.data.data?.url) throw new Error('Upload failed')
-    commentFileUrl.value = res.data.data.url
-  } catch {
+    if (!res.url) throw new Error('Upload failed')
+    commentFileUrl.value = res.url
+  } catch (err) {
     if (!disposed && generation === commentUploadGeneration) {
       removeCommentFile()
-      actionError.value = 'Не удалось загрузить вложение. Выберите файл ещё раз.'
+      actionError.value = uploadLimitMessage(err) ?? 'Не удалось загрузить вложение. Выберите файл ещё раз.'
     }
   } finally {
     if (generation === commentUploadGeneration) commentFileUploading.value = false
@@ -210,6 +214,8 @@ let replyUploadController: AbortController | null = null
 async function uploadReplyFile(file: File) {
   if (!auth.user || props.commentsDisabled || submitting.value) return
   removeReplyFile()
+  const tooBig = precheckUpload(file)
+  if (tooBig) { actionError.value = tooBig; return }
   const generation = replyUploadGeneration
   replyUploadController = new AbortController()
   replyFileType.value = detectMediaType(file)
@@ -217,16 +223,14 @@ async function uploadReplyFile(file: File) {
   replyFileUploading.value = true
   actionError.value = ''
   try {
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await api.post('/media/upload?folder=comments', fd, { signal: replyUploadController.signal, headers: { 'Content-Type': 'multipart/form-data' } })
+    const res = await uploadMedia(file, { folder: 'comments', signal: replyUploadController.signal })
     if (disposed || generation !== replyUploadGeneration) return
-    if (!res.data.success || !res.data.data?.url) throw new Error('Upload failed')
-    replyFileUrl.value = res.data.data.url
-  } catch {
+    if (!res.url) throw new Error('Upload failed')
+    replyFileUrl.value = res.url
+  } catch (err) {
     if (!disposed && generation === replyUploadGeneration) {
       removeReplyFile()
-      actionError.value = 'Не удалось загрузить вложение. Выберите файл ещё раз.'
+      actionError.value = uploadLimitMessage(err) ?? 'Не удалось загрузить вложение. Выберите файл ещё раз.'
     }
   } finally {
     if (generation === replyUploadGeneration) replyFileUploading.value = false
