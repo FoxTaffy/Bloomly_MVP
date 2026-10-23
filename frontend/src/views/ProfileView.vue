@@ -244,7 +244,7 @@
               <!-- Accent line top -->
               <div class="h-px bg-linear-to-r/srgb from-transparent via-brand-accent/60 to-transparent"></div>
 
-              <div class="px-6 pt-0 pb-5 max-md:px-4 max-md:flex max-md:flex-col">
+              <div class="relative px-6 pt-0 pb-5 max-md:px-4 max-md:flex max-md:flex-col">
                 <div class="flex items-start justify-between gap-4 max-md:contents">
 
                   <!-- ══ Avatar block — dual card stack swap ══ -->
@@ -300,6 +300,54 @@
 
                     <audio ref="statusPreviewAudioEl" class="hidden"
                       @play="isStatusMusicPlaying = true" @pause="isStatusMusicPlaying = false" @ended="isStatusMusicPlaying = false" />
+                  </div>
+
+                  <div class="md:flex-1 md:min-w-0 md:pt-4 md:px-3 max-md:absolute max-md:left-[7.5rem] max-md:right-4 max-md:top-2 max-md:z-20">
+                      <!-- Status bubble — to the right of the avatar -->
+                      <Transition name="status-pop">
+                        <div v-if="isOwnProfile || hasActiveStatus"
+                          :key="profileStatus.text + profileStatus.emoji + (profileStatus.music?.title || '')"
+                          class="relative w-fit max-w-full md:max-w-sm">
+                          <button
+                            @click="isOwnProfile ? openStatusEdit() : null"
+                            :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
+                            class="relative block w-full text-left hover:opacity-90 active:scale-95 transition-all">
+                            <!-- Bubble -->
+                            <div class="w-full px-3 py-2 rounded-2xl text-white overflow-hidden"
+                              :class="hasActiveStatus ? 'status-bubble-glow' : ''"
+                              :style="{ background: statusBubbleGradient, boxShadow: hasActiveStatus ? `0 4px 18px -2px ${statusBubbleColor}80, 0 2px 6px rgba(0,0,0,0.35)` : '0 8px 20px rgba(0,0,0,0.35)' }">
+                              <!-- Text/emoji -->
+                              <div v-if="profileStatus.text || profileStatus.emoji"
+                                class="flex gap-1 items-start"
+                                :class="profileStatus.music ? 'mb-1' : ''">
+                                <span v-if="profileStatus.emoji" class="text-sm shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
+                                <span v-if="profileStatus.text"
+                                  class="text-[11px] font-semibold leading-snug"
+                                  style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-word">{{ profileStatus.text }}</span>
+                              </div>
+                              <!-- Music -->
+                              <div v-if="profileStatus.music" class="flex items-center gap-1.5" @click.stop="toggleStatusMusicPreview">
+                                <div class="relative w-6 h-6 rounded-md overflow-hidden shrink-0 bg-black/30">
+                                  <img v-if="profileStatus.music.artworkUrl" :src="profileStatus.music.artworkUrl" class="w-full h-full object-cover" />
+                                  <div class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/50 transition-colors">
+                                    <BIcon :name="isStatusMusicPlaying ? 'Pause' : 'Play'" class="w-2.5 h-2.5 text-white" />
+                                  </div>
+                                </div>
+                                <div class="min-w-0 overflow-hidden">
+                                  <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
+                                  <p class="text-[9px] opacity-70 leading-tight truncate">{{ profileStatus.music.title }}</p>
+                                </div>
+                              </div>
+                              <!-- Empty own profile -->
+                              <span v-if="!hasActiveStatus && isOwnProfile"
+                                class="flex items-center gap-1 text-[11px] text-white/60">
+                                {{ langStore.t.emptyBio }}</span>
+                              <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
+                                <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
+                            </div>
+                          </button>
+                        </div>
+                      </Transition>
                   </div>
 
                   <!-- Action buttons (positioned to side of avatar) -->
@@ -469,51 +517,6 @@
                       <BIcon name="Link" class="w-3 h-3" />{{ viewedProfile.website.replace(/^https?:\/\//, '') }}
                     </a>
                   </div>
-                    <!-- Status bubble — right of avatar, under the name/chips -->
-                    <Transition name="status-pop">
-                      <div v-if="isOwnProfile || hasActiveStatus"
-                        :key="profileStatus.text + profileStatus.emoji + (profileStatus.music?.title || '')"
-                        class="relative mt-2.5 w-fit max-w-full md:max-w-sm">
-                        <button
-                          @click="isOwnProfile ? openStatusEdit() : null"
-                          :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
-                          class="relative block w-full text-left hover:opacity-90 active:scale-95 transition-all">
-                          <!-- Bubble -->
-                          <div class="w-full px-3 py-2 rounded-2xl text-white overflow-hidden"
-                            :class="hasActiveStatus ? 'status-bubble-glow' : ''"
-                            :style="{ background: statusBubbleGradient, boxShadow: hasActiveStatus ? `0 4px 18px -2px ${statusBubbleColor}80, 0 2px 6px rgba(0,0,0,0.35)` : '0 8px 20px rgba(0,0,0,0.35)' }">
-                            <!-- Text/emoji -->
-                            <div v-if="profileStatus.text || profileStatus.emoji"
-                              class="flex gap-1 items-start"
-                              :class="profileStatus.music ? 'mb-1' : ''">
-                              <span v-if="profileStatus.emoji" class="text-sm shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
-                              <span v-if="profileStatus.text"
-                                class="text-[11px] font-semibold leading-snug"
-                                style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-word">{{ profileStatus.text }}</span>
-                            </div>
-                            <!-- Music -->
-                            <div v-if="profileStatus.music" class="flex items-center gap-1.5" @click.stop="toggleStatusMusicPreview">
-                              <div class="relative w-6 h-6 rounded-md overflow-hidden shrink-0 bg-black/30">
-                                <img v-if="profileStatus.music.artworkUrl" :src="profileStatus.music.artworkUrl" class="w-full h-full object-cover" />
-                                <div class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/50 transition-colors">
-                                  <BIcon :name="isStatusMusicPlaying ? 'Pause' : 'Play'" class="w-2.5 h-2.5 text-white" />
-                                </div>
-                              </div>
-                              <div class="min-w-0 overflow-hidden">
-                                <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
-                                <p class="text-[9px] opacity-70 leading-tight truncate">{{ profileStatus.music.title }}</p>
-                              </div>
-                            </div>
-                            <!-- Empty own profile -->
-                            <span v-if="!hasActiveStatus && isOwnProfile"
-                              class="flex items-center gap-1 text-[11px] text-white/60">
-                              {{ langStore.t.emptyBio }}</span>
-                            <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
-                              <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
-                          </div>
-                        </button>
-                      </div>
-                    </Transition>
 
                 </div>
               </div>
@@ -1880,6 +1883,10 @@
                 </div>
               </div>
 
+              <!-- Bug hunt achievement: visible to everyone once earned; the owner always sees it as a nudge -->
+              <BugHunterCard v-if="viewedProfile?.bug_hunter && (viewedProfile.bug_hunter.count > 0 || isOwnProfile)"
+                :hunter="viewedProfile.bug_hunter" :is-own="isOwnProfile" />
+
               <!-- TrustScore card (only for activity participants) -->
               <TrustScoreCard v-if="viewedProfile?.id" :user-id="viewedProfile.id" />
 
@@ -2483,6 +2490,7 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import type { Post } from '@/types/post'
 import { apiErrorMessage, apiErrorStatus } from '@/lib/apiError'
 import TrustScoreCard from '@/components/TrustScoreCard.vue'
+import BugHunterCard from '@/components/BugHunterCard.vue'
 const messagesStore = useMessagesStore()
 const groupsStore = useGroupsStore()
 
