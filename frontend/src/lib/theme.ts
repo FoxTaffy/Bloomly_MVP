@@ -3,27 +3,39 @@ import { PROFILE_THEMES } from '@/lib/utils'
 /** Тарифы, на которых работает цветовая тема профиля (на free она заблокирована в настройках). */
 const THEME_TIERS = new Set(['lite', 'pro', 'business'])
 
-/** Акцентный цвет темы по её id; null для пустой/неизвестной/«по умолчанию» темы. */
-export function themeAccentOf(themeId?: string | null): string | null {
+type ProfileTheme = (typeof PROFILE_THEMES)[string]
+
+/** Тема по id; null для пустой/неизвестной/«по умолчанию» темы. */
+export function themeOf(themeId?: string | null): ProfileTheme | null {
   if (!themeId || themeId === 'default') return null
-  return PROFILE_THEMES[themeId]?.accent ?? null
+  return PROFILE_THEMES[themeId] ?? null
+}
+
+/** Акцентный цвет темы по её id. */
+export function themeAccentOf(themeId?: string | null): string | null {
+  return themeOf(themeId)?.accent ?? null
 }
 
 /** Тема пользователя действует только на платном тарифе. */
-export function activeThemeAccent(themeId?: string | null, tier?: string | null): string | null {
-  return THEME_TIERS.has(tier ?? 'free') ? themeAccentOf(themeId) : null
+export function activeTheme(themeId?: string | null, tier?: string | null): ProfileTheme | null {
+  return THEME_TIERS.has(tier ?? 'free') ? themeOf(themeId) : null
 }
 
 const mix = (color: string, withColor: 'black' | 'white', pct: number) =>
   `color-mix(in srgb, ${color} ${pct}%, ${withColor})`
 
 /**
- * Палитра `--color-brand-accent*` из одного акцента — те же оттенки, что заданы в style.css
- * для базового синего. Tailwind-классы (`bg-brand-accent/15`, `from-brand-accent-plus` и т.д.)
- * читают эти переменные, поэтому перекрашиваются без правок в компонентах.
+ * Токены темы: акцентная палитра `--color-brand-accent*` (те же оттенки, что в style.css для
+ * базового синего) и поверхности `--color-brand-bg/card/border/muted`.
+ * Tailwind-классы (`bg-brand-accent/15`, `bg-brand-card` и т.д.) читают эти переменные, поэтому перекрашиваются без правок в компонентах.
  */
-export function accentTokens(accent: string): Record<string, string> {
+export function themeTokens({ accent, bg, cardBg }: ProfileTheme): Record<string, string> {
   return {
+    // Поверхности: фон страницы, карточки/блоки и их границы тоже окрашены темой.
+    '--color-brand-bg': bg,
+    '--color-brand-card': cardBg,
+    '--color-brand-border': `color-mix(in srgb, ${accent} 18%, ${cardBg})`,
+    '--color-brand-muted': `color-mix(in srgb, ${accent} 28%, ${cardBg})`,
     '--color-brand-accent': accent,
     '--color-brand-accent-plus': mix(accent, 'black', 65),
     '--color-brand-accent-plus-plus': mix(accent, 'black', 30),

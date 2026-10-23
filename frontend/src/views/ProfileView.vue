@@ -573,7 +573,7 @@
                         class="relative overflow-hidden rounded-2xl border transition-all group"
                         :class="partnerProfile ? 'border-pink-500/30 hover:border-pink-500/50' : 'border-pink-500/20 hover:border-pink-500/35 bg-brand-bg'">
                         <!-- Gradient background -->
-                        <div v-if="partnerProfile" class="absolute inset-0 bg-linear-to-br/srgb from-pink-500/10 via-rose-500/6 to-purple-500/8 pointer-events-none" />
+                        <div v-if="partnerProfile" class="absolute inset-0 bg-linear-to-br/srgb from-pink-500/10 via-rose-500/6 to-brand-accent/8 pointer-events-none" />
                         <div v-else class="absolute inset-0 bg-linear-to-r/srgb from-pink-500/6 to-transparent pointer-events-none" />
 
                         <div class="relative px-3.5 py-3">
@@ -1669,7 +1669,7 @@
                 <button @click="openGroupsModal"
                   class="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-brand-bg/60 transition-all group cursor-pointer">
                   <span class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-white/55">
-                    <BIcon name="Users" class="w-4 h-4 text-violet-400" />
+                    <BIcon name="Users" class="w-4 h-4 text-brand-accent" />
                     {{ langStore.t.groups }}
                   </span>
                   <span class="flex items-center gap-1.5">
@@ -2171,9 +2171,9 @@
         <div class="w-full max-w-sm bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
           <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border shrink-0">
             <div class="flex items-center gap-2.5">
-              <BIcon name="Users" class="w-5 h-5 text-violet-400" />
+              <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
               <h3 class="font-bold text-white text-base">{{ langStore.t.groups }}</h3>
-              <span class="text-xs font-bold bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded-full">{{ userGroupsCount }}</span>
+              <span class="text-xs font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ userGroupsCount }}</span>
             </div>
             <button @click="showGroupsModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
               <BIcon name="X" class="w-4 h-4" />

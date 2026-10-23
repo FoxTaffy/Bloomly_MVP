@@ -12,6 +12,7 @@ import { useMessagesStore } from '@/stores/messages'
 import { useWarningModalStore } from '@/stores/warningModal'
 import api from '@/api'
 import BIcon from './BIcon.vue'
+import CommissionsBadge from './CommissionsBadge.vue'
 import PostCard from './PostCard.vue'
 import { isDenNotification, denNotificationKey, DEN_NOTIFICATION_ICONS } from '@/lib/denNotifications'
 import * as fmt from '@/lib/format'
@@ -656,7 +657,7 @@ onUnmounted(() => {
                   <div v-for="story in searchStories" :key="story.id"
                     class="flex flex-col items-center gap-1.5 cursor-pointer shrink-0"
                     @click="openStory(story)">
-                    <div class="w-14 h-14 rounded-2xl p-[2px] bg-linear-to-tr/srgb from-brand-accent to-brand-purple">
+                    <div class="w-14 h-14 rounded-2xl p-[2px] bg-linear-to-tr/srgb from-brand-accent to-brand-accent-plus">
                       <img v-if="story.user.avatar_url" :src="story.user.avatar_url"
                         class="w-full h-full rounded-xl border-2 border-brand-card object-cover"
                         @error="onAvatarError" />
@@ -746,7 +747,9 @@ onUnmounted(() => {
                       @error="onAvatarError" />
                     <div class="min-w-0 flex-1">
                       <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
-                      <p class="text-xs text-white/55">@{{ user.username }}</p>
+                      <p class="text-xs text-white/55 flex items-center gap-1.5">@{{ user.username }}
+                        <CommissionsBadge v-if="user.commissions_status && user.commissions_status !== 'none'" :status="user.commissions_status" />
+                      </p>
                     </div>
                   </router-link>
                 </div>
@@ -856,7 +859,7 @@ onUnmounted(() => {
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
                     <div v-if="isAutomodNotif(n)" class="relative shrink-0 mt-0.5">
-                      <div class="w-10 h-10 rounded-full bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
+                      <div class="w-10 h-10 rounded-full bg-linear-to-br/srgb from-brand-accent to-brand-accent-plus flex items-center justify-center">
                         <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
                       </div>
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center', notifBadgeClass(n.type)]">
@@ -925,7 +928,7 @@ onUnmounted(() => {
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
                     <div v-if="isAutomodNotif(n)" class="relative shrink-0 mt-0.5 opacity-70">
-                      <div class="w-10 h-10 rounded-full bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
+                      <div class="w-10 h-10 rounded-full bg-linear-to-br/srgb from-brand-accent to-brand-accent-plus flex items-center justify-center">
                         <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
                       </div>
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center opacity-60', notifBadgeClass(n.type)]">
