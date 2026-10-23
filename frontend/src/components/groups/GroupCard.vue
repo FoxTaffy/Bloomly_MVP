@@ -89,7 +89,7 @@ function bannerGradient(color: string | null | undefined) {
           <div v-else class="w-full h-full flex items-center justify-center"
             :style="'background: ' + bannerGradient(group.accent_color)">
             <BIcon :name="typeIcon[group.type] ?? 'Grid'" class="w-6 h-6"
-              :style="{ color: group.accent_color || '#a855f7' }" />
+              :style="{ color: group.accent_color || 'var(--color-brand-accent)' }" />
           </div>
         </div>
 

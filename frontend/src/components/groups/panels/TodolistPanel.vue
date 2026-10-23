@@ -233,9 +233,8 @@ onMounted(() => {
 
     <!-- Header -->
     <div class="relative px-6 py-5 border-b border-brand-border flex items-center gap-3 overflow-hidden">
-      <div class="absolute inset-0 bg-linear-to-r/srgb from-brand-purple/10 via-transparent to-transparent pointer-events-none" />
-      <div class="relative w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
-        style="background: linear-gradient(135deg, #8b5cf6, #a855f7); box-shadow: 0 4px 16px #8b5cf645">
+      <div class="absolute inset-0 bg-linear-to-r/srgb from-brand-accent/10 via-transparent to-transparent pointer-events-none" />
+      <div class="bg-brand-gradient shadow-lg shadow-brand-accent/30 relative w-11 h-11 rounded-2xl flex items-center justify-center shrink-0">
         <BIcon name="CheckSquare" class="w-5 h-5 text-white" />
       </div>
       <div class="relative flex-1 min-w-0">
@@ -253,7 +252,7 @@ onMounted(() => {
         <button
           v-if="groupId"
           @click="showAdd = !showAdd"
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-purple/20 border border-brand-purple/30 text-xs font-bold text-brand-purple hover:bg-brand-purple/30 transition-all">
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-accent/20 border border-brand-accent/30 text-xs font-bold text-brand-accent hover:bg-brand-accent/30 transition-all">
           <BIcon name="Plus" class="w-3.5 h-3.5" /> Добавить
         </button>
         <button
@@ -311,7 +310,7 @@ onMounted(() => {
               class="absolute z-20 top-full left-0 mt-1 bg-brand-card border border-brand-border rounded-xl p-2.5 shadow-xl grid grid-cols-5 gap-1.5 w-[200px]">
               <button v-for="ic in ICON_PRESETS" :key="ic" @click="col.icon = ic; pickerFor = null"
                 class="w-7 h-7 rounded-lg border flex items-center justify-center transition-colors"
-                :class="col.icon === ic ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border text-white/50 hover:text-white'">
+                :class="col.icon === ic ? 'border-brand-accent text-brand-accent bg-brand-accent/10' : 'border-brand-border text-white/50 hover:text-white'">
                 <BIcon :name="ic" class="w-4 h-4" />
               </button>
             </div>
@@ -331,8 +330,8 @@ onMounted(() => {
             Отмена
           </button>
           <button @click="saveColumns" :disabled="savingColumns"
-            class="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-purple/20 border border-brand-purple/30 text-xs font-bold text-brand-purple hover:bg-brand-purple/30 transition-all disabled:opacity-40">
-            <div v-if="savingColumns" class="w-3.5 h-3.5 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
+            class="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-accent/20 border border-brand-accent/30 text-xs font-bold text-brand-accent hover:bg-brand-accent/30 transition-all disabled:opacity-40">
+            <div v-if="savingColumns" class="w-3.5 h-3.5 border-2 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin" />
             Сохранить
           </button>
         </div>
@@ -346,12 +345,12 @@ onMounted(() => {
         v-model="newTitle"
         placeholder="Название задачи / имя заказчика..."
         @keyup.enter="addItem"
-        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-purple/50" />
+        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/50" />
       <textarea
         v-model="newDesc"
         placeholder="Описание (необязательно)..."
         rows="2"
-        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-purple/50 resize-none" />
+        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/50 resize-none" />
       <div class="flex gap-2 justify-end">
         <button
           @click="showAdd = false"
@@ -361,8 +360,8 @@ onMounted(() => {
         <button
           @click="addItem"
           :disabled="adding || !newTitle.trim()"
-          class="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-purple/20 border border-brand-purple/30 text-xs font-bold text-brand-purple hover:bg-brand-purple/30 transition-all disabled:opacity-40">
-          <div v-if="adding" class="w-3.5 h-3.5 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
+          class="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-accent/20 border border-brand-accent/30 text-xs font-bold text-brand-accent hover:bg-brand-accent/30 transition-all disabled:opacity-40">
+          <div v-if="adding" class="w-3.5 h-3.5 border-2 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin" />
           Добавить
         </button>
       </div>
@@ -370,7 +369,7 @@ onMounted(() => {
 
     <!-- Loading -->
     <div v-if="loading || columnsLoading" class="px-6 py-16 flex justify-center">
-      <div class="w-8 h-8 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
+      <div class="w-8 h-8 border-2 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin" />
     </div>
 
     <!-- Error -->
@@ -420,11 +419,11 @@ onMounted(() => {
                   <div class="stack-y-2" @click.stop>
                     <input
                       v-model="editTitle"
-                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-hidden focus:border-brand-purple/50" />
+                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-hidden focus:border-brand-accent/50" />
                     <textarea
                       v-model="editDesc"
                       rows="2"
-                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-hidden focus:border-brand-purple/50 resize-none" />
+                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-hidden focus:border-brand-accent/50 resize-none" />
                     <div class="flex gap-1.5">
                       <button
                         @click="editingId = null"
@@ -434,7 +433,7 @@ onMounted(() => {
                       <button
                         @click="saveEdit(item)"
                         :disabled="savingEdit"
-                        class="flex-1 py-1 rounded-lg bg-brand-purple/20 border border-brand-purple/30 text-[11px] font-bold text-brand-purple hover:bg-brand-purple/30 transition-all">
+                        class="flex-1 py-1 rounded-lg bg-brand-accent/20 border border-brand-accent/30 text-[11px] font-bold text-brand-accent hover:bg-brand-accent/30 transition-all">
                         OK
                       </button>
                     </div>

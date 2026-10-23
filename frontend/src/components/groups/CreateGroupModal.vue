@@ -536,9 +536,9 @@ function submit() {
 
           <!-- ── CREATIVE ─────────────────────────────────────────────────── -->
           <template v-if="type === 'creative'">
-            <div class="bg-brand-bg/40 border border-brand-purple/20 rounded-2xl p-4 flex items-start gap-3">
-              <div class="w-9 h-9 rounded-xl bg-brand-purple/10 flex items-center justify-center shrink-0 mt-0.5">
-                <BIcon name="Palette" class="w-5 h-5 text-brand-purple" />
+            <div class="bg-brand-bg/40 border border-brand-accent/20 rounded-2xl p-4 flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-brand-accent/10 flex items-center justify-center shrink-0 mt-0.5">
+                <BIcon name="Palette" class="w-5 h-5 text-brand-accent" />
               </div>
               <div>
                 <p class="text-white font-bold text-sm">Настройка заказов</p>
@@ -574,13 +574,13 @@ function submit() {
                   @click="toggleStyle(s.key)"
                   class="flex flex-col items-center gap-1 p-2.5 rounded-2xl border transition-all duration-150 text-center"
                   :class="commissionStyles.includes(s.key)
-                    ? 'bg-brand-purple/15 border-brand-purple/50 text-white'
-                    : 'bg-brand-bg/40 border-brand-border text-white/40 hover:border-brand-purple/30 hover:text-white/70'"
+                    ? 'bg-brand-accent/15 border-brand-accent/50 text-white'
+                    : 'bg-brand-bg/40 border-brand-border text-white/40 hover:border-brand-accent/30 hover:text-white/70'"
                 >
                   <div class="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                    :class="commissionStyles.includes(s.key) ? 'bg-brand-purple/20' : 'bg-brand-bg'">
+                    :class="commissionStyles.includes(s.key) ? 'bg-brand-accent/20' : 'bg-brand-bg'">
                     <BIcon :name="s.icon" class="w-4 h-4"
-                      :class="commissionStyles.includes(s.key) ? 'text-brand-purple' : 'text-white/30'" />
+                      :class="commissionStyles.includes(s.key) ? 'text-brand-accent' : 'text-white/30'" />
                   </div>
                   <span class="text-[10px] font-semibold leading-tight">{{ s.label }}</span>
                 </button>

@@ -70,7 +70,7 @@ const accentColor = computed(() => props.event.theme?.accent ?? props.event.grou
         :alt="event.title"
         class="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
       />
-      <div v-else class="w-full h-full bg-linear-to-br/srgb from-brand-accent/30 to-brand-purple/30" />
+      <div v-else class="w-full h-full bg-linear-to-br/srgb from-brand-accent/30 to-brand-accent-plus/30" />
       <!-- Overlay -->
       <div class="absolute inset-0 bg-linear-to-t/srgb from-black/70 to-transparent" />
       <!-- Title on banner -->

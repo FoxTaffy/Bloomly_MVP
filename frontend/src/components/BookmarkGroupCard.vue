@@ -87,7 +87,7 @@ async function removeBookmark() {
           :style="!group.avatar_url ? 'background: ' + bannerGradient(group.accent_color) : ''">
           <img v-if="group.avatar_url" :src="group.avatar_url" :alt="group.name" class="w-full h-full object-cover" />
           <div v-else class="w-full h-full flex items-center justify-center">
-            <BIcon :name="typeIcon[group.type] ?? 'Grid'" class="w-5 h-5" :style="{ color: group.accent_color || '#a855f7' }" />
+            <BIcon :name="typeIcon[group.type] ?? 'Grid'" class="w-5 h-5" :style="{ color: group.accent_color || 'var(--color-brand-accent)' }" />
           </div>
         </div>
       </div>

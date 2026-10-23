@@ -505,3 +505,8 @@
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.35);
 }
+
+/* Фирменный градиент кнопок/аватаров: следует выбранной теме (см. composables/useAppTheme.ts). */
+.bg-brand-gradient {
+  background: linear-gradient(135deg, var(--color-brand-accent), var(--color-brand-accent-plus));
+}

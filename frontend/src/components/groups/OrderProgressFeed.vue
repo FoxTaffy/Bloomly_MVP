@@ -117,8 +117,7 @@ function fmt(iso: string) {
       <MediaUpload v-if="images.length < MAX_IMAGES" type="posts" accept="image/*" multiple streaming :max-files="MAX_IMAGES - images.length" @uploaded="onUploaded" />
       <p v-if="error" class="text-xs text-brand-error">{{ error }}</p>
       <button type="button" :disabled="!canPost" @click="post"
-        class="w-full py-2 rounded-xl text-white font-extrabold text-sm disabled:opacity-40 hover:opacity-90 transition-all"
-        style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+        class="bg-brand-gradient w-full py-2 rounded-xl text-white font-extrabold text-sm disabled:opacity-40 hover:opacity-90 transition-all">
         {{ posting ? 'Публикуем…' : 'Выложить этап' }}
       </button>
       <p class="text-[10px] text-white/35 leading-snug">Заказчик получит уведомление и увидит этап на странице заказа.</p>

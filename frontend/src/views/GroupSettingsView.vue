@@ -1537,34 +1537,34 @@ async function deleteGroup() {
                         <!-- Header -->
                         <div class="flex items-center justify-between mb-4">
                           <div class="flex items-center gap-2.5">
-                            <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,#a78bfa20,#7c3aed20);border:1px solid #a78bfa25">
-                              <BIcon name="Palette" class="w-4 h-4 text-brand-purple" />
+                            <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-linear-to-br from-brand-accent/15 to-brand-accent-plus/15 border border-brand-accent/20">
+                              <BIcon name="Palette" class="w-4 h-4 text-brand-accent" />
                             </div>
                             <div>
                               <p class="text-sm font-bold text-white">{{ langStore.t.groupSettingsSecCustomize }}</p>
                               <p class="text-[11px] text-white/40">{{ langStore.t.groupSettingsCustomizeHint }}</p>
                             </div>
                           </div>
-                          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0" style="background:#a78bfa15;color:#a78bfa;border:1px solid #a78bfa30">
+                          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0 bg-brand-accent/10 text-brand-accent-minus border border-brand-accent/20">
                             <BIcon name="Star" class="w-2.5 h-2.5"/>Business
                           </span>
                         </div>
 
                         <!-- Business-only upsell -->
                         <div v-if="authStore.user?.subscription_tier !== 'business'"
-                          class="rounded-2xl overflow-hidden relative" style="background:linear-gradient(135deg,#1a163c,#16192F);border:1px solid #a78bfa20">
-                          <div class="absolute top-0 right-0 w-24 h-24 opacity-20 blur-2xl rounded-full pointer-events-none" style="background:#a78bfa"/>
+                          class="rounded-2xl overflow-hidden relative bg-linear-to-br from-brand-accent-plus-plus to-brand-bg border border-brand-accent/15">
+                          <div class="absolute top-0 right-0 w-24 h-24 opacity-20 blur-2xl rounded-full pointer-events-none bg-brand-accent"/>
                           <div class="relative p-5">
                             <div class="flex items-center gap-3 mb-3">
-                              <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,#a78bfa30,#7c3aed30);border:1px solid #a78bfa25">
-                                <BIcon name="Lock" class="w-4 h-4 text-brand-purple"/>
+                              <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-linear-to-br from-brand-accent/20 to-brand-accent-plus/20 border border-brand-accent/20">
+                                <BIcon name="Lock" class="w-4 h-4 text-brand-accent"/>
                               </div>
                               <div>
                                 <p class="font-bold text-white text-sm">{{ langStore.t.groupSettingsBusinessRequired }}</p>
                                 <p class="text-[11px] text-white/40">{{ langStore.t.groupSettingsBusinessRequiredHint }}</p>
                               </div>
                             </div>
-                            <button @click="$router.push('/subscription')" class="w-full py-2 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90" style="background:linear-gradient(135deg,#a78bfa,#7c3aed);box-shadow:0 4px 16px #7c3aed35">
+                            <button @click="$router.push('/subscription')" class="w-full py-2 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90 bg-brand-gradient shadow-lg shadow-brand-accent-plus/25">
                               {{ langStore.t.groupSettingsGetBusiness }}
                             </button>
                           </div>
@@ -1578,16 +1578,16 @@ async function deleteGroup() {
                                 <BIcon name="Image" class="w-3.5 h-3.5 text-brand-accent"/>
                                 <span class="text-xs font-bold text-white/70">{{ langStore.t.groupSettingsGroupBackground }}</span>
                               </div>
-                              <button @click="$router.push('/shop')" class="flex items-center gap-1 text-[10px] font-semibold text-brand-purple hover:underline">
+                              <button @click="$router.push('/shop')" class="flex items-center gap-1 text-[10px] font-semibold text-brand-accent hover:underline">
                                 <BIcon name="ExternalLink" class="w-3 h-3"/> {{ langStore.t.groupSettingsGoToShop }}
                               </button>
                             </div>
                             <div class="flex gap-2 flex-wrap">
                               <!-- No background -->
                               <button @click="form.groupBgUrl = ''" class="relative w-14 h-14 rounded-xl border-2 flex items-center justify-center transition-all"
-                                :class="!form.groupBgUrl ? 'border-brand-purple shadow-md shadow-brand-purple/20 bg-brand-purple/10' : 'border-brand-border/60 hover:border-brand-border bg-brand-bg/60'">
-                                <BIcon name="X" class="w-4 h-4" :class="!form.groupBgUrl ? 'text-brand-purple' : 'text-white/25'"/>
-                                <div v-if="!form.groupBgUrl" class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-brand-purple flex items-center justify-center shadow-md">
+                                :class="!form.groupBgUrl ? 'border-brand-accent shadow-md shadow-brand-accent/20 bg-brand-accent/10' : 'border-brand-border/60 hover:border-brand-border bg-brand-bg/60'">
+                                <BIcon name="X" class="w-4 h-4" :class="!form.groupBgUrl ? 'text-brand-accent' : 'text-white/25'"/>
+                                <div v-if="!form.groupBgUrl" class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-brand-accent flex items-center justify-center shadow-md">
                                   <BIcon name="Check" class="w-2.5 h-2.5 text-white"/>
                                 </div>
                               </button>
@@ -1595,11 +1595,11 @@ async function deleteGroup() {
                               <div v-for="item in shopStore.myItems.filter(i => i.type === 'background')" :key="item.id"
                                 class="relative cursor-pointer group/bg" @click="form.groupBgUrl = getShopItemBgUrl(item)">
                                 <div class="w-20 h-14 rounded-xl border-2 overflow-hidden transition-all"
-                                  :class="form.groupBgUrl === getShopItemBgUrl(item) ? 'border-brand-purple shadow-md shadow-brand-purple/20 scale-105' : 'border-brand-border/60 hover:border-brand-border group-hover/bg:scale-105'">
+                                  :class="form.groupBgUrl === getShopItemBgUrl(item) ? 'border-brand-accent shadow-md shadow-brand-accent/20 scale-105' : 'border-brand-border/60 hover:border-brand-border group-hover/bg:scale-105'">
                                   <img v-if="item.preview_url" :src="item.preview_url" class="w-full h-full object-cover" :alt="item.name"/>
                                   <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center"><BIcon name="Image" class="w-4 h-4 text-white/20"/></div>
                                 </div>
-                                <div v-if="form.groupBgUrl === getShopItemBgUrl(item)" class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-brand-purple flex items-center justify-center shadow-md">
+                                <div v-if="form.groupBgUrl === getShopItemBgUrl(item)" class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-brand-accent flex items-center justify-center shadow-md">
                                   <BIcon name="Check" class="w-2.5 h-2.5 text-white"/>
                                 </div>
                                 <p class="text-[9px] text-center text-white/35 mt-1 truncate w-20">{{ item.name }}</p>
@@ -1622,17 +1622,17 @@ async function deleteGroup() {
                             </div>
                             <div class="flex gap-2 flex-wrap">
                               <button @click="form.groupFrame = ''" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
-                                :class="!form.groupFrame ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                :class="!form.groupFrame ? 'border-brand-accent text-brand-accent bg-brand-accent/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
                                 {{ langStore.t.groupSettingsNoneOption }}
-                                <div v-if="!form.groupFrame" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                <div v-if="!form.groupFrame" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-accent flex items-center justify-center">
                                   <BIcon name="Check" class="w-2 h-2 text-white"/>
                                 </div>
                               </button>
                               <button v-for="item in shopStore.myItems.filter(i=>i.type==='frame')" :key="item.id"
                                 @click="form.groupFrame = item.id" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
-                                :class="form.groupFrame===item.id ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                :class="form.groupFrame===item.id ? 'border-brand-accent text-brand-accent bg-brand-accent/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
                                 {{ item.name }}
-                                <div v-if="form.groupFrame===item.id" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                <div v-if="form.groupFrame===item.id" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-accent flex items-center justify-center">
                                   <BIcon name="Check" class="w-2 h-2 text-white"/>
                                 </div>
                               </button>
@@ -1651,17 +1651,17 @@ async function deleteGroup() {
                             </div>
                             <div class="flex gap-2 flex-wrap">
                               <button @click="form.groupTheme = ''" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
-                                :class="!form.groupTheme ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                :class="!form.groupTheme ? 'border-brand-accent text-brand-accent bg-brand-accent/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
                                 {{ langStore.t.groupSettingsDefaultOption }}
-                                <div v-if="!form.groupTheme" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                <div v-if="!form.groupTheme" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-accent flex items-center justify-center">
                                   <BIcon name="Check" class="w-2 h-2 text-white"/>
                                 </div>
                               </button>
                               <button v-for="item in shopStore.myItems.filter(i=>i.type==='theme')" :key="item.id"
                                 @click="form.groupTheme = item.id" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
-                                :class="form.groupTheme===item.id ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                :class="form.groupTheme===item.id ? 'border-brand-accent text-brand-accent bg-brand-accent/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
                                 {{ item.name }}
-                                <div v-if="form.groupTheme===item.id" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                <div v-if="form.groupTheme===item.id" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-accent flex items-center justify-center">
                                   <BIcon name="Check" class="w-2 h-2 text-white"/>
                                 </div>
                               </button>
@@ -1813,7 +1813,7 @@ async function deleteGroup() {
                           </div>
                           <div class="flex gap-1.5">
                             <button type="button" :disabled="!!memberSaving[m.user_id]"
-                              class="px-2.5 py-1 rounded-lg border border-[#a78bfa]/30 text-[#a78bfa] text-[10px] font-bold hover:bg-[#a78bfa]/10 transition-colors disabled:opacity-40"
+                              class="px-2.5 py-1 rounded-lg border border-brand-accent/30 text-brand-accent-minus text-[10px] font-bold hover:bg-brand-accent/10 transition-colors disabled:opacity-40"
                               @click="doSetRole(m.user_id, 'moderator')">
                               {{ langStore.t.groupSettingsRoleModerator }}
                             </button>
@@ -2758,7 +2758,7 @@ async function deleteGroup() {
                   <div class="flex gap-1 p-3 border-b border-brand-border bg-brand-bg/30">
                     <button type="button" @click="teamTab = 'members'"
                       class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
-                      :class="teamTab === 'members' ? 'bg-[#a78bfa]/15 text-[#a78bfa] border border-[#a78bfa]/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'">
+                      :class="teamTab === 'members' ? 'bg-brand-accent/15 text-brand-accent-minus border border-brand-accent/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'">
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                       {{ langStore.t.groupSettingsSecMembers }}
                     </button>
@@ -2998,7 +2998,7 @@ async function deleteGroup() {
                           </div>
                           <div class="flex gap-1.5">
                             <button type="button" :disabled="!!memberSaving[m.user_id]"
-                              class="px-2.5 py-1 rounded-lg border border-[#a78bfa]/30 text-[#a78bfa] text-[10px] font-bold hover:bg-[#a78bfa]/10 transition-colors disabled:opacity-40"
+                              class="px-2.5 py-1 rounded-lg border border-brand-accent/30 text-brand-accent-minus text-[10px] font-bold hover:bg-brand-accent/10 transition-colors disabled:opacity-40"
                               @click="doSetRole(m.user_id, 'moderator')">
                               {{ langStore.t.groupSettingsRoleModerator }}
                             </button>
@@ -3058,25 +3058,24 @@ async function deleteGroup() {
 
                 <!-- ═══ § CUSTOMIZE ═══════════════════════════════════════ -->
                 <section v-show="openSection === 'sec-customize'" class="bg-brand-card border border-border-default rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
-                  <div class="px-6 py-4 border-b border-border-default flex items-center gap-3"
-                    style="background:linear-gradient(90deg,rgba(167,139,250,0.05) 0%,transparent 100%)">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(167,139,250,0.12)">
-                      <BIcon name="Palette" class="w-4 h-4" style="color:#a78bfa" />
+                  <div class="px-6 py-4 border-b border-border-default flex items-center gap-3 bg-linear-to-r from-brand-accent/5 to-transparent">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-brand-accent/10">
+                      <BIcon name="Palette" class="w-4 h-4 text-brand-accent-minus" />
                     </div>
                     <h2 class="font-bold text-sm text-text-primary">{{ langStore.t.groupSettingsCustomizeGroupTitle }}</h2>
                   </div>
 
                   <div class="p-6">
                     <!-- Business upsell -->
-                    <div v-if="authStore.user?.subscription_tier !== 'business'" class="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-5 flex flex-col items-center gap-3 text-center">
-                      <div class="w-12 h-12 rounded-xl bg-violet-500/15 flex items-center justify-center">
-                        <BIcon name="Lock" class="w-6 h-6 text-violet-400" />
+                    <div v-if="authStore.user?.subscription_tier !== 'business'" class="rounded-2xl border border-brand-accent/30 bg-brand-accent/5 p-5 flex flex-col items-center gap-3 text-center">
+                      <div class="w-12 h-12 rounded-xl bg-brand-accent/15 flex items-center justify-center">
+                        <BIcon name="Lock" class="w-6 h-6 text-brand-accent-minus" />
                       </div>
                       <div>
                         <p class="font-semibold text-text-primary">{{ langStore.t.groupSettingsAvailableForBusiness }}</p>
                         <p class="text-sm text-text-muted mt-1">{{ langStore.t.groupSettingsCustomizeUpsellDesc }}</p>
                       </div>
-                      <button @click="$router.push('/subscription')" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-colors">
+                      <button @click="$router.push('/subscription')" class="px-4 py-2 rounded-xl bg-brand-accent-plus hover:bg-brand-accent text-white text-sm font-semibold transition-colors">
                         {{ langStore.t.groupSettingsGoToSubscriptions }}
                       </button>
                     </div>
@@ -3088,11 +3087,11 @@ async function deleteGroup() {
                         <!-- Background -->
                         <div>
                           <label class="block text-sm font-medium text-text-primary mb-2">{{ langStore.t.groupSettingsGroupBackground }}</label>
-                          <p class="text-xs text-text-muted mb-3">{{ langStore.t.groupSettingsBuyBgIn }} <span class="text-violet-400 cursor-pointer hover:underline" @click="$router.push('/shop')">Bloomly Shop</span> {{ langStore.t.groupSettingsAndApplyHere }}</p>
+                          <p class="text-xs text-text-muted mb-3">{{ langStore.t.groupSettingsBuyBgIn }} <span class="text-brand-accent-minus cursor-pointer hover:underline" @click="$router.push('/shop')">Bloomly Shop</span> {{ langStore.t.groupSettingsAndApplyHere }}</p>
                           <div class="flex flex-wrap gap-2">
                             <button
                               @click="form.groupBgUrl = ''"
-                              :class="['h-16 w-16 rounded-xl border-2 transition-all flex items-center justify-center text-xs text-text-muted', !form.groupBgUrl ? 'border-violet-500 bg-violet-500/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
+                              :class="['h-16 w-16 rounded-xl border-2 transition-all flex items-center justify-center text-xs text-text-muted', !form.groupBgUrl ? 'border-brand-accent bg-brand-accent/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
                             >{{ langStore.t.groupSettingsNoneOption }}</button>
                             <div
                               v-for="item in shopStore.myItems.filter(i => i.type === 'background')"
@@ -3101,7 +3100,7 @@ async function deleteGroup() {
                               @click="form.groupBgUrl = getShopItemBgUrl(item)"
                             >
                               <div
-                                :class="['h-16 w-24 rounded-xl border-2 transition-all overflow-hidden', form.groupBgUrl === getShopItemBgUrl(item) ? 'border-violet-500 scale-105 shadow-lg shadow-violet-500/20' : 'border-border-default hover:border-border-hover']"
+                                :class="['h-16 w-24 rounded-xl border-2 transition-all overflow-hidden', form.groupBgUrl === getShopItemBgUrl(item) ? 'border-brand-accent scale-105 shadow-lg shadow-brand-accent/20' : 'border-border-default hover:border-border-hover']"
                               >
                                 <img v-if="item.preview_url" :src="item.preview_url" class="w-full h-full object-cover" :alt="item.name" />
                                 <div v-else class="w-full h-full bg-bg-elevated flex items-center justify-center"><BIcon name="Image" class="w-5 h-5 text-text-muted" /></div>
@@ -3120,13 +3119,13 @@ async function deleteGroup() {
                           <div class="flex flex-wrap gap-2">
                             <button
                               @click="form.groupFrame = ''"
-                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs text-text-muted', !form.groupFrame ? 'border-violet-500 bg-violet-500/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs text-text-muted', !form.groupFrame ? 'border-brand-accent bg-brand-accent/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
                             >{{ langStore.t.groupSettingsNoneOption }}</button>
                             <button
                               v-for="item in shopStore.myItems.filter(i => i.type === 'frame')"
                               :key="item.id"
                               @click="form.groupFrame = item.id"
-                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs font-medium', form.groupFrame === item.id ? 'border-violet-500 text-violet-300 bg-violet-500/10' : 'border-border-default text-text-muted hover:border-border-hover bg-bg-elevated']"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs font-medium', form.groupFrame === item.id ? 'border-brand-accent text-brand-accent-minus bg-brand-accent/10' : 'border-border-default text-text-muted hover:border-border-hover bg-bg-elevated']"
                             >{{ item.name }}</button>
                             <div v-if="shopStore.myItems.filter(i => i.type === 'frame').length === 0" class="text-xs text-text-muted py-2 px-3 bg-bg-secondary rounded-lg border border-border-default">
                               {{ langStore.t.groupSettingsNoOwnedFrames }}
@@ -3140,13 +3139,13 @@ async function deleteGroup() {
                           <div class="flex flex-wrap gap-2">
                             <button
                               @click="form.groupTheme = ''"
-                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs text-text-muted', !form.groupTheme ? 'border-violet-500 bg-violet-500/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs text-text-muted', !form.groupTheme ? 'border-brand-accent bg-brand-accent/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
                             >{{ langStore.t.groupSettingsDefaultOption }}</button>
                             <button
                               v-for="item in shopStore.myItems.filter(i => i.type === 'theme')"
                               :key="item.id"
                               @click="form.groupTheme = item.id"
-                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs font-medium', form.groupTheme === item.id ? 'border-violet-500 text-violet-300 bg-violet-500/10' : 'border-border-default text-text-muted hover:border-border-hover bg-bg-elevated']"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs font-medium', form.groupTheme === item.id ? 'border-brand-accent text-brand-accent-minus bg-brand-accent/10' : 'border-border-default text-text-muted hover:border-border-hover bg-bg-elevated']"
                             >{{ item.name }}</button>
                             <div v-if="shopStore.myItems.filter(i => i.type === 'theme').length === 0" class="text-xs text-text-muted py-2 px-3 bg-bg-secondary rounded-lg border border-border-default">
                               {{ langStore.t.groupSettingsNoOwnedThemes }}
@@ -3216,7 +3215,7 @@ async function deleteGroup() {
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${r.color}`"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="r.iconPath"/></svg>
         </span>
         <span class="flex-1">{{ r.label }}</span>
-        <svg v-if="roleDropdownMember!.role === r.value" class="w-3.5 h-3.5 shrink-0" style="color:#a78bfa" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg v-if="roleDropdownMember!.role === r.value" class="w-3.5 h-3.5 shrink-0" style="color:var(--color-brand-accent-minus)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
         </svg>
       </button>
@@ -3229,7 +3228,7 @@ async function deleteGroup() {
           :class="roleDropdownMember!.customRole?.id === cr.id ? 'text-white font-bold' : 'text-white/70'">
           <span class="shrink-0 w-5 text-center">{{ cr.icon }}</span>
           <span class="flex-1 truncate" :style="`color:${cr.color}`">{{ cr.name }}</span>
-          <span v-if="roleDropdownMember!.customRole?.id === cr.id" class="text-xs" style="color:#a78bfa">✓</span>
+          <span v-if="roleDropdownMember!.customRole?.id === cr.id" class="text-xs text-brand-accent-minus">✓</span>
         </button>
         <button v-if="roleDropdownMember!.customRole"
           @click="doSetCustomRole(roleDropdownMember!.user_id, null)"
@@ -3339,7 +3338,7 @@ async function deleteGroup() {
             </button>
             <button @click="saveRole"
               :disabled="customRoleSaving || !roleForm.name.trim()"
-              class="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-brand-accent hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors">
+              class="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors">
               <div v-if="customRoleSaving" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>
               {{ roleModalMode === 'create' ? langStore.t.fursonaCreateBtn : langStore.t.groupSettingsSave }}
             </button>

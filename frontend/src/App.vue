@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useHead } from '@unhead/vue'
 import { usePresence } from '@/composables/usePresence'
+import { useAppTheme } from '@/composables/useAppTheme'
 import { useAuthStore } from '@/stores/auth'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
 import NotifToastContainer from '@/components/NotifToastContainer.vue'
@@ -13,6 +14,7 @@ import WarningDetailModal from '@/components/WarningDetailModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import FrozenAccountModal from '@/components/FrozenAccountModal.vue'
 usePresence()
+useAppTheme()
 
 const auth  = useAuthStore()
 const route = useRoute()

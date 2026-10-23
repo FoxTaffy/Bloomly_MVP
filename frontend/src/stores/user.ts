@@ -150,6 +150,7 @@ export interface UserProfile {
   fav_artist: string | null
   fav_film: string | null
   subscription_tier: string
+  commissions_status?: 'none' | 'open' | 'waitlist' | 'closed'
   profile_theme: string | null
   profile_bg_url: string | null
   profile_frame: string | null
@@ -298,6 +299,7 @@ export const useUserStore = defineStore('user', () => {
         if (updated.avatar_url  !== undefined) auth.user.avatar_url  = updated.avatar_url
         if (updated.display_name !== undefined) auth.user.display_name = updated.display_name
         if ((updated as any).is_adult !== undefined) auth.user.is_adult = (updated as any).is_adult
+        if (updated.profile_theme !== undefined) auth.user.profile_theme = updated.profile_theme
         // Persist to sessionStorage so sidebar / AppHeader update immediately
         cacheUser(auth.user)
       }

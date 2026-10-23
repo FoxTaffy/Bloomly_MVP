@@ -65,7 +65,7 @@ function open() {
       <BIcon name="FolderX" class="w-4 h-4" /> Группа недоступна
     </div>
     <template v-else>
-      <div class="relative w-full h-16 bg-linear-to-br/srgb from-brand-accent/30 to-purple-900/40 overflow-hidden">
+      <div class="relative w-full h-16 bg-linear-to-br/srgb from-brand-accent/30 to-brand-accent-plus/40 overflow-hidden">
         <img v-if="group.banner_url" :src="group.banner_url" class="absolute inset-0 w-full h-full object-cover" />
       </div>
       <div class="px-3 pb-3 -mt-6">

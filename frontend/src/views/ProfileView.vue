@@ -415,6 +415,13 @@
                       <Sparkles class="w-2.5 h-2.5" />
                       {{ viewedProfile.subscription_tier === 'lite' ? 'Lite' : viewedProfile.subscription_tier === 'pro' ? 'Pro' : 'Business' }}
                     </span>
+                    <!-- Статус заказов (Pro и Business): у владельца — быстрый переключатель, у гостей — ссылка в магазин -->
+                    <button v-if="isOwnProfile && canSetCommissions" type="button" @click="toggleCommissions"
+                      class="inline-flex items-center" :title="langStore.t.commissionsSettingTitle">
+                      <CommissionsBadge v-if="viewedProfile.commissions_status && viewedProfile.commissions_status !== 'none'" :status="viewedProfile.commissions_status" size="md" />
+                      <span v-else class="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border border-dashed border-white/20 text-white/45 font-bold hover:text-white/80 transition">🎨 {{ langStore.t.commissionsOpen }}?</span>
+                    </button>
+                    <CommissionsBadge v-else :status="viewedProfile.commissions_status" :username="viewedProfile.username" :link="!isOwnProfile" size="md" />
                     <!-- Artist Badge -->
                     <AppBadge
                       v-if="viewedProfile.badge_level && viewedProfile.badge_level !== 'none'"
@@ -2425,6 +2432,7 @@ import BIcon from '@/components/BIcon.vue'
 import AvatarFrameOverlay from '@/components/AvatarFrameOverlay.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
+import CommissionsBadge from '@/components/CommissionsBadge.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import StoryViewer from '@/components/StoryViewer.vue'
@@ -2432,7 +2440,8 @@ import ReportModal from '@/components/ReportModal.vue'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
 import { FAVORITE_CATEGORIES, type FavoriteCategory } from '@/lib/interests'
-import { PROFILE_THEMES, PROFILE_FRAMES, rainbowShadow } from '@/lib/utils'
+import { PROFILE_FRAMES, rainbowShadow } from '@/lib/utils'
+import { themeAccentOf } from '@/lib/theme'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
@@ -2834,6 +2843,17 @@ async function onAvatarFileChange(e: Event) {
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isOwnProfile = computed(() => !!authStore.user && authStore.user.id === viewedProfile.value?.id)
+// Плашка «Заказы открыты» — перк Pro и Business
+const canSetCommissions = computed(() => ['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free'))
+async function toggleCommissions() {
+  if (!viewedProfile.value || !canSetCommissions.value) return
+  const next = viewedProfile.value.commissions_status === 'open' ? 'none' : 'open'
+  try {
+    await api.patch('/users/me', { commissions_status: next })
+    viewedProfile.value.commissions_status = next
+    if (authStore.user) authStore.user.commissions_status = next
+  } catch {}
+}
 
 const fursonaHasPersonalityContent = computed(() => {
   const f = profileFursona.value
@@ -2907,9 +2927,7 @@ const bannerStyle = computed(() => {
   if (!p) return {}
   if (p.banner_url) return { backgroundImage: `url('${String(p.banner_url).replace(/['"\\()\s]/g, encodeURIComponent)}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
   // Use theme accent if set, otherwise profile accent_color
-  const themeId = p.profile_theme as string | undefined
-  const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
-  const color = themeAccent ?? p.accent_color ?? '#4C67CF'
+  const color = themeAccentOf(p.profile_theme) ?? p.accent_color ?? '#4C67CF'
   return { background: `linear-gradient(135deg, ${color}55, ${color}33)` }
 })
 
@@ -2919,9 +2937,7 @@ const avatarRingStyle = computed(() => {
   if (p?.equippedFrame) return {}
   const frameId = p?.profile_frame as string | undefined
   // Theme accent for default_ring / no frame
-  const themeId = p?.profile_theme ?? undefined
-  const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
-  const accentColor = themeAccent ?? p?.accent_color ?? '#4C67CF'
+  const accentColor = themeAccentOf(p?.profile_theme) ?? p?.accent_color ?? '#4C67CF'
   const frameStyleMap: Record<string, Record<string, string>> = {
     none:         {},
     default_ring: { outline: `2px solid ${accentColor}80`, outlineOffset: '2px' },

@@ -50,7 +50,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_COLORS: Record<string, string> = {
   owner: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-  admin: 'text-brand-purple bg-brand-purple/10 border-brand-purple/20',
+  admin: 'text-brand-accent bg-brand-accent/10 border-brand-accent/20',
   moderator: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
   member: 'text-white/50 bg-white/5 border-white/10',
   dealer: 'text-brand-accent bg-brand-accent/10 border-brand-accent/20',
@@ -174,8 +174,8 @@ defineExpose({ loadMembers })
 
     <!-- Header -->
     <div class="px-6 py-5 border-b border-brand-border flex items-center gap-3">
-      <div class="w-10 h-10 rounded-2xl bg-brand-purple/15 border border-brand-purple/25 flex items-center justify-center shrink-0">
-        <BIcon name="Users" class="w-5 h-5 text-brand-purple" />
+      <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center shrink-0">
+        <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
       </div>
       <div class="flex-1 min-w-0">
         <h1 class="text-lg font-extrabold text-white">{{ pageTitle }}</h1>
@@ -230,7 +230,7 @@ defineExpose({ loadMembers })
         :class="[
           'px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border',
           filterRole === f.key
-            ? 'bg-brand-purple/20 border-brand-purple/40 text-brand-purple'
+            ? 'bg-brand-accent/20 border-brand-accent/40 text-brand-accent'
             : 'bg-white/4 border-brand-border text-white/50 hover:text-white hover:border-white/20'
         ]">
         {{ f.label }}
@@ -239,7 +239,7 @@ defineExpose({ loadMembers })
 
     <!-- Loading -->
     <div v-if="loading" class="px-6 py-10 flex justify-center">
-      <div class="w-8 h-8 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
+      <div class="w-8 h-8 border-2 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin" />
     </div>
 
     <!-- Error -->
@@ -310,7 +310,7 @@ defineExpose({ loadMembers })
                 @click="changeRole(member, r.value)"
                 :class="[
                   'w-full px-4 py-2.5 text-left text-xs font-semibold hover:bg-white/5 transition-colors',
-                  member.role === r.value ? 'text-brand-purple' : 'text-white/70'
+                  member.role === r.value ? 'text-brand-accent' : 'text-white/70'
                 ]">
                 {{ r.label }}
               </button>
@@ -328,7 +328,7 @@ defineExpose({ loadMembers })
 
         <!-- Loading spinner -->
         <div v-if="changingRole === member.user_id || removing === member.user_id" class="ml-1">
-          <div class="w-4 h-4 border-2 border-brand-purple/30 border-t-brand-purple rounded-full animate-spin" />
+          <div class="w-4 h-4 border-2 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin" />
         </div>
       </div>
 

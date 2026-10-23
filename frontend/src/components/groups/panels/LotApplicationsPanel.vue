@@ -106,8 +106,7 @@ onMounted(load)
   <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
     <!-- Header -->
     <div class="px-6 py-5 border-b border-brand-border flex items-center gap-3">
-      <div class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
-        style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+      <div class="bg-brand-gradient w-10 h-10 rounded-2xl flex items-center justify-center shrink-0">
         <BIcon name="Send" class="w-5 h-5 text-white" />
       </div>
       <div class="flex-1 min-w-0">
@@ -219,13 +218,11 @@ onMounted(load)
             <BIcon name="CheckCircle2" class="w-4 h-4" /> Принята — заказ в очереди, заявитель уведомлён
           </p>
           <button @click="openOrders"
-            class="px-4 py-2.5 rounded-xl text-white font-extrabold text-xs hover:opacity-90 transition-all"
-            style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">К заказам</button>
+            class="bg-brand-gradient px-4 py-2.5 rounded-xl text-white font-extrabold text-xs hover:opacity-90 transition-all">К заказам</button>
         </div>
         <div v-else class="flex items-center gap-2 px-4 py-4 flex-wrap">
           <button v-if="app.status !== 'declined'" @click="accept(app)" :disabled="busyId === app.id"
-            class="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-extrabold text-xs disabled:opacity-40 hover:opacity-90 active:scale-[0.98] transition-all"
-            style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+            class="bg-brand-gradient flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-white font-extrabold text-xs disabled:opacity-40 hover:opacity-90 active:scale-[0.98] transition-all">
             <BIcon name="Check" class="w-4 h-4" /> Принять в работу
           </button>
           <button @click="writeToApplicant(app)" :disabled="busyId === app.id || app.status === 'declined'"

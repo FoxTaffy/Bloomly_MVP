@@ -1464,20 +1464,6 @@ const vClickOutside = {
                       </div>
                     </div>
 
-                    <!-- Прайс-лист -->
-                    <div v-if="group.commissionInfo && Object.keys(group.commissionInfo.base_prices || {}).length" class="stack-y-2">
-                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Wallet" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.groupDetailPriceListLabel }}
-                      </p>
-                      <div class="stack-y-2">
-                        <div v-for="(price, key) in (group.commissionInfo.base_prices as Record<string,number>)" :key="key"
-                          class="flex items-center justify-between bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-                          <span class="text-white text-sm font-semibold capitalize">{{ String(key).replace(/_/g, ' ') }}</span>
-                          <span class="text-brand-accent font-extrabold">{{ langStore.t.groupDetailFromPricePrefix }} {{ price }} {{ group.commissionInfo!.currency }}</span>
-                        </div>
-                      </div>
-                    </div>
-
                     <!-- Детали -->
                     <div v-if="group.delivery_info || group.production_time || group.guarantee_text || group.completed_works" class="stack-y-2">
                       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
@@ -2569,7 +2555,7 @@ const vClickOutside = {
               <!-- Owner / Organizer (redesigned to match screenshot) -->
               <div v-if="group.owner && !group.hide_admins && !JSON.parse(group.hidden_member_ids || '[]').includes(group.owner.id)" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
-                  <BIcon name="Users" class="w-3.5 h-3.5 text-brand-purple" />
+                  <BIcon name="Users" class="w-3.5 h-3.5 text-brand-accent" />
                   <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupSettingsSecOrganizers }}</p>
                 </div>
                 <!-- Organizer card -->
@@ -2764,7 +2750,7 @@ const vClickOutside = {
                 class="bg-brand-bg border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/40 transition-all group/card cursor-pointer">
                 <!-- Mini banner -->
                 <div class="h-16 relative bg-cover bg-center"
-                  :class="!m.user.banner_url ? 'bg-linear-to-br/srgb from-brand-accent/20 to-brand-purple/20' : ''"
+                  :class="!m.user.banner_url ? 'bg-linear-to-br/srgb from-brand-accent/20 to-brand-accent-plus/20' : ''"
                   :style="m.user.banner_url ? `background-image: url('${m.user.banner_url}')` : ''">
                   <span v-if="m.role === 'owner' || m.role === 'admin'"
                     class="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
@@ -2822,8 +2808,7 @@ const vClickOutside = {
     <Teleport to="body">
       <Transition name="slide-up">
         <button v-if="showScrollTop" @click="scrollToTop"
-          class="fixed bottom-20 md:bottom-6 right-6 z-210 w-11 h-11 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110"
-          style="background: linear-gradient(135deg,#CD83F5,#7C3AED)">
+          class="bg-brand-gradient fixed bottom-20 md:bottom-6 right-6 z-210 w-11 h-11 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110">
           <BIcon name="ArrowUp" class="w-5 h-5 text-white" />
         </button>
       </Transition>

@@ -283,8 +283,7 @@ onMounted(load)
             <!-- Действия -->
             <div class="relative flex flex-wrap gap-2.5 mt-6">
               <button @click="openChat"
-                class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white font-extrabold text-sm hover:opacity-90 active:scale-[0.98] transition-all"
-                style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+                class="bg-brand-gradient flex items-center gap-2 px-4 py-2.5 rounded-xl text-white font-extrabold text-sm hover:opacity-90 active:scale-[0.98] transition-all">
                 <BIcon name="MessageCircle" class="w-4 h-4" /> {{ order.canManage ? 'Написать заказчику' : 'Чат с группой' }}
               </button>
               <template v-if="order.canManage">
@@ -383,8 +382,7 @@ onMounted(load)
                   </template>
                 </p>
                 <button v-if="order.payment_status === 'unpaid' && !order.canManage && order.invoice_message_id" @click="markPaid" :disabled="payBusy"
-                  class="w-full mt-3 py-2.5 rounded-xl text-white font-extrabold text-sm hover:opacity-90 disabled:opacity-40 transition-all"
-                  style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+                  class="bg-brand-gradient w-full mt-3 py-2.5 rounded-xl text-white font-extrabold text-sm hover:opacity-90 disabled:opacity-40 transition-all">
                   {{ payBusy ? 'Оплачиваем…' : 'Оплатить с кошелька' }}
                 </button>
                 <!-- Оплата не прошла: пополнить, отменить или написать в поддержку -->

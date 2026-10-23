@@ -9,8 +9,7 @@
         </button>
 
         <div class="flex items-center gap-3 mb-5 pr-10">
-          <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
-            style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+          <div class="bg-brand-gradient w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
             <BIcon name="Clock" class="w-5 h-5 text-white" />
           </div>
           <div class="min-w-0">
@@ -45,8 +44,7 @@
         <div class="flex gap-3 mt-5">
           <button class="px-5 py-3 rounded-2xl bg-brand-bg border border-brand-border text-white/60 font-bold text-sm hover:bg-brand-border/50 transition-colors"
             @click="emit('close')">Отмена</button>
-          <button class="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-white font-extrabold text-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-            style="background: linear-gradient(135deg, #4C67CF, #7c3aed)" :disabled="!date || busy" @click="submit">
+          <button class="bg-brand-gradient flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-white font-extrabold text-sm transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed" :disabled="!date || busy" @click="submit">
             <span v-if="busy" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             <BIcon v-else name="Play" class="w-4 h-4" />
             {{ paymentConfirm ? 'Подтвердить и начать' : 'Начать' }}

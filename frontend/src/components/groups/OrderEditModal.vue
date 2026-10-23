@@ -9,8 +9,7 @@
         </button>
 
         <div class="flex items-center gap-3 mb-5 pr-10">
-          <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
-            style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+          <div class="bg-brand-gradient w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-lg">
             <BIcon name="Pencil" class="w-5 h-5 text-white" />
           </div>
           <div class="min-w-0">
@@ -71,8 +70,7 @@
         <div class="flex gap-3 mt-6">
           <button class="px-5 py-3 rounded-2xl bg-brand-bg border border-brand-border text-white/60 font-bold text-sm hover:bg-brand-border/50 transition-colors"
             @click="emit('close')">Отмена</button>
-          <button class="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-white font-extrabold text-sm transition-all hover:opacity-90 disabled:opacity-40"
-            style="background: linear-gradient(135deg, #4C67CF, #7c3aed)" :disabled="saving" @click="save">
+          <button class="bg-brand-gradient flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-white font-extrabold text-sm transition-all hover:opacity-90 disabled:opacity-40" :disabled="saving" @click="save">
             <span v-if="saving" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             Сохранить
           </button>
