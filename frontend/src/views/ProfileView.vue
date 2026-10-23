@@ -10,9 +10,10 @@
     </Transition>
 
     <!-- ─── Page background (profile_bg_url) ──────────────────────────────── -->
-    <template v-if="profileBgStyle.backgroundImage">
+    <!-- Свой фон показывает глобальный слой (useAppTheme); здесь — фон чужого профиля, если он задан -->
+    <template v-if="profileBgStyle.backgroundImage && !isOwnProfile">
       <div class="fixed inset-0 z-[-1] pointer-events-none" :style="profileBgStyle" />
-      <div class="fixed inset-0 z-[-1] pointer-events-none" style="background: rgba(22,25,47,0.78)" />
+      <div class="fixed inset-0 z-[-1] pointer-events-none bg-brand-bg/78" />
     </template>
 
     <!-- ─── hidden file inputs for banner/avatar S3 upload ────────────────── -->

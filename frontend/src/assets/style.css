@@ -368,7 +368,7 @@
     font-family: 'Nunito', ui-rounded, sans-serif;
   }
   body {
-    background-color: var(--c-bg);
+    background-color: var(--color-brand-bg);
     color: var(--c-offwhite);
   }
 
@@ -509,4 +509,20 @@
 /* Фирменный градиент кнопок/аватаров: следует выбранной теме (см. composables/useAppTheme.ts). */
 .bg-brand-gradient {
   background: linear-gradient(135deg, var(--color-brand-accent), var(--color-brand-accent-plus));
+}
+
+/* Свой фон пользователя (Pro+): картинка под всеми страницами, полноэкранные обёртки прозрачны.
+   Переменная и класс выставляются в composables/useAppTheme.ts. */
+html.has-custom-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(color-mix(in srgb, var(--color-brand-bg) 78%, transparent), color-mix(in srgb, var(--color-brand-bg) 78%, transparent)),
+    var(--app-bg-image) center / cover fixed;
+}
+html.has-custom-bg .min-h-screen.bg-brand-bg {
+  background-color: transparent;
 }

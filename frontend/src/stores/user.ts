@@ -300,6 +300,7 @@ export const useUserStore = defineStore('user', () => {
         if (updated.display_name !== undefined) auth.user.display_name = updated.display_name
         if ((updated as any).is_adult !== undefined) auth.user.is_adult = (updated as any).is_adult
         if (updated.profile_theme !== undefined) auth.user.profile_theme = updated.profile_theme
+        if (updated.profile_bg_url !== undefined) auth.user.profile_bg_url = updated.profile_bg_url
         // Persist to sessionStorage so sidebar / AppHeader update immediately
         cacheUser(auth.user)
       }

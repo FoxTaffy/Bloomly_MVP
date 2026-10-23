@@ -44,3 +44,17 @@ export function themeTokens({ accent, bg, cardBg }: ProfileTheme): Record<string
     '--color-brand-accent-minus-minus-minus': mix(accent, 'white', 10),
   }
 }
+
+/** Свой фон (profile_bg_url): только http(s)-ссылка, возвращает значение для CSS `url(...)`. */
+export function safeBgImage(url?: string | null): string | null {
+  if (!url) return null
+  try {
+    if (!['http:', 'https:'].includes(new URL(url).protocol)) return null
+  } catch { return null }
+  return `url('${url.replace(/['"\\()\s]/g, encodeURIComponent)}')`
+}
+
+/** Свой фон доступен на Pro и Business (как загрузка в настройках). */
+export function activeBgImage(url?: string | null, tier?: string | null): string | null {
+  return tier === 'pro' || tier === 'business' ? safeBgImage(url) : null
+}
