@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { idList } from '../../lib/pagination.js';
 import { parseDeviceName } from '../auth/device.util.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { userLookup } from '../users/lookup.js';
@@ -56,7 +57,7 @@ export async function realtimeRoutes(fastify: FastifyInstance) {
 
   // REST endpoint: GET /api/users/online?ids=id1,id2,...
   fastify.get('/api/users/online', { onRequest: [fastify.tryAuthenticate] }, async (request, reply) => {
-    const ids = ((request.query as { ids?: string }).ids ?? '').split(',').filter(Boolean);
+    const ids = idList((request.query as { ids?: string }).ids);
     const viewerId = (request.user as { id: string } | undefined)?.id;
     const result: Record<string, boolean> = {};
     // Sibling map, not nested under `data[id]` — keeps `data` a plain boolean

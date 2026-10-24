@@ -1,5 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { pagination, idList } from '../../lib/pagination.js';
 import { postService } from './service.js';
+import { followsService } from '../follows/service.js';
 import type { CreatePostInput, EditPostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } from './types.js';
 import { moderatePost, moderateComment } from '../automod/service.js';
 import { isModerator, isAdmin } from '../../lib/roles.js';
@@ -166,8 +168,7 @@ export const getPersonalizedPostsHandler = async (
   try {
     const { id: userId } = request.user as JwtUser;
     const nsfwMode = resolveNsfwMode({ nsfw: request.query.nsfw, safeMode: request.query.safeMode, isAdult: requestIsAdult(request.user) });
-    const pageNum = request.query.page ? parseInt(request.query.page as string, 10) : 1;
-    const limitNum = request.query.limit ? parseInt(request.query.limit as string, 10) : 30;
+    const { page: pageNum, limit: limitNum } = pagination(request.query.page, request.query.limit, 30, 50);
 
     const posts = await postService.getPersonalizedPosts(userId, nsfwMode, pageNum, limitNum);
     return reply.send({ success: true, data: { posts }, error: null });
@@ -178,6 +179,39 @@ export const getPersonalizedPostsHandler = async (
       data: null,
       error: { code: 'GET_PERSONALIZED_ERROR', message },
     });
+  }
+};
+
+const CHECK_NEW_MODES = ['for-you', 'subscriptions', 'news', 'photos', 'nsfw'] as const;
+type CheckNewMode = (typeof CHECK_NEW_MODES)[number];
+
+/** GET /posts/check-new?mode=…&since=<ISO>: сколько постов новее `since` в выдаче вкладки. Только число, без самих постов. */
+export const checkNewPostsHandler = async (
+  request: FastifyRequest<{ Querystring: { mode?: string; since?: string; nsfw?: string; safeMode?: string } }>,
+  reply: FastifyReply,
+) => {
+  const { mode, since: sinceRaw } = request.query;
+  const bad = (message: string) => reply.code(400).send({ success: false, data: null, error: { code: 'CHECK_NEW_INVALID', message } });
+  if (!mode || !(CHECK_NEW_MODES as readonly string[]).includes(mode)) return bad('Unknown feed mode');
+  const sinceInput = new Date(sinceRaw ?? '');
+  if (!sinceRaw || Number.isNaN(sinceInput.getTime())) return bad('Invalid since');
+  // В БД время с микросекундами, в JS — с миллисекундами: без запаса самый свежий из показанных постов считался бы «новее» самого себя
+  const since = new Date(sinceInput.getTime() + 1);
+  try {
+    const { id: userId } = request.user as JwtUser;
+    // Вкладка NSFW всегда спрашивает режим show, как и сама выдача
+    const nsfwMode = resolveNsfwMode({
+      nsfw: mode === 'nsfw' ? 'show' : request.query.nsfw,
+      safeMode: request.query.safeMode,
+      isAdult: requestIsAdult(request.user),
+    });
+    const count = (mode as CheckNewMode) === 'subscriptions'
+      ? await followsService.countNewSince(userId, nsfwMode, since)
+      : await postService.countNewSince(userId, mode as 'for-you' | 'news' | 'photos' | 'nsfw', since, nsfwMode);
+    return reply.send({ success: true, data: { count }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to check new posts';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'CHECK_NEW_ERROR', message } });
   }
 };
 
@@ -217,7 +251,7 @@ export const getUserPostStatusHandler = async (
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const ids = (request.query.ids || '').split(',').filter(Boolean);
+    const ids = idList(request.query.ids);
     if (!ids.length) return reply.send({ success: true, data: [], error: null });
     const result = await postService.getPostStatus(userId, ids);
     return reply.send({ success: true, data: result, error: null });

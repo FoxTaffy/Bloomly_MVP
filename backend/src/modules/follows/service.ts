@@ -170,23 +170,33 @@ export const followsService = {
     return { aFollowsB: !!aFollowsB, bFollowsA: !!bFollowsA, friends: !!aFollowsB && !!bFollowsA };
   },
 
-  async getSubscriptionFeed(userId: string, nsfwMode: NsfwMode = 'hide', page = 1, limit = 30) {
+  /** На кого подписан пользователь, без взаимных блокировок (иначе заблокированный автор остаётся видимым в ленте подписок). */
+  async subscriptionAuthorIds(userId: string): Promise<string[]> {
     const followingRows = await prisma.follow.findMany({
       where: { follower_id: userId },
       select: { following_id: true },
     });
-    let authorIds = followingRows.map((r) => r.following_id);
+    const authorIds = followingRows.map((r) => r.following_id);
     if (!authorIds.length) return [];
-
-    // Не показываем посты авторов, с которыми есть взаимная блокировка —
-    // иначе заблокированный автор (или тот, кто заблокировал нас) всё равно
-    // остаётся видимым в ленте подписок, хотя пропадает из общей ленты/поиска.
     const blockerIds = await getBlockerIds(userId);
-    if (blockerIds.length) {
-      const blockedSet = new Set(blockerIds);
-      authorIds = authorIds.filter((id) => !blockedSet.has(id));
-      if (!authorIds.length) return [];
-    }
+    if (!blockerIds.length) return authorIds;
+    const blockedSet = new Set(blockerIds);
+    return authorIds.filter((id) => !blockedSet.has(id));
+  },
+
+  /** Сколько постов в ленте подписок новее `since` (не больше `cap`) — для плашки «Новые посты». */
+  async countNewSince(userId: string, nsfwMode: NsfwMode, since: Date, cap = 100): Promise<number> {
+    const authorIds = await this.subscriptionAuthorIds(userId);
+    if (!authorIds.length) return 0;
+    return prisma.post.count({
+      where: { deleted_at: null, author_id: { in: authorIds }, ...nsfwWhere(nsfwMode), created_at: { gt: since } },
+      take: cap,
+    });
+  },
+
+  async getSubscriptionFeed(userId: string, nsfwMode: NsfwMode = 'hide', page = 1, limit = 30) {
+    const authorIds = await this.subscriptionAuthorIds(userId);
+    if (!authorIds.length) return [];
 
     const skip = (page - 1) * limit;
     return prisma.post.findMany({

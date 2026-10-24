@@ -12,3 +12,10 @@ export function pagination(page: unknown, limit: unknown, defaultLimit = 20, max
   const pageSize = boundedInteger(limit, defaultLimit, 1, maxLimit);
   return { page: pageNumber, limit: pageSize, skip: (pageNumber - 1) * pageSize };
 }
+
+/** Список id из query-строки `a,b,c`: без пустых и повторов, не длиннее `max` (иначе IN (...) раздувается до любого размера). */
+export function idList(value: unknown, max = 100): string[] {
+  if (typeof value !== 'string') return [];
+  const ids = value.split(',').map((id) => id.trim()).filter(Boolean);
+  return [...new Set(ids)].slice(0, max);
+}

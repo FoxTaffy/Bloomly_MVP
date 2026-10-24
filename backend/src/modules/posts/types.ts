@@ -17,7 +17,10 @@ export interface CreatePostInput {
   mediaOriginalUrls?: string[];
 }
 
-export type PostSortBy = 'new' | 'hot';
+/** new — новые сверху, old — старые сверху, hot — по рейтингу (с периодом `period`). */
+export type PostSortBy = 'new' | 'old' | 'hot';
+/** Период для сортировки по рейтингу: за сутки, неделю, месяц или всё время. */
+export type PostSortPeriod = 'day' | 'week' | 'month' | 'all';
 
 export interface GetPostsQuery {
   search?: string;
@@ -26,6 +29,7 @@ export interface GetPostsQuery {
   /** 'true' — the tag filter also matches its synonyms (see lib/tagSynonyms). */
   synonyms?: string;
   sort?: PostSortBy;
+  period?: PostSortPeriod;
   safeMode?: string;
   nsfw?: string;
   /** Resolved by the controller from `nsfw`/`safeMode` + viewer age; the service never reads the raw params. */

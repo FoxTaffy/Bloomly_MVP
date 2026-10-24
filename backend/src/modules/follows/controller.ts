@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { idList } from '../../lib/pagination.js';
 import { followsService } from './service.js';
 import { requestIsAdult } from '../../lib/age.js';
 import { resolveNsfwMode } from '../../lib/contentFilters.js';
@@ -44,7 +45,7 @@ export const checkBulkHandler = async (
 ) => {
   try {
     const { id: followerId } = req.user as JwtUser;
-    const ids = (req.query.ids || '').split(',').filter(Boolean);
+    const ids = idList(req.query.ids);
     const result = await followsService.checkBulk(followerId, ids);
     return reply.send({ success: true, data: result, error: null });
   } catch (e) {

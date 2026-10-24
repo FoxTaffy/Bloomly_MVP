@@ -66,6 +66,13 @@ const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly GroupPermission[]> = {
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const MAX_CUSTOM_ROLES = 20;
 
+/** Цвет группы попадает в inline-style карточек (ленты, события): допускаем только #RRGGBB, иначе — CSS-инъекция через style. */
+function validAccentColor(color: string | null | undefined): string | null | undefined {
+  if (color == null || color === '') return color;
+  if (!HEX_COLOR_RE.test(color)) throw httpError('Invalid accent color', 400);
+  return color;
+}
+
 function permissionsOf(role: string | null | undefined, customPerms: unknown): Set<GroupPermission> {
   const set = new Set<GroupPermission>(SYSTEM_ROLE_PERMISSIONS[role ?? ''] ?? []);
   if (Array.isArray(customPerms)) for (const p of customPerms) if (isGroupPermission(p)) set.add(p);
@@ -553,7 +560,7 @@ export const groupService = {
           owner_id: ownerId,
           avatar_url: input.avatarUrl,
           banner_url: input.bannerUrl,
-          accent_color: input.accentColor,
+          accent_color: validAccentColor(input.accentColor),
           social_links: sanitizeLinkRecord(input.socialLinks),
           is_public: input.isPublic ?? true,
           members_count: 1, // owner is the first member
@@ -595,7 +602,7 @@ export const groupService = {
     if (input.description !== undefined) data.description = input.description;
     if (input.avatarUrl !== undefined) data.avatar_url = input.avatarUrl;
     if (input.bannerUrl !== undefined) data.banner_url = input.bannerUrl;
-    if (input.accentColor !== undefined) data.accent_color = input.accentColor;
+    if (input.accentColor !== undefined) data.accent_color = validAccentColor(input.accentColor);
     if (input.socialLinks !== undefined) data.social_links = sanitizeLinkRecord(input.socialLinks);
     if (input.isPublic !== undefined) data.is_public = input.isPublic;
     if (input.rulesText !== undefined) data.rules_text = input.rulesText;

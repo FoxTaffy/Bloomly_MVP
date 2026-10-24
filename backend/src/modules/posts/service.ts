@@ -16,7 +16,10 @@ import { parseSearchQuery, textScore } from '../../lib/searchQuery.js';
 import { resolveTagsForTerm } from '../../lib/tagSearch.js';
 import { muteKeywordsWhere, nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
 import { analyzeContent } from '../automod/service.js';
-import type { CreatePostInput, EditPostInput, GetPostsQuery } from './types.js';
+import type { CreatePostInput, EditPostInput, GetPostsQuery, PostSortBy, PostSortPeriod } from './types.js';
+
+/** Сортировка общей ленты «Лучшие за …»: сколько дней назад начинается период (all — без ограничения). */
+const SORT_PERIOD_DAYS: Record<PostSortPeriod, number | null> = { day: 1, week: 7, month: 30, all: null };
 import { errCode } from '../../lib/httpErrors.js';
 import { logError } from '../../lib/logger.js';
 import { POST_LISTING_INCLUDE, assertListingAttachable, withPublicListing } from '../../lib/postListing.js';
@@ -480,6 +483,53 @@ export function interleave<T>(a: T[], aRun: number, b: T[], bRun: number): T[] {
   return out;
 }
 
+/**
+ * Условия общей ленты (/posts): вкладки «Общее», «Фото», «NSFW», поиск, категория, тег.
+ * Общие для самой выдачи и для счётчика новых постов, чтобы плашка «Новые посты» считала ровно то, что покажет лента.
+ * null — выдача заведомо пуста (вкладка NSFW в режиме hide).
+ */
+async function buildPostsWhere(query: GetPostsQuery, viewerId?: string): Promise<{ visible: any; sort: PostSortBy } | null> {
+  const { search, category, tag, synonyms, nsfwMode = 'hide', hasMedia = false, nsfwOnly } = query;
+  // Неизвестные значения не ломают выдачу — обычная сортировка «новые сверху»
+  const sort: PostSortBy = query.sort === 'old' || query.sort === 'hot' ? query.sort : 'new';
+  const periodDays = sort === 'hot' ? SORT_PERIOD_DAYS[query.period ?? 'all'] ?? null : null;
+
+  const where: any = { deleted_at: null, is_archived: false, ...NOT_DELETED_GROUP_FILTER };
+  Object.assign(where, nsfwWhere(nsfwMode));
+  // Вкладка NSFW: только помеченные посты. В режиме hide (не-взрослые, гости) выдача пуста, а не обычная.
+  if (nsfwOnly === true || nsfwOnly === 'true') {
+    if (nsfwMode === 'hide') return null;
+    where.is_nsfw = true;
+  }
+  if (hasMedia) where.media_urls = { isEmpty: false };
+  // «Лучшие за период»: рейтинг среди постов, опубликованных за последние N дней
+  if (periodDays) where.created_at = { gte: new Date(Date.now() - periodDays * 86_400_000) };
+
+  const blockerIds = await getBlockerIds(viewerId);
+  if (blockerIds.length > 0) where.author_id = { notIn: blockerIds };
+
+  if (search) {
+    where.content = { contains: search, mode: 'insensitive' };
+  }
+
+  if (category) {
+    where.category = category;
+  }
+
+  if (tag) {
+    where.tags = {
+      some: {
+        tag: synonyms === 'true' ? { name: { in: await expandTag(tag) } } : { name: tag },
+      },
+    };
+  }
+
+  return { visible: { AND: [where, await readablePostsWhere(viewerId)] }, sort };
+}
+
+/** Предел подсчёта новых постов: дальше плашке «Новые посты» точное число не нужно, а запрос не должен расти. */
+const NEW_POSTS_CAP = 100;
+
 export const postService = {
   async createPost(input: CreatePostInput) {
     const content = (input.content ?? '').trim();
@@ -608,36 +658,11 @@ export const postService = {
   },
 
   async getPosts(query: GetPostsQuery = {}, viewerId?: string) {
-    const { search, category, tag, synonyms, sort = 'new', nsfwMode = 'hide', hasMedia = false, nsfwOnly, page, limit } = query;
+    const { search, category, tag, hasMedia = false, nsfwOnly, page, limit } = query;
     const { page: pageNum, limit: limitNum } = pagination(page, limit);
-
-    const where: any = { deleted_at: null, is_archived: false, ...NOT_DELETED_GROUP_FILTER };
-    Object.assign(where, nsfwWhere(nsfwMode));
-    // Вкладка NSFW: только помеченные посты. В режиме hide (не-взрослые, гости) выдача пуста, а не обычная.
-    if (nsfwOnly === true || nsfwOnly === 'true') {
-      if (nsfwMode === 'hide') return [];
-      where.is_nsfw = true;
-    }
-    if (hasMedia) where.media_urls = { isEmpty: false };
-
-    const blockerIds = await getBlockerIds(viewerId);
-    if (blockerIds.length > 0) where.author_id = { notIn: blockerIds };
-
-    if (search) {
-      where.content = { contains: search, mode: 'insensitive' };
-    }
-
-    if (category) {
-      where.category = category;
-    }
-
-    if (tag) {
-      where.tags = {
-        some: {
-          tag: synonyms === 'true' ? { name: { in: await expandTag(tag) } } : { name: tag },
-        },
-      };
-    }
+    const built = await buildPostsWhere(query, viewerId);
+    if (!built) return [];
+    const { visible, sort } = built;
 
     const include = {
       author: { select: AUTHOR_SELECT },
@@ -647,16 +672,19 @@ export const postService = {
       groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       listing: POST_LISTING_INCLUDE,
     };
-    const visible = { AND: [where, await readablePostsWhere(viewerId)] };
     let posts: any[] = await prisma.post.findMany({
       where: visible,
-      orderBy: sort === 'hot' ? { rating: 'desc' } : { created_at: 'desc' },
+      // Второй ключ (дата, затем id) — устойчивый порядок при равном рейтинге, иначе страницы дублируют/теряют посты
+      orderBy: sort === 'hot' ? [{ rating: 'desc' }, { created_at: 'desc' }, { id: 'desc' }]
+        : sort === 'old' ? [{ created_at: 'asc' }, { id: 'asc' }]
+        : [{ created_at: 'desc' }, { id: 'desc' }],
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
       include,
     });
     // Общая лента без поиска и фильтров: наверх первой страницы подмешиваются продвигаемые посты
-    if (pageNum === 1 && !search && !tag && !category && !hasMedia && !nsfwOnly) {
+    // («старые сверху» — просмотр архива, там продвижение неуместно)
+    if (pageNum === 1 && sort !== 'old' && !search && !tag && !category && !hasMedia && !nsfwOnly) {
       const boosted = await pickBoostedPosts(
         (take) => prisma.post.findMany({ where: { AND: [visible, { boosted_until: { gt: new Date() } }] }, orderBy: { boosted_at: 'desc' }, take, include }),
       );
@@ -817,6 +845,45 @@ export const postService = {
       .sort((a, b) => b.score - a.score || b.count - a.count)
       .slice(0, limit)
       .map(({ name, count }) => ({ name, count }));
+  },
+
+  /**
+   * Сколько постов новее `since` появилось в выдаче вкладки (не больше NEW_POSTS_CAP).
+   * Лёгкая замена повторной загрузке целой страницы ленты ради плашки «Новые посты».
+   * Для «Для вас» считаются все подходящие по фильтрам посты без учёта ранжирования и уже просмотренных:
+   * новее, чем самый свежий из показанных, значит ещё не просмотрено.
+   */
+  async countNewSince(
+    userId: string,
+    mode: 'for-you' | 'news' | 'photos' | 'nsfw',
+    since: Date,
+    nsfwMode: NsfwMode,
+  ): Promise<number> {
+    const newer = { created_at: { gt: since } };
+    if (mode !== 'for-you') {
+      const built = await buildPostsWhere({ nsfwMode, hasMedia: mode === 'photos', nsfwOnly: mode === 'nsfw' }, userId);
+      if (!built) return 0;
+      return prisma.post.count({ where: { AND: [built.visible, newer] }, take: NEW_POSTS_CAP });
+    }
+    const [user, blockerIds, notInterested] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { mute_keywords: true } }),
+      getBlockerIds(userId),
+      prisma.postNotInterested.findMany({ where: { user_id: userId }, select: { post_id: true } }),
+    ]);
+    return prisma.post.count({
+      where: {
+        AND: [await readablePostsWhere(userId)],
+        deleted_at: null,
+        is_archived: false,
+        id: notInterested.length ? { notIn: notInterested.map((n) => n.post_id) } : undefined,
+        ...newer,
+        ...nsfwWhere(nsfwMode),
+        ...muteKeywordsWhere(user?.mute_keywords ?? []),
+        ...(blockerIds.length ? { author_id: { notIn: blockerIds } } : {}),
+        ...NOT_DELETED_GROUP_FILTER,
+      },
+      take: NEW_POSTS_CAP,
+    });
   },
 
   async getPersonalizedPosts(userId: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 30) {

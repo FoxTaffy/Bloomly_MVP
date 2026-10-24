@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
-import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, searchTagsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, getMyPostsLikedByHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler, setNotInterestedHandler, getBoostInfoHandler, boostPostHandler } from './controller.js';
+import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, searchTagsHandler, getPersonalizedPostsHandler, checkNewPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, getMyPostsLikedByHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler, setNotInterestedHandler, getBoostInfoHandler, boostPostHandler } from './controller.js';
 import { createScheduledPostHandler, listScheduledPostsHandler, updateScheduledPostHandler, cancelScheduledPostHandler, publishNowScheduledPostHandler } from './scheduledController.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
@@ -89,6 +89,7 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof searchPostsHandler>>('/search', tryAuth, searchPostsHandler);
   fastify.get<RouteGenericOf<typeof searchTagsHandler>>('/search/tags', tryAuth, searchTagsHandler);
   fastify.get<RouteGenericOf<typeof getPersonalizedPostsHandler>>('/personalized', auth, getPersonalizedPostsHandler);
+  fastify.get<RouteGenericOf<typeof checkNewPostsHandler>>('/check-new', auth, checkNewPostsHandler);
   fastify.get<RouteGenericOf<typeof getTrendingTagsHandler>>('/trending-tags', getTrendingTagsHandler);
   fastify.get<RouteGenericOf<typeof suggestTagsHandler>>('/tags/suggest', suggestTagsHandler);
   fastify.get<RouteGenericOf<typeof getUserPostStatusHandler>>('/status', auth, getUserPostStatusHandler);
