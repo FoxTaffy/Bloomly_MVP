@@ -53,9 +53,6 @@ export async function createTicket(userId: string, input: {
     device: SUPPORT_DEVICES.includes(input.device as typeof SUPPORT_DEVICES[number]) ? input.device : null,
     browser: input.browser?.trim().slice(0, 60) || null,
   } : {};
-  if (type === 'bug' && (!bug.steps_to_reproduce || !bug.expected_result)) {
-    throw Object.assign(new Error('Для бага укажите шаги воспроизведения и ожидаемый результат'), { statusCode: 400 });
-  }
   const ticket = await prisma.supportTicket.create({
     data: {
       user_id: userId,

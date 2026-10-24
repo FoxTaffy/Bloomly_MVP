@@ -38,8 +38,6 @@ function detectBrowser(): string {
 const form = reactive({
   subject: '',
   message: '',
-  steps_to_reproduce: '',
-  expected_result: '',
   device: 'desktop' as Device,
   browser: '',
   contact_email: '',
@@ -61,7 +59,7 @@ async function submit() {
     const res = await api.post('/support/tickets', { type: 'bug', ...form })
     if (res.data.success) {
       emit('submitted', res.data.data.ticket)
-      form.subject = form.message = form.steps_to_reproduce = form.expected_result = ''
+      form.subject = form.message = ''
       form.attachment_urls = []
       mediaUploadRef.value?.clearAll()
     }
@@ -71,59 +69,46 @@ async function submit() {
     isSubmitting.value = false
   }
 }
-
-const inputCls = 'w-full px-4 py-2.5 rounded-xl bg-brand-bg/60 border border-white/10 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/50'
 </script>
 
 <template>
-  <form @submit.prevent="submit" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-5 md:p-6">
-    <h2 class="font-extrabold text-white text-xl leading-tight">{{ langStore.t.bugFormTitle }}</h2>
-    <p class="text-xs text-brand-accent/70 mt-1 pb-4 mb-5 border-b border-white/8">{{ langStore.t.bugFormHint }}</p>
+  <form @submit.prevent="submit" class="panel-card p-5 md:p-6">
+    <h2 class="text-xl font-extrabold text-white leading-tight">{{ langStore.t.bugFormTitle }}</h2>
+    <p class="text-xs text-white/40 mt-1 pb-4 mb-5 border-b border-brand-border">{{ langStore.t.bugFormHint }}</p>
 
-    <div class="mb-4">
-      <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.bugTitleLabel }} <span class="text-brand-error">*</span></label>
-      <input v-model="form.subject" type="text" required minlength="3" maxlength="150" :placeholder="langStore.t.bugTitlePlaceholder" :class="inputCls" />
+    <div class="mb-5">
+      <label class="field-label">{{ langStore.t.bugTitleLabel }} <span class="text-brand-error">*</span></label>
+      <p class="text-xs text-white/40 -mt-1 mb-2">{{ langStore.t.bugTitleHint }}</p>
+      <input v-model="form.subject" type="text" required minlength="3" maxlength="150" :placeholder="langStore.t.bugTitlePlaceholder" class="field-input w-full" />
     </div>
 
-    <div class="mb-4">
-      <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.bugWhatLabel }} <span class="text-brand-error">*</span></label>
-      <textarea v-model="form.message" required minlength="10" rows="3" maxlength="3000" :placeholder="langStore.t.bugWhatPlaceholder" :class="inputCls + ' resize-none'"></textarea>
+    <div class="mb-5">
+      <label class="field-label">{{ langStore.t.bugWhatLabel }} <span class="text-brand-error">*</span></label>
+      <p class="text-xs text-white/40 -mt-1 mb-2">{{ langStore.t.bugWhatHint }}</p>
+      <textarea v-model="form.message" required minlength="10" rows="4" maxlength="3000" :placeholder="langStore.t.bugWhatPlaceholder" class="field-input w-full resize-none"></textarea>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-      <div>
-        <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.bugStepsLabel }} <span class="text-brand-error">*</span></label>
-        <textarea v-model="form.steps_to_reproduce" required rows="3" maxlength="2000" :placeholder="langStore.t.bugStepsPlaceholder" :class="inputCls + ' resize-none font-mono text-xs'"></textarea>
-      </div>
-      <div>
-        <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.bugExpectedLabel }} <span class="text-brand-error">*</span></label>
-        <textarea v-model="form.expected_result" required rows="3" maxlength="1000" :placeholder="langStore.t.bugExpectedPlaceholder" :class="inputCls + ' resize-none'"></textarea>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-      <div>
-        <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.bugDeviceLabel }}</label>
-        <select v-model="form.device" :class="inputCls">
+    <div class="mb-5">
+      <label class="field-label">{{ langStore.t.bugDeviceLabel }} / {{ langStore.t.bugBrowserLabel }}</label>
+      <p class="text-xs text-white/40 -mt-1 mb-2">{{ langStore.t.bugEnvHint }}</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <select v-model="form.device" class="field-input w-full">
           <option value="desktop">{{ langStore.t.bugDeviceDesktop }}</option>
           <option value="mobile">{{ langStore.t.bugDeviceMobile }}</option>
           <option value="tablet">{{ langStore.t.bugDeviceTablet }}</option>
         </select>
-      </div>
-      <div>
-        <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.bugBrowserLabel }}</label>
-        <input v-model="form.browser" type="text" maxlength="60" :class="inputCls" />
+        <input v-model="form.browser" type="text" maxlength="60" class="field-input w-full" />
       </div>
     </div>
 
-    <div class="mb-4">
-      <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.helpAttachmentsLabel }}</label>
+    <div class="mb-5">
+      <label class="field-label">{{ langStore.t.helpAttachmentsLabel }}</label>
       <MediaUpload ref="mediaUploadRef" folder="reports" accept="image/*,video/*" :multiple="true" :max-files="MAX_ATTACHMENT_FILES" :max-size-mb="50" @uploaded="(urls: string[]) => form.attachment_urls = urls" />
     </div>
 
     <div class="mb-5">
-      <label class="block text-xs font-bold text-white/70 mb-2">{{ langStore.t.helpEmailLabel }}</label>
-      <input v-model="form.contact_email" type="email" placeholder="you@example.com" :class="inputCls" />
+      <label class="field-label">{{ langStore.t.helpEmailLabel }}</label>
+      <input v-model="form.contact_email" type="email" placeholder="you@example.com" class="field-input w-full" />
     </div>
 
     <div class="flex items-center justify-end gap-3">
