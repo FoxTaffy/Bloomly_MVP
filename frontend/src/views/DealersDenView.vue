@@ -380,7 +380,7 @@ async function buyTicket(listing: DealerListing) {
       <main class="flex-1 min-w-0 pb-28 md:pb-20 stack-y-5">
 
         <!-- Шапка -->
-        <MarketHero title="Dealers' Den" icon="Store" tone="accent" :stats="heroStats"
+        <MarketHero title="Dealers' Den" icon="Store" :stats="heroStats"
           :subtitle="`${store.isLoading ? '…' : store.total} ${t.dealersDenListingsCountLabel} · ${t.dealersDenMarketplaceTagline}`">
           <template #tagline>
             {{ t.dealersDenHeroArts }}, <span class="text-brand-yellow font-semibold">{{ t.dealersDenHeroAuctions }}</span>,
@@ -395,15 +395,6 @@ async function buyTicket(listing: DealerListing) {
               <input v-model="searchQuery" :placeholder="t.dealersDenSearchPlaceholderHero" @keyup.enter="loadData()"
                 class="bg-transparent text-sm text-white placeholder-white/35 outline-hidden w-full" />
             </label>
-            <template v-if="auth.user">
-              <button v-for="h in heroTabs" :key="h.tab" @click="toggleTab(h.tab)"
-                class="flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-2xl transition-all border"
-                :class="activeTab === h.tab ? 'bg-brand-gradient border-transparent' : 'bg-white/8 border-white/12 hover:bg-white/12'">
-                <BIcon :name="h.icon" class="w-4 h-4" :class="activeTab === h.tab && h.tab === 'wishlist' ? 'fill-current' : ''" />
-                {{ activeTab === h.tab ? t.dealersDenMarketplaceLabel : h.label }}
-                <span v-if="h.count && activeTab !== h.tab" class="text-[11px] text-white/60 tabular-nums">{{ h.count }}</span>
-              </button>
-            </template>
           </template>
         </MarketHero>
 
@@ -414,7 +405,15 @@ async function buyTicket(listing: DealerListing) {
               class="pill px-4 py-2 text-sm" :class="selectedKind === k.key ? 'pill-active' : 'pill-idle'">
               <BIcon :name="k.icon" class="w-3.5 h-3.5" /> {{ k.label }}
             </button>
-            <button v-if="auth.user && canSell" @click="openCreate" class="xl:hidden pill pill-active ml-auto px-4 py-2 text-sm">
+            <template v-if="auth.user">
+              <button v-for="(h, i) in heroTabs" :key="h.tab" @click="toggleTab(h.tab)"
+                class="pill px-4 py-2 text-sm" :class="[activeTab === h.tab ? 'pill-active' : 'pill-idle', i === 0 ? 'ml-auto' : '']">
+                <BIcon :name="h.icon" class="w-3.5 h-3.5" :class="activeTab === h.tab && h.tab === 'wishlist' ? 'fill-current' : ''" />
+                {{ h.label }}
+                <span v-if="h.count" class="text-[11px] opacity-70 tabular-nums">{{ h.count }}</span>
+              </button>
+            </template>
+            <button v-if="auth.user && canSell" @click="openCreate" class="xl:hidden pill pill-active px-4 py-2 text-sm">
               <BIcon name="Plus" class="w-3.5 h-3.5" /> {{ t.dealersDenPostBtn }}
             </button>
           </div>
