@@ -13,9 +13,9 @@ export const HASHTAG_RE = new RegExp(`#([${TAG_CLASS}]+)`, 'gu')
 /** Тег целиком состоит из допустимых символов. */
 export const TAG_RE = new RegExp(`^[${TAG_CLASS}]+$`, 'u')
 
-/** Очистка того, что ввёл пользователь: нижний регистр, без недопустимых символов. */
+/** Очистка того, что ввёл пользователь: нижний регистр, пробелы → «_», прочие недопустимые символы удаляются. */
 export function sanitizeTagInput(raw: string): string {
-  return raw.toLowerCase().replace(NON_TAG_CHAR_RE, '')
+  return raw.trim().toLowerCase().replace(/\s+/g, '_').replace(NON_TAG_CHAR_RE, '')
 }
 
 /** Slug группы — только английские буквы, цифры, «_» и «-» (в отличие от тегов). */

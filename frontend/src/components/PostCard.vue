@@ -921,6 +921,21 @@ watch(() => props.initialFavourited, (val) => { if (val !== undefined) localFavo
 
 const showMenu    = ref(false)
 const menuBtnRef  = ref<HTMLElement | null>(null)
+// Карточку открытого поста (по ссылке, из уведомления) никто не снабжает состоянием «я уже оценил»:
+// в самом посте его нет, поэтому один раз спрашиваем у /posts/status. Лента и профиль передают его сами.
+onMounted(async () => {
+  if (!props.startExpanded || !authStore.isAuthenticated || props.adMode) return
+  if (props.initialVote !== undefined || props.initialRepawed !== undefined || props.initialFavourited !== undefined) return
+  try {
+    const res = await api.get(`/posts/status?ids=${props.post.id}`)
+    const st = res.data?.success ? res.data.data?.[0] : null
+    if (!st) return
+    localVote.value = st.userVote ?? 0
+    localRepawed.value = st.repawed ?? false
+    localFavourited.value = st.favourited ?? false
+  } catch { /* не критично: останется нейтральное состояние */ }
+})
+
 const menuPos     = ref({ top: '0px', right: '0px' })
 const isExpanded  = ref(props.startExpanded ?? false)
 

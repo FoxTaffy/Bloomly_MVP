@@ -4,6 +4,7 @@ import { X } from 'lucide-vue-next'
 import BIcon from '@/components/BIcon.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
 import { useLangStore } from '@/stores/lang'
+import { sanitizeTagInput } from '@/lib/tagRules'
 
 // Дополнительные поля редактирования поста: теги, NSFW, метка ИИ и добавление медиа.
 // Состоянием владеет родитель — компонент только меняет его через события.
@@ -27,7 +28,7 @@ const langStore = useLangStore()
 const tagInput = ref('')
 
 function addTag() {
-  const tag = tagInput.value.trim().replace(/^#+/, '').toLowerCase()
+  const tag = sanitizeTagInput(tagInput.value.replace(/^\s*#+/, ''))
   tagInput.value = ''
   if (tag && !props.tags.includes(tag)) emit('update:tags', [...props.tags, tag])
 }

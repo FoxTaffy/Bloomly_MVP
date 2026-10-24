@@ -11,6 +11,7 @@ import { useNotifToast } from '@/composables/useNotifToast'
 import { useMessagesStore } from '@/stores/messages'
 import { useWarningModalStore } from '@/stores/warningModal'
 import api from '@/api'
+import { announceNotificationsRead, onNotificationsRead } from '@/lib/notificationsRead'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
 import { isDenNotification, denNotificationKey, DEN_NOTIFICATION_ICONS } from '@/lib/denNotifications'
@@ -139,7 +140,13 @@ const toggleNotifications = async () => {
   }
 }
 
-watch(showNotifications, (open) => { if (!open) clearMarkReadTimer() })
+// Закрыли колокольчик раньше таймера — пользователь уже увидел список, считаем его прочитанным
+watch(showNotifications, (open) => {
+  if (open) return
+  const pending = markReadTimer !== null
+  clearMarkReadTimer()
+  if (pending) markAllRead()
+})
 
 onUnmounted(clearMarkReadTimer)
 
@@ -148,8 +155,16 @@ const markAllRead = async () => {
     await api.post('/notifications/read', {})
     rawNotifications.value.forEach((n: any) => { n.is_read = true })
     unreadCount.value = 0
+    announceNotificationsRead()
   } catch {}
 }
+
+// Прочитали на странице «Уведомления» (или в другом месте) — локальный список и бейдж следуют за сервером
+const stopNotificationsReadSync = onNotificationsRead((ids) => {
+  const marked = ids ? new Set(ids) : null
+  rawNotifications.value.forEach((n: any) => { if (!marked || marked.has(n.id)) n.is_read = true })
+  fetchUnreadCount()
+})
 
 let sseReconnectTimer: ReturnType<typeof setTimeout> | null = null
 let notifActive = true
@@ -408,7 +423,8 @@ const onNotifClick = async (n: any) => {
     members.forEach((m: any) => { m.is_read = true })
     n.is_read = true
     unreadCount.value = Math.max(0, unreadCount.value - wasUnread)
-    try { await api.post('/notifications/read', { ids: members.map((m: any) => m.id) }) } catch {}
+    const ids = members.map((m: any) => m.id)
+    try { await api.post('/notifications/read', { ids }); announceNotificationsRead(ids) } catch {}
   }
   // Warning notifications open the violation detail modal built from `meta` —
   // never the post itself, since the reported post is very often already deleted
@@ -600,6 +616,7 @@ onUnmounted(() => {
   if (storyTimerInterval) clearInterval(storyTimerInterval)
   window.removeEventListener('keydown', onGlobalKeydown)
   document.removeEventListener('click', onDocumentClick)
+  stopNotificationsReadSync()
 })
 </script>
 
@@ -1016,10 +1033,14 @@ onUnmounted(() => {
         </div>
       </button>
 
-      <!-- Logout -->
-      <button @click="handleLogout" class="hidden md:flex p-2.5 text-white/55 hover:text-rose-400 hover:bg-rose-500/10 rounded-full">
+      <!-- Logout (гостю вместо выхода — вход) -->
+      <button v-if="auth.token" @click="handleLogout" class="hidden md:flex p-2.5 text-white/55 hover:text-rose-400 hover:bg-rose-500/10 rounded-full">
         <BIcon name="LogOut" class="h-5 w-5" />
       </button>
+      <router-link v-else :to="{ name: 'login' }"
+        class="px-4 py-2 rounded-full bg-brand-accent hover:bg-brand-accent2 text-white text-sm font-bold transition-colors">
+        {{ langStore.t.submitLogin }}
+      </router-link>
     </div>
   </header>
 

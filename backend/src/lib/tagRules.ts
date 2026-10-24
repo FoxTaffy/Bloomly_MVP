@@ -10,7 +10,7 @@ export const NON_TAG_CHAR_RE = new RegExp(`[^${TAG_CLASS}]`, 'gu');
 /** Тег целиком состоит из допустимых символов. */
 export const TAG_RE = new RegExp(`^[${TAG_CLASS}]+$`, 'u');
 
-/** Очистка тега: нижний регистр, без «#» в начале, без недопустимых символов. */
+/** Очистка тега: нижний регистр, без «#» в начале; пробелы внутри → «_», прочие недопустимые символы удаляются. */
 export function normalizeTag(raw: string): string {
-  return raw.trim().replace(/^#/, '').toLowerCase().replace(NON_TAG_CHAR_RE, '');
+  return raw.trim().replace(/^#/, '').toLowerCase().replace(/\s+/g, '_').replace(NON_TAG_CHAR_RE, '');
 }

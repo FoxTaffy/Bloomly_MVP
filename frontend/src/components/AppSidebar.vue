@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { vStickyBottom } from '@/lib/stickyBottom'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFriendsStore } from '@/stores/friends'
@@ -13,6 +13,7 @@ import { useGroupAlerts } from '@/composables/useGroupAlerts'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import api from '@/api'
+import { onNotificationsRead } from '@/lib/notificationsRead'
 
 // kept for backward compat (MainLayout still passes it for home sub-views)
 const props = withDefaults(defineProps<{
@@ -65,6 +66,8 @@ const refreshNotifUnread = async () => {
 }
 onMounted(refreshNotifUnread)
 watch(() => route.fullPath, refreshNotifUnread)
+// Уход со страницы «Уведомления» помечает прочитанное уже после смены маршрута — ждём это событие
+onUnmounted(onNotificationsRead(refreshNotifUnread))
 
 // Sum of pending "Обращения" across every group the user owns/admins/moderates.
 const groupInboxTotal = computed(() =>
@@ -215,6 +218,10 @@ const categoryItems = computed(() => [
               <p class="text-xs text-white/50">{{ langStore.t.goToProfile }}</p>
             </div>
           </router-link>
+          <router-link v-else-if="!auth.token" :to="{ name: 'login' }" @click="mobileSidebar.close()"
+            class="block text-center px-4 py-2.5 rounded-xl bg-brand-accent hover:bg-brand-accent2 text-white text-sm font-bold transition-colors">
+            {{ langStore.t.submitLogin }} / {{ langStore.t.registerTab }}
+          </router-link>
           <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
           <div v-else class="flex items-center gap-3 px-1 animate-pulse">
             <div class="w-10 h-10 rounded-full bg-white/10"></div>
@@ -336,6 +343,14 @@ const categoryItems = computed(() => [
         <p class="text-xs text-white/50">{{ langStore.t.goToProfile }}</p>
       </div>
     </router-link>
+    <!-- Гость: приглашение войти или зарегистрироваться вместо вечной «загрузки» -->
+    <div v-else-if="!auth.token" class="rounded-2xl border border-brand-border bg-brand-card p-4 stack-y-3">
+      <p class="text-sm font-bold text-white">Bloomly</p>
+      <router-link :to="{ name: 'login' }"
+        class="block text-center px-4 py-2 rounded-xl bg-brand-accent hover:bg-brand-accent2 text-white text-sm font-bold transition-colors">
+        {{ langStore.t.submitLogin }} / {{ langStore.t.registerTab }}
+      </router-link>
+    </div>
     <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
     <div v-else class="flex items-center gap-3 animate-pulse">
       <div class="w-12 h-12 rounded-full bg-white/10"></div>

@@ -27,6 +27,7 @@ import { useAnalytics } from '@/composables/useAnalytics'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
 import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
+import { sanitizeTagInput } from '@/lib/tagRules'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
 // MediaUpload component ref
@@ -570,7 +571,7 @@ const fetchTrendingTags = async () => {
 }
 
 const addTag = () => {
-  const tag = tagInput.value.trim().toLowerCase().replace(/^#/, '')
+  const tag = sanitizeTagInput(tagInput.value.replace(/^\s*#/, ''))
   if (tag && !newPost.value.tags.includes(tag)) newPost.value.tags.push(tag)
   tagInput.value = ''
   clearTagSuggestions()

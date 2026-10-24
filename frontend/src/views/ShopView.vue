@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore, type ShopItem } from '@/stores/shop'
 import { useStickersStore } from '@/stores/stickers'
@@ -18,6 +18,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import type { StickerPack } from '@/stores/stickers'
 
 const router       = useRouter()
+const route        = useRoute()
 const auth         = useAuthStore()
 const shopStore    = useShopStore()
 const stickerStore = useStickersStore()
@@ -118,7 +119,16 @@ async function loadData() {
 }
 
 watch(activeCategory, loadData)
-onMounted(loadData)
+onMounted(async () => {
+  await loadData()
+  // «Управление» на странице пака приходит сюда с ?edit=<id>: сразу открываем редактор этого пака
+  const editId = typeof route.query.edit === 'string' ? route.query.edit : ''
+  if (!editId) return
+  const mine = stickerStore.myPacks.length ? stickerStore.myPacks : await stickerStore.loadMyPacks()
+  const target = mine?.find((p: StickerPack) => p.id === editId)
+  if (target) openEdit(target)
+  router.replace({ name: 'shop', query: { ...route.query, edit: undefined } })
+})
 
 // ── Computed ──────────────────────────────────────────────────────────────
 const filteredItems = computed<ShopItem[]>(() => {

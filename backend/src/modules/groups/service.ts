@@ -105,6 +105,21 @@ export const GROUP_TOPICS: Partial<Record<string, readonly string[]>> = {
 };
 const TOPIC_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
+const SLUG_MIN_LENGTH = 3;
+// Адреса, которые заняты маршрутами сайта или вводят в заблуждение
+const RESERVED_SLUGS = new Set([
+  'admin', 'administrator', 'api', 'auth', 'bloomly', 'create', 'explore', 'groups', 'help', 'login', 'messages',
+  'moderator', 'new', 'notifications', 'register', 'root', 'settings', 'shop', 'staff', 'support', 'system', 'user', 'users',
+]);
+
+// Формат уже нормализован normalizeSlug; здесь — то, что нормализацией не поймать: длина, служебные имена, «_» по краям.
+function assertSlugValid(slug: string) {
+  if (slug.length < SLUG_MIN_LENGTH) throw httpError(`Адрес группы — минимум ${SLUG_MIN_LENGTH} символа`, 400);
+  if (!/^[a-z0-9]/.test(slug) || !/[a-z0-9]$/.test(slug)) throw httpError('Адрес группы должен начинаться и заканчиваться буквой или цифрой', 400);
+  if (/[-_]{2,}/.test(slug)) throw httpError('Адрес группы: нельзя ставить два дефиса или подчёркивания подряд', 400);
+  if (RESERVED_SLUGS.has(slug)) throw httpError('Этот адрес зарезервирован', 400);
+}
+
 // A slug must be unique among live slugs and among the redirect aliases of other groups.
 async function assertSlugFree(slug: string, exceptGroupId?: string) {
   const clash = await prisma.group.findFirst({
@@ -518,6 +533,7 @@ export const groupService = {
     if (!GROUP_TYPES.includes(input.type)) throw httpError('Unknown group type', 400);
     const slug = normalizeSlug(input.slug ?? '').slice(0, 60);
     if (!slug) throw httpError('Group slug is required', 400);
+    assertSlugValid(slug);
     await assertSlugFree(slug);
     return prisma.$transaction(async (tx) => {
       const owner = await tx.user.findUnique({
@@ -605,6 +621,7 @@ export const groupService = {
       // Fetch current slug to save as alias
       const current = await prisma.group.findUnique({ where: { id: groupId }, select: { slug: true, slug_aliases: true } });
       if (current && current.slug !== newSlug) {
+        assertSlugValid(newSlug);
         await assertSlugFree(newSlug, groupId);
         // Old slug becomes a redirect alias (limit 10); the slug we move to stops being an alias
         const aliases = [...new Set([...current.slug_aliases.filter((a) => a !== newSlug), current.slug])].slice(-10);
@@ -804,7 +821,8 @@ export const groupService = {
       await tx.groupMember.upsert({
         where: { group_id_user_id: { group_id: groupId, user_id: userId } },
         update: {},
-        create: { group_id: groupId, user_id: userId, role: 'member' },
+        // Колокольчик новых постов включается вручную: иначе при многих подписках уведомления превращаются в спам
+        create: { group_id: groupId, user_id: userId, role: 'member', notify_posts: false },
       });
       // A full member doesn't need a separate notification-only subscription or a pending application
       await tx.groupSubscriber.deleteMany({ where: { group_id: groupId, user_id: userId } });

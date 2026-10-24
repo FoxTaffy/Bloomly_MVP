@@ -57,6 +57,25 @@ function isAlreadyTargetLang(text: string, target: string): boolean {
  * Translate `text` to the target language using the free MyMemory API.
  * Returns null if translation failed or is same as original.
  */
+const MAX_TRANSLATE_CHARS = 3000
+const TRANSLATE_CHUNK_CHARS = 450
+
+/** Делит текст на куски до TRANSLATE_CHUNK_CHARS по границам абзацев/предложений; пробелы и переносы остаются в кусках. */
+export function splitForTranslate(text: string): string[] {
+  const chunks: string[] = []
+  let rest = text
+  while (rest.length > TRANSLATE_CHUNK_CHARS) {
+    const window = rest.slice(0, TRANSLATE_CHUNK_CHARS)
+    const cut = Math.max(window.lastIndexOf('\n'), window.search(/[.!?…][^.!?…]*$/))
+    const space = window.lastIndexOf(' ')
+    const at = cut > TRANSLATE_CHUNK_CHARS * 0.4 ? cut + 1 : space > TRANSLATE_CHUNK_CHARS * 0.4 ? space + 1 : TRANSLATE_CHUNK_CHARS
+    chunks.push(rest.slice(0, at))
+    rest = rest.slice(at)
+  }
+  if (rest) chunks.push(rest)
+  return chunks
+}
+
 export async function translateText(text: string, targetLang: Lang): Promise<string | null> {
   const target = LANG_TO_API[targetLang]
   if (!target) return null
@@ -71,7 +90,7 @@ export async function translateText(text: string, targetLang: Lang): Promise<str
   const restoreMentions = (s: string) =>
     mentions.length ? s.replace(/\[M(\d+)\]/g, (_, i) => mentions[+i] ?? '') : s
 
-  const trimmed = textForApi.trim().slice(0, 500)
+  const trimmed = textForApi.trim().slice(0, MAX_TRANSLATE_CHARS)
   if (!trimmed) return null
 
   // Skip when the text is already in the target language (by script, letters only —
@@ -80,10 +99,10 @@ export async function translateText(text: string, targetLang: Lang): Promise<str
 
   const INVALID_PREFIXES = ["'AUTO' IS AN INVALID", 'MYMEMORY WARNING', 'PLEASE NOTE']
 
-  const tryFetch = async (src: string): Promise<string | null> => {
+  const fetchChunk = async (src: string, chunk: string): Promise<string | null> => {
     if (Date.now() < blockedUntil) return null
     try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed)}&langpair=${src}|${target}`
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=${src}|${target}`
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
       if (res.status === 429) { blockedUntil = Date.now() + 10 * 60_000; return null }
       const data = await res.json()
@@ -98,11 +117,24 @@ export async function translateText(text: string, targetLang: Lang): Promise<str
           t &&
           t.trim() &&
           !INVALID_PREFIXES.some(p => t.startsWith(p)) &&
-          t.toLowerCase().trim() !== trimmed.toLowerCase()
+          t.toLowerCase().trim() !== chunk.toLowerCase()
         ) return t
       }
     } catch { /* ignore */ }
     return null
+  }
+
+  // MyMemory принимает до ~500 символов за запрос: длинный текст переводим кусками и склеиваем.
+  // Кусок, который не перевёлся, остаётся оригиналом; если не перевёлся ни один — источник не подошёл.
+  const tryFetch = async (src: string): Promise<string | null> => {
+    const parts: string[] = []
+    let translated = 0
+    for (const chunk of splitForTranslate(trimmed)) {
+      const t = await fetchChunk(src, chunk)
+      if (t) translated++
+      parts.push(t ?? chunk)
+    }
+    return translated ? parts.join('') : null
   }
 
   // Try Russian source first (most content on this platform is Russian),

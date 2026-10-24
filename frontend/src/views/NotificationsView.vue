@@ -3,6 +3,7 @@ import { apiErrorMessage } from '@/lib/apiError'
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
+import { announceNotificationsRead } from '@/lib/notificationsRead'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -91,6 +92,7 @@ const markAllRead = async () => {
   try {
     await api.post('/notifications/read', {})
     rawNotifications.value.forEach((n: any) => { n.is_read = true })
+    announceNotificationsRead()
   } catch {}
 }
 
@@ -215,7 +217,8 @@ const onClick = async (n: any) => {
   if (!n.is_read) {
     const members: any[] = n._members ?? [n]
     members.forEach((m: any) => { m.is_read = true })
-    try { await api.post('/notifications/read', { ids: members.map((m: any) => m.id) }) } catch {}
+    const ids = members.map((m: any) => m.id)
+    try { await api.post('/notifications/read', { ids }); announceNotificationsRead(ids) } catch {}
   }
   if (n.type === 'automod_warn') warningModal.open(n)
   if ((n.type.startsWith('den_application_') || n.type.startsWith('den_order_')) && (n.meta?.orderId || n.meta?.listingId)) {
@@ -273,6 +276,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearInterval(refreshTimer); clearTimeout(actionErrorTimer)
   document.removeEventListener('visibilitychange', refreshIfVisible)
+  // Список был на экране — при уходе со страницы считаем показанное прочитанным. Запрос завершается уже после
+  // смены страницы, поэтому шапку и меню извещаем событием: иначе их бейдж не гаснет до перезагрузки.
+  if (unreadCount.value > 0) api.post('/notifications/read', {}).then(() => announceNotificationsRead()).catch(() => {})
 })
 </script>
 

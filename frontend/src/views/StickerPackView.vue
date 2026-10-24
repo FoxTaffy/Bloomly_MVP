@@ -274,7 +274,7 @@ const chartData = computed(() => {
                   <p v-if="actionError" class="text-xs font-bold text-brand-error max-w-[16rem]">{{ actionError }}</p>
                   <button
                     v-if="isOwn()"
-                    @click="router.push({ name: 'shop' })"
+                    @click="router.push({ name: 'shop', query: { edit: pack.id } })"
                     class="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-2xl bg-brand-bg border border-brand-border hover:bg-brand-border text-white transition-all">
                     <BIcon name="Pencil" class="w-4 h-4" />
                     Управление
