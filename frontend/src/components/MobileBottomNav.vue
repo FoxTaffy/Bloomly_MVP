@@ -16,6 +16,9 @@ const messagesStore = useMessagesStore()
 
 const mobileHubOpen = ref(false)
 
+// Открытый диалог занимает весь экран: меню скрываем, чтобы не перекрывало поле ввода
+const chatOpen = computed(() => route.name === 'messages' && !!messagesStore.activeId)
+
 type MobileTab = 'home' | 'friends' | 'messages' | 'profile'
 
 const activeTab = computed<MobileTab>(() => {
@@ -51,7 +54,7 @@ function handleNewStory() {
 </script>
 
 <template>
-  <nav class="fixed bottom-0 inset-x-0 z-200 md:hidden">
+  <nav v-if="!chatOpen" class="fixed bottom-0 inset-x-0 z-200 md:hidden">
     <!-- Blur backdrop -->
     <div class="absolute inset-0 bg-brand-bg/90 backdrop-blur-xl border-t border-brand-border"></div>
 

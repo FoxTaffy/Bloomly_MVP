@@ -11,6 +11,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
 import BIcon from '@/components/BIcon.vue'
+import FriendsStatusBar from '@/components/FriendsStatusBar.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const router = useRouter()
@@ -272,6 +273,9 @@ onBeforeUnmount(() => {
           </div>
           <h1 class="text-xl font-extrabold text-white">{{ langStore.t.explore }}</h1>
         </div>
+
+        <!-- Друзья: статусы и истории -->
+        <FriendsStatusBar />
 
         <!-- Sort tabs -->
         <div class="flex items-center gap-2 flex-wrap m-scroll-row max-md:-mx-3 max-md:px-3">

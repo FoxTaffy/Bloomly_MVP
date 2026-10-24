@@ -69,23 +69,27 @@
     <div class="flex-1 overflow-y-auto min-h-0" @click="menuConvId = null; muteMenuFor = null; muteDurationPickerFor = null">
 
       <!-- ═══ Conversations (personal / groups / community / customer) tabs ═══ -->
-        <template v-if="store.loading">
-          <div v-for="i in 5" :key="i" class="flex items-center gap-3 px-3 py-3">
-            <div class="w-10 h-10 rounded-full bg-brand-border animate-pulse shrink-0" />
-            <div class="flex-1 stack-y-2">
-              <div class="h-3 bg-brand-border rounded-full animate-pulse w-28" />
-              <div class="h-2.5 bg-brand-border rounded-full animate-pulse w-40" />
+        <div v-if="showSkeleton" class="conv-skeleton" role="status" aria-busy="true">
+          <div v-for="i in 7" :key="i" class="w-[calc(100%-12px)] mx-1.5 mb-0.5 flex items-center gap-3 px-2.5 py-2.5"
+            :style="{ animationDelay: `${i * 60}ms` }">
+            <div class="skel w-11 h-11 rounded-full shrink-0" />
+            <div class="flex-1 min-w-0 space-y-2">
+              <div class="flex items-center justify-between gap-3">
+                <div class="skel h-3 rounded-full" :style="{ width: SKEL_NAME_W[i % SKEL_NAME_W.length] }" />
+                <div class="skel h-2 w-8 rounded-full shrink-0" />
+              </div>
+              <div class="skel h-2.5 rounded-full" :style="{ width: SKEL_MSG_W[i % SKEL_MSG_W.length] }" />
             </div>
           </div>
-        </template>
-        <div v-else-if="!filtered.length && activeCategory === 'community'" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
+        </div>
+        <div v-else-if="!store.loading && !filtered.length && activeCategory === 'community'" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
           <div class="w-14 h-14 rounded-2xl bg-linear-to-br/srgb from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
             <BIcon name="Globe" class="w-6 h-6 text-brand-accent/60" />
           </div>
           <span>{{ langStore.t.convNoGroups }}</span>
           <button @click="router.push('/groups')" class="text-brand-accent text-xs hover:underline mt-1">{{ langStore.t.findGroupsLink }}</button>
         </div>
-        <div v-else-if="!filtered.length" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
+        <div v-else-if="!store.loading && !filtered.length" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
           <div class="w-14 h-14 rounded-2xl bg-linear-to-br/srgb from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
             <BIcon name="MessageCircle" class="w-6 h-6 text-brand-accent/60" />
           </div>
@@ -573,6 +577,33 @@ const auth  = useAuthStore()
 const groupsStore = useGroupsStore()
 const router = useRouter()
 const search = ref('')
+
+// Skeleton only on a real initial load, and only if it lasts long enough to be noticed:
+// a fast response never flashes it, and once shown it stays a minimum time (no flicker).
+const SKEL_NAME_W = ['42%', '55%', '35%', '48%', '60%']
+const SKEL_MSG_W = ['72%', '58%', '84%', '66%', '50%']
+const SKEL_DELAY_MS = 150
+const SKEL_MIN_MS = 350
+const showSkeleton = ref(false)
+let skelShownAt = 0
+let skelTimer: ReturnType<typeof setTimeout> | null = null
+const clearSkelTimer = () => { if (skelTimer) { clearTimeout(skelTimer); skelTimer = null } }
+watch(
+  () => store.loading && !store.conversations.length,
+  (want) => {
+    clearSkelTimer()
+    if (want) {
+      if (showSkeleton.value) return
+      skelTimer = setTimeout(() => { showSkeleton.value = true; skelShownAt = Date.now() }, SKEL_DELAY_MS)
+    } else if (showSkeleton.value) {
+      const left = SKEL_MIN_MS - (Date.now() - skelShownAt)
+      if (left > 0) skelTimer = setTimeout(() => { showSkeleton.value = false }, left)
+      else showSkeleton.value = false
+    }
+  },
+  { immediate: true },
+)
+onUnmounted(clearSkelTimer)
 const activeCategory = ref<'all' | 'personal' | 'groups' | 'community' | 'customer'>('personal')
 const showArchived = ref(false)
 const unreadOnly = ref(false)
@@ -893,6 +924,15 @@ async function toggleArchive(conv: Conversation) {
 </script>
 
 <style scoped>
+.skel {
+  background: linear-gradient(100deg, rgba(255,255,255,0.05) 30%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.05) 70%);
+  background-size: 250% 100%;
+  animation: skel-shimmer 1.6s ease-in-out infinite;
+}
+.conv-skeleton > div { animation: skel-in 0.25s ease both; }
+@keyframes skel-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@keyframes skel-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 

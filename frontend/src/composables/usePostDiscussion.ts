@@ -75,7 +75,9 @@ export function usePostDiscussion(postId: () => string, userId: () => string | u
           const vote = item.user_vote ?? item.userVote
           if (vote === 1 || vote === -1 || vote === 0) target.votes[item.id] = vote
         }
-        if (target.total === null) target.total = target.comments.reduce((n, item) => n + 1 + (item.replies?.length ?? 0), 0)
+        // Счётчик поста (_count) учитывает и скрытые для этого читателя комментарии (чёрный список,
+        // стоп-слова, фильтр спама) — после загрузки показываем столько, сколько читатель реально видит.
+        target.total = target.comments.reduce((n, item) => n + 1 + (item.replies?.length ?? 0), 0)
         target.loadedAt = Date.now()
       } catch {
         target.error = 'Не удалось загрузить комментарии. Проверьте соединение и повторите.'

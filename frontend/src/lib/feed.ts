@@ -35,10 +35,12 @@ export interface FeedRequest {
   /** 'hide' | 'blur' | 'show' — режим NSFW из useNsfwMode */
   nsfw: string
   sort: FeedSort
+  /** nextCursor прошлого ответа: с ним страница запрашивается «после последнего поста», а не по номеру */
+  cursor?: string | null
 }
 
-export function feedUrl({ mode, page, nsfw, sort }: FeedRequest): string {
-  const params = new URLSearchParams({ page: String(page), nsfw })
+export function feedUrl({ mode, page, nsfw, sort, cursor }: FeedRequest): string {
+  const params = new URLSearchParams(cursor ? { nsfw, cursor } : { page: String(page), nsfw })
   const applySort = () => {
     const [by, period] = sort.split('-')
     params.set('sort', by)

@@ -46,18 +46,25 @@ export function useFeed(nsfwMode: Ref<string>, mode: Ref<FeedMode> = ref<FeedMod
 
   let generation = 0
   let page = 1
+  // Курсор следующей страницы от сервера: undefined — сервер его не отдал (откат на номер страницы), null — лента кончилась
+  let cursor: string | null | undefined
+
+  interface FeedPage { posts: any[]; nextCursor?: string | null }
   let controller: AbortController | null = null
   let lastCheck = Date.now()
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
-  const request = (pageNumber: number) =>
-    feedUrl({ mode: mode.value, page: pageNumber, nsfw: nsfwMode.value, sort: sort.value })
+  const request = (pageNumber: number, after?: string | null) =>
+    feedUrl({ mode: mode.value, page: pageNumber, nsfw: nsfwMode.value, sort: sort.value, cursor: after })
 
-  async function fetchPage(pageNumber: number, signal?: AbortSignal): Promise<any[]> {
-    const res = await api.get(request(pageNumber), { signal })
+  async function fetchPage(pageNumber: number, after?: string | null, signal?: AbortSignal): Promise<FeedPage> {
+    const res = await api.get(request(pageNumber, after), { signal })
     if (!res.data.success) throw new Error('feed request failed')
-    return res.data.data.posts ?? []
+    return { posts: res.data.data.posts ?? [], nextCursor: res.data.data.nextCursor }
   }
+
+  /** Есть ли ещё страницы: решает сервер (nextCursor), а без него — пустой ли был ответ. */
+  const moreAfter = (result: FeedPage) => (result.nextCursor === undefined ? result.posts.length > 0 : result.nextCursor !== null)
 
   // ── Состояние «я лайкнул / подписан» для показанных постов ─────────────────
   async function loadViewerState(list: any[], gen: number) {
@@ -83,6 +90,7 @@ export function useFeed(nsfwMode: Ref<string>, mode: Ref<FeedMode> = ref<FeedMod
     controller = new AbortController()
     const gen = ++generation
     page = 1
+    cursor = undefined
     isLoading.value = true
     isLoadingMore.value = false
     hasMore.value = true
@@ -90,10 +98,11 @@ export function useFeed(nsfwMode: Ref<string>, mode: Ref<FeedMode> = ref<FeedMod
     // Состояние прошлой выдачи не должно копиться: оно нужно только показанным постам
     for (const id of Object.keys(viewerState)) delete viewerState[id]
     try {
-      const raw = await fetchPage(1, controller.signal)
+      const result = await fetchPage(1, null, controller.signal)
       if (gen !== generation) return
-      posts.value = raw.filter(isRenderablePost)
-      hasMore.value = raw.length > 0
+      posts.value = result.posts.filter(isRenderablePost)
+      cursor = result.nextCursor
+      hasMore.value = moreAfter(result)
       newPostsCount.value = 0
       lastCheck = Date.now()
       void loadViewerState(posts.value, gen)
@@ -112,15 +121,14 @@ export function useFeed(nsfwMode: Ref<string>, mode: Ref<FeedMode> = ref<FeedMod
     const next = page + 1
     isLoadingMore.value = true
     try {
-      const raw = await fetchPage(next, controller?.signal)
+      const result = await fetchPage(next, cursor, controller?.signal)
       if (gen !== generation) return
-      // Номер страницы двигаем только после успеха: иначе при сбое страница терялась бы навсегда
+      // Позицию двигаем только после успеха: иначе при сбое страница терялась бы навсегда
       page = next
-      if (!raw.length) {
-        hasMore.value = false
-        return
-      }
-      const fresh = raw.filter(isRenderablePost)
+      cursor = result.nextCursor
+      hasMore.value = moreAfter(result)
+      const fresh = result.posts.filter(isRenderablePost)
+      if (!fresh.length) return
       posts.value = appendUnique(posts.value, fresh)
       void loadViewerState(fresh, gen)
     } catch (error) {

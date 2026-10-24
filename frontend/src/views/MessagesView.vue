@@ -7,7 +7,8 @@
 
       <main class="flex-1 min-w-0 pb-0 md:pb-4">
         <div
-          class="msgs-shell relative flex overflow-hidden h-[calc(100dvh-3.5rem-62px)] md:h-[calc(100dvh-7.25rem)] md:rounded-[28px] md:border md:border-white/[0.07] md:shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+          :class="{ 'msgs-shell-chat': activeConvId }"
+          class="msgs-shell relative flex overflow-hidden msgs-shell-h md:h-[calc(100dvh-7.25rem)] md:rounded-[28px] md:border md:border-white/[0.07] md:shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
         >
           <div class="pointer-events-none absolute inset-0 msgs-glow" aria-hidden="true" />
 
@@ -348,8 +349,24 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+// Высота видимой области (без виртуальной клавиатуры) — чтобы поле ввода не уходило под неё
+function syncViewportHeight() {
+  const vv = window.visualViewport
+  if (!vv) return
+  document.documentElement.style.setProperty('--msgs-vvh', `${Math.round(vv.height)}px`)
+  if (vv.offsetTop > 0) window.scrollTo(0, 0)
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
+  syncViewportHeight()
+  window.visualViewport?.addEventListener('resize', syncViewportHeight)
+  window.visualViewport?.addEventListener('scroll', syncViewportHeight)
+})
+onUnmounted(() => {
+  window.visualViewport?.removeEventListener('resize', syncViewportHeight)
+  window.visualViewport?.removeEventListener('scroll', syncViewportHeight)
+  document.documentElement.style.removeProperty('--msgs-vvh')
 })
 
 watch(activeConvId, async (id) => {
@@ -401,6 +418,11 @@ async function startDm(userId: string) {
 </script>
 
 <style scoped>
+/* Мобильная высота: список — над нижним меню; открытый диалог — весь экран (меню скрыто), с учётом клавиатуры */
+@media (max-width: 767px) {
+  .msgs-shell-h { height: calc(100dvh - 3.5rem - 62px); }
+  .msgs-shell-h.msgs-shell-chat { height: calc(var(--msgs-vvh, 100dvh) - 3.5rem); }
+}
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 

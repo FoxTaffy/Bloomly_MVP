@@ -40,22 +40,30 @@ function removeTag(tag: string) {
 
 <template>
   <div class="mt-3 space-y-3">
+    <!-- Теги — как в форме создания поста: таблетки (нажатие убирает тег) и поле «тег + Enter».
+         Пробел внутри тега допустим и станет «_», как при создании. -->
     <div class="flex flex-wrap items-center gap-1.5">
-      <span
+      <button
         v-for="tag in tags" :key="tag"
-        class="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-accent/10 border border-brand-accent/20 rounded-md text-[11px] font-semibold text-brand-accent">
+        type="button"
+        @click="removeTag(tag)"
+        :aria-label="`Убрать тег ${tag}`"
+        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-xs font-semibold hover:bg-brand-accent/25 transition-colors">
         #{{ tag }}
-        <button type="button" @click="removeTag(tag)" class="hover:text-white" aria-label="Убрать тег"><X class="w-3 h-3" /></button>
-      </span>
-      <input
-        v-model="tagInput"
-        @keydown.enter.prevent="addTag"
-        @keydown.space.prevent="addTag"
-        @keydown.comma.prevent="addTag"
-        @blur="addTag"
-        placeholder="Добавить тег"
-        maxlength="50"
-        class="min-w-[8rem] flex-1 bg-transparent text-xs text-white placeholder-white/35 outline-hidden px-1 py-1" />
+        <X class="w-3 h-3 text-brand-accent/60" aria-hidden="true" />
+      </button>
+      <div class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg focus-within:border-brand-border transition-all">
+        <BIcon name="Hash" class="w-4 h-4 text-white/55 shrink-0" aria-hidden="true" />
+        <input
+          v-model="tagInput"
+          @keydown.enter.prevent="addTag"
+          @keydown.comma.prevent="addTag"
+          @blur="addTag"
+          placeholder="тег + Enter"
+          aria-label="Добавить тег"
+          maxlength="50"
+          class="w-28 bg-transparent text-xs text-white placeholder-brand-muted outline-hidden" />
+      </div>
     </div>
 
     <div class="flex items-center gap-2">

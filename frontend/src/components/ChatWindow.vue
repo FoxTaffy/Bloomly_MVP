@@ -1329,14 +1329,19 @@
               </button>
             </div>
           </TransitionGroup>
+          <div class="relative">
+          <!-- Только эмодзи в поле — подсказываем стикеры с этим эмодзи из своей библиотеки -->
+          <StickerSuggestStrip :items="editingMsg || pendingAttachments.length ? [] : stickerSuggest.items.value" @pick="sendSuggestedSticker" />
           <textarea ref="inputEl" v-model="draft" rows="1"
             :placeholder="pendingAttachments.length ? langStore.t.chatCaptionPlaceholder : langStore.t.chatMessagePlaceholder"
             class="block w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-[9px] text-sm text-white placeholder-brand-muted resize-none outline-hidden focus:border-brand-accent/60 transition-colors max-h-32 overflow-y-auto"
             @keydown.enter.exact.prevent="submit"
             @keydown.enter.shift.exact="newline"
+            @keydown.escape="stickerSuggest.items.value.length && ($event.stopPropagation(), stickerSuggest.dismiss())"
             @paste="onPaste"
             @input="onInput"
           />
+          </div>
         </div>
 
         <!-- Send / Mic toggle button -->
@@ -1400,6 +1405,8 @@ import WalletCard from '@/components/WalletCard.vue'
 import { apiErrorCode, apiErrorDetails, apiErrorMessage } from '@/lib/apiError'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
+import StickerSuggestStrip from '@/components/StickerSuggestStrip.vue'
+import { useStickerSuggest } from '@/composables/useStickerSuggest'
 import UserBadges from '@/components/UserBadges.vue'
 import StickerRenderer from '@/components/StickerRenderer.vue'
 import StickerPackPreviewModal from '@/components/StickerPackPreviewModal.vue'
@@ -1696,6 +1703,15 @@ function sendSticker(url: string) {
   showStickerPanel.value = false
   if (store.checkSpamGate()) return
   store.sendMessage(props.convId, '', url, 'sticker')
+}
+
+// Подсказка стикера по эмодзи: отправляем стикер вместо набранного эмодзи
+const stickerSuggest = useStickerSuggest(draft)
+function sendSuggestedSticker(url: string) {
+  if (store.checkSpamGate()) return
+  store.sendMessage(props.convId, '', url, 'sticker')
+  draft.value = ''
+  inputEl.value?.focus()
 }
 
 function insertEmojiFromStickers(emoji: string) {

@@ -13,7 +13,7 @@ import BIcon from '@/components/BIcon.vue'
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'imported', payload: { title: string; tg_name: string; sticker_urls: string[] }): void
+  (e: 'imported', payload: { title: string; tg_name: string; sticker_urls: string[]; sticker_emojis?: string[] }): void
 }>()
 
 const store = useStickersStore()
@@ -23,7 +23,7 @@ type Step = 'idle' | 'loading' | 'done' | 'error'
 const step    = ref<Step>('idle')
 const link    = ref('')
 const error   = ref('')
-const result  = ref<{ title: string; tg_name: string; total: number; skipped?: number; imported: number; sticker_urls: string[] } | null>(null)
+const result  = ref<{ title: string; tg_name: string; total: number; skipped?: number; imported: number; sticker_urls: string[]; sticker_emojis?: string[] } | null>(null)
 
 // ── Link paste helper ─────────────────────────────────────────────────────
 function extractName(raw: string): string {
@@ -58,6 +58,8 @@ function useResult() {
     title:        result.value.title,
     tg_name:      result.value.tg_name,
     sticker_urls: result.value.sticker_urls,
+    // Эмодзи из Telegram по тем же позициям — для подсказок стикеров по эмодзи
+    sticker_emojis: result.value.sticker_emojis ?? [],
   })
   emit('close')
 }

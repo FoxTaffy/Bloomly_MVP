@@ -37,7 +37,7 @@ async function removeBookmark() {
     <!-- Image -->
     <div class="relative aspect-4/3 shrink-0 bg-[#090d20]">
       <img v-if="listing.images?.[0]" :src="listing.images[0]" :alt="listing.title"
-        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+        class="w-full h-full object-contain"
         :class="listing.is_nsfw && !nsfwEnabled ? 'blur-xl' : ''" />
       <div v-else class="w-full h-full flex items-center justify-center">
         <BIcon name="Image" class="w-10 h-10 text-brand-border" />

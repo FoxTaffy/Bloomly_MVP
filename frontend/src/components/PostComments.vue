@@ -11,6 +11,10 @@ import VerificationBadge from './VerificationBadge.vue'
 import StickerPanel from './StickerPanel.vue'
 import StickerRenderer from './StickerRenderer.vue'
 import SafeMedia from './SafeMedia.vue'
+import MentionDropdown from './MentionDropdown.vue'
+import StickerSuggestStrip from './StickerSuggestStrip.vue'
+import { useStickerSuggest } from '@/composables/useStickerSuggest'
+import { useMentionInput } from '@/composables/useMentionInput'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { usePostDiscussion } from '@/composables/usePostDiscussion'
 import * as fmt from '@/lib/format'
@@ -115,14 +119,24 @@ const deleting = ref(false)
 const pendingDelete = ref<string | null>(null)
 let disposed = false
 let loadGeneration = 0
+// @упоминания в комментарии и ответе: друзья — первыми; Enter при открытом меню выбирает, а не отправляет
 function onCommentKey(e: KeyboardEvent) {
+  if (commentMention.onKeydown(e)) return
+  if (e.key === 'Escape' && commentStickerSuggest.items.value.length) { e.stopPropagation(); commentStickerSuggest.dismiss(); return }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitComment() }
 }
 function onReplyKey(e: KeyboardEvent) {
+  if (replyMention.onKeydown(e)) return
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitReply() }
 }
 const replyingTo     = ref<{ id: string; username: string } | null>(null)
 const replyText      = ref('')
+const commentInputRef = ref<HTMLTextAreaElement | null>(null)
+const replyInputRef = ref<HTMLInputElement | null>(null)
+const commentMention = useMentionInput(commentText, commentInputRef)
+const replyMention = useMentionInput(replyText, replyInputRef)
+// Поле ответа внутри v-for: строковый ref собрал бы массив, поэтому — функция (поле ответа одно на экране)
+function setReplyInput(el: unknown) { replyInputRef.value = el instanceof HTMLInputElement ? el : null }
 const submitting = discussion.submitting
 const expandedReplies = ref<Set<string>>(new Set())
 const userVotes = discussion.votes
@@ -364,6 +378,12 @@ function pickCommentSticker(url: string) {
   submitCommentSticker(url)
 }
 
+const commentStickerSuggest = useStickerSuggest(commentText)
+function sendSuggestedCommentSticker(url: string) {
+  commentText.value = ''
+  pickCommentSticker(url)
+}
+
 const submitReply = async () => {
   const hasText = !!replyText.value.trim()
   const hasFile = !!replyFileUrl.value
@@ -509,7 +529,9 @@ const vClickOutside = {
 </script>
 
 <template>
-  <div ref="root" class="comments-root" :class="{ 'comments-fullscreen': fullscreen, 'comments-preview': !!previewLimit }">
+  <!-- activate: если IntersectionObserver не сработал (видео-карточки, вложенные прокрутки), список всё равно загрузится при наведении или фокусе -->
+  <div ref="root" class="comments-root" :class="{ 'comments-fullscreen': fullscreen, 'comments-inline': !fullscreen, 'comments-preview': !!previewLimit }"
+    @pointerenter.once="activate" @focusin="activate">
     <!-- Comments disabled by author -->
     <div v-if="commentsDisabled" class="comment-access-message flex items-center gap-2 text-sm text-white/40 bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
       <BIcon name="MessageSquareOff" class="w-4 h-4" /> Комментарии отключены автором
@@ -613,14 +635,23 @@ const vClickOutside = {
 
         <div class="comment-input-label" aria-hidden="true">Ваш комментарий</div>
         <div class="comment-compose-controls">
-          <textarea rows="2" aria-label="Ваш комментарий" maxlength="5000" :disabled="submitting"
-            v-model="commentText"
-            @keydown="onCommentKey"
-            @focus="showReplyStickerPanel = false"
-            @paste="onCommentPaste"
-            :placeholder="langStore.t.writeComment"
-            class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 max-md:px-3 text-sm text-white placeholder-brand-muted outline-hidden focus:border-brand-accent"
-          ></textarea>
+          <div class="comment-mention-field">
+            <textarea ref="commentInputRef" rows="2" aria-label="Ваш комментарий" maxlength="5000" :disabled="submitting"
+              v-model="commentText"
+              @input="commentMention.onInput()"
+              @click="commentMention.onInput()"
+              @blur="commentMention.onBlur()"
+              @keydown="onCommentKey"
+              @focus="showReplyStickerPanel = false"
+              @paste="onCommentPaste"
+              :placeholder="langStore.t.writeComment"
+              class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 max-md:px-3 text-sm text-white placeholder-brand-muted outline-hidden focus:border-brand-accent"
+            ></textarea>
+            <MentionDropdown placement="top" :items="commentMention.open.value ? commentMention.items.value : []" :active="commentMention.active.value"
+              @pick="commentMention.pick" @hover="i => commentMention.active.value = i" />
+            <!-- Только эмодзи в поле — стикеры с этим эмодзи; нажатие отправляет стикер вместо текста -->
+            <StickerSuggestStrip :items="commentFileUrl ? [] : commentStickerSuggest.items.value" @pick="sendSuggestedCommentSticker" />
+          </div>
           <!-- Media attach button -->
           <button
             type="button"
@@ -661,7 +692,7 @@ const vClickOutside = {
     </div>
     <div class="comments-scroll">
       <slot name="post" />
-      <div v-if="fullscreen || (previewLimit && comments.length)" class="comments-list-heading"><span v-if="previewLimit">Комментарии</span><div class="flex items-center gap-2 ml-auto"><button class="comments-refresh" type="button" aria-label="Обновить комментарии" title="Обновить комментарии" @click="fetchComments(true)" :disabled="isLoading"><BIcon name="RefreshCw" :class="['w-4 h-4', { 'animate-spin': isLoading }]" aria-hidden="true" /></button><select v-model="sortOrder" aria-label="Порядок комментариев"><option value="newest">Сначала новые</option><option value="popular">Популярные</option><option value="oldest">Сначала старые</option></select></div></div>
+      <div v-if="comments.length && (fullscreen || previewLimit)" class="comments-list-heading"><span v-if="previewLimit">Комментарии</span><div class="flex items-center gap-2 ml-auto"><button class="comments-refresh" type="button" aria-label="Обновить комментарии" title="Обновить комментарии" @click="fetchComments(true)" :disabled="isLoading"><BIcon name="RefreshCw" :class="['w-4 h-4', { 'animate-spin': isLoading }]" aria-hidden="true" /></button><select v-model="sortOrder" aria-label="Порядок комментариев"><option value="newest">Сначала новые</option><option value="popular">Популярные</option><option value="oldest">Сначала старые</option></select></div></div>
     <!-- Loading -->
     <div v-if="isLoading && !comments.length" role="status" aria-label="Загрузка комментариев" class="text-center py-3 text-white/55 text-sm">
       <BIcon name="Loader2" class="w-5 h-5 animate-spin inline-block" />
@@ -729,18 +760,18 @@ const vClickOutside = {
             <!-- Actions row -->
             <div class="comment-actions flex items-center gap-3 mt-1.5 pl-1">
               <!-- Vote -->
-              <div class="flex items-center gap-0.5 bg-brand-bg rounded-full border border-brand-border/60 px-0.5">
+              <div class="comment-vote">
                 <button @click="voteComment(comment.id, 1)" aria-label="Нравится комментарий" :disabled="!auth.user || pendingVotes.has(comment.id)" :aria-pressed="userVotes[comment.id] === 1"
-                  class="p-0.5 rounded-full transition-all duration-150"
+                  class="comment-vote-btn"
                   :class="(userVotes[comment.id] ?? 0) === 1 ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.6)]' : 'text-white/35 hover:text-emerald-400'">
                   <BIcon name="ArrowBigUp" class="w-4.5 h-4.5" :fill="userVotes[comment.id] === 1 ? 'currentColor' : 'none'" aria-hidden="true" />
                 </button>
-                <span class="comment-vote-count text-xs font-semibold min-w-[16px] text-center tabular-nums"
+                <span class="comment-vote-count tabular-nums"
                   :class="(userVotes[comment.id] ?? 0) === 1 ? 'text-emerald-400' : (userVotes[comment.id] ?? 0) === -1 ? 'text-rose-400' : comment.rating > 0 ? 'text-emerald-300/80' : comment.rating < 0 ? 'text-rose-300/80' : 'text-white/50'">
                   {{ comment.rating }}
                 </span>
                 <button @click="voteComment(comment.id, -1)" aria-label="Не нравится комментарий" :disabled="!auth.user || pendingVotes.has(comment.id)" :aria-pressed="userVotes[comment.id] === -1"
-                  class="p-0.5 rounded-full transition-all duration-150"
+                  class="comment-vote-btn"
                   :class="(userVotes[comment.id] ?? 0) === -1 ? 'text-rose-400 drop-shadow-[0_0_5px_rgba(251,113,133,0.6)]' : 'text-white/35 hover:text-rose-400'">
                   <BIcon name="ArrowBigDown" class="w-4.5 h-4.5" :fill="userVotes[comment.id] === -1 ? 'currentColor' : 'none'" aria-hidden="true" />
                 </button>
@@ -797,14 +828,21 @@ const vClickOutside = {
               <div class="comment-reply-controls flex gap-2 max-md:gap-1.5 items-center">
                 <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border shrink-0 max-md:hidden" />
                 <div v-else class="w-7 h-7 rounded-full border border-brand-border shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px] max-md:hidden">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
-                <input
-                  v-model="replyText" aria-label="Ваш ответ" :disabled="submitting" maxlength="5000"
-                  @keydown="onReplyKey"
-                  @paste="onReplyPaste"
-                  :placeholder="`@${replyingTo?.username}...`"
-                  autofocus
-                  class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-hidden focus:border-brand-accent"
-                />
+                <div class="comment-mention-field comment-reply-field">
+                  <input :ref="setReplyInput"
+                    v-model="replyText" aria-label="Ваш ответ" :disabled="submitting" maxlength="5000"
+                    @input="replyMention.onInput()"
+                    @click="replyMention.onInput()"
+                    @blur="replyMention.onBlur()"
+                    @keydown="onReplyKey"
+                    @paste="onReplyPaste"
+                    :placeholder="`@${replyingTo?.username}...`"
+                    autofocus
+                    class="w-full bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-hidden focus:border-brand-accent"
+                  />
+                  <MentionDropdown placement="top" :items="replyMention.open.value ? replyMention.items.value : []" :active="replyMention.active.value"
+                    @pick="replyMention.pick" @hover="i => replyMention.active.value = i" />
+                </div>
                 <!-- Reply media attach button -->
                 <button
                   type="button"
@@ -882,16 +920,16 @@ const vClickOutside = {
                   </div>
 
                   <div class="comment-actions flex items-center gap-3 mt-1 pl-1">
-                    <div class="flex items-center gap-0.5 bg-brand-bg rounded-full border border-brand-border/60 px-0.5">
+                    <div class="comment-vote">
                       <button @click="voteComment(reply.id, 1)" aria-label="Нравится ответ" :disabled="!auth.user || pendingVotes.has(reply.id)" :aria-pressed="userVotes[reply.id] === 1"
-                        class="p-0.5 rounded-full transition-all duration-150"
+                        class="comment-vote-btn"
                         :class="(userVotes[reply.id] ?? 0) === 1 ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.6)]' : 'text-white/35 hover:text-emerald-400'">
                         <BIcon name="ArrowBigUp" class="w-4.5 h-4.5" :fill="userVotes[reply.id] === 1 ? 'currentColor' : 'none'" aria-hidden="true" />
                       </button>
-                      <span class="comment-vote-count text-xs font-semibold min-w-[14px] text-center tabular-nums"
+                      <span class="comment-vote-count tabular-nums"
                         :class="(userVotes[reply.id] ?? 0) === 1 ? 'text-emerald-400' : (userVotes[reply.id] ?? 0) === -1 ? 'text-rose-400' : reply.rating > 0 ? 'text-emerald-300/80' : reply.rating < 0 ? 'text-rose-300/80' : 'text-white/50'">{{ reply.rating }}</span>
                       <button @click="voteComment(reply.id, -1)" aria-label="Не нравится ответ" :disabled="!auth.user || pendingVotes.has(reply.id)" :aria-pressed="userVotes[reply.id] === -1"
-                        class="p-0.5 rounded-full transition-all duration-150"
+                        class="comment-vote-btn"
                         :class="(userVotes[reply.id] ?? 0) === -1 ? 'text-rose-400 drop-shadow-[0_0_5px_rgba(251,113,133,0.6)]' : 'text-white/35 hover:text-rose-400'">
                         <BIcon name="ArrowBigDown" class="w-4.5 h-4.5" :fill="userVotes[reply.id] === -1 ? 'currentColor' : 'none'" aria-hidden="true" />
                       </button>
@@ -942,21 +980,23 @@ const vClickOutside = {
 .comment-actions > button { flex-shrink:0; width:auto; }
 .comment-compose-controls .comment-send { height:auto; min-height:44px; padding-block:10px; max-width:100%; line-height:1.3; }
 .comments-refresh { display:grid; place-items:center; min-width:36px; min-height:36px; border-radius:10px; border:1px solid var(--color-brand-border); color:var(--color-brand-accent-minus); }
-.comments-preview { display:flex; flex-direction:column; margin:0; padding:0; }
-.comments-preview .comments-scroll { order:1; padding-top:4px; }
-.comments-preview > .comment-composer,.comments-preview > .comment-access-message { order:3; }
-.comments-preview .comments-empty { padding:16px 8px; }
-.comments-preview .comment-compose-controls textarea { min-height:48px; height:48px; }
+/* В карточке (лента и страница поста): отступы задаёт секция карточки (12 px сверху и снизу), внутри тот же шаг 12 px:
+   заголовок → первый комментарий, последний комментарий / «Пока нет комментариев» → поле ввода. Поле ввода — внизу. */
+.comments-root.comments-inline { display:flex; flex-direction:column; margin:0; padding:0; }
+.comments-inline .comments-scroll { order:1; padding-top:0; }
+.comments-inline > .comment-composer,.comments-inline > .comment-access-message { order:3; }
+.comments-inline > .comment-composer { padding:12px 0 0; }
+.comments-inline .comments-list-heading { margin-bottom:12px; }
+.comments-inline .comments-empty { padding:16px 8px; }
+.comments-inline .comments-empty-state { padding:0 8px; }
+.comments-inline .comment-compose-controls textarea { min-height:48px; height:48px; }
 .comments-load-more { width:100%; margin-top:16px; min-height:44px; display:flex; gap:8px; align-items:center; justify-content:center; border:1px solid var(--color-brand-border); border-radius:14px; color:var(--color-brand-accent-minus); font-size:var(--comment-label-size); font-weight:600; }
 .comments-list :is(.text-white\/35,.text-white\/40,.text-white\/50,.text-white\/55) { color:var(--color-brand-accent-minus-minus); }
 .comments-list :is(.text-brand-accent,.text-brand-purple) { color:var(--color-brand-accent-minus); }
-.comments-list button[aria-label*="Нравится"],.comments-list button[aria-label*="нравится"] { min-width:36px; min-height:36px; display:grid; place-items:center; }
-.comments-list button[aria-label*="Нравится"] + span { font-size:14px; min-width:24px; }
 .comments-list :is(.text-emerald-400,.text-emerald-300\/80) { color:var(--color-brand-success); }
 .comments-list :is(.text-rose-400,.text-rose-300\/80) { color:var(--color-brand-pink); }
 .comments-list .border-l-2 { border-color:var(--color-brand-accent-plus); margin-top:12px; padding-left:12px; }
 .comments-list button[aria-expanded] { display:inline-flex; align-items:center; gap:6px; font-size:13px; }
-.comments-list .flex.items-center.gap-0\.5 { border-radius:12px; }
 
 .comments-root {
   --comment-text-size:.875rem;
@@ -973,7 +1013,14 @@ const vClickOutside = {
 .comment-actions { column-gap:10px; }
 .comment-actions > button { font-size:var(--comment-meta-size); font-weight:600; line-height:1.5; }
 .comment-actions > button svg { width:14px; height:14px; }
-.comment-vote-count { font-size:var(--comment-text-size); font-weight:600; min-width:24px; }
+/* Оценка комментария — та же «таблетка», что у поста (PostCard), на ступень меньше: 28 px вместо 32 */
+.comment-vote { display:inline-flex; align-items:center; gap:2px; height:28px; padding:0 2px; border-radius:9999px; border:1px solid var(--color-brand-border); background:var(--color-brand-bg); flex-shrink:0; }
+.comments-list .comment-vote-btn { display:grid; place-items:center; width:24px; height:24px; min-width:24px; min-height:24px; padding:0; border-radius:9999px; transition:color .15s, background-color .15s, filter .15s; }
+.comment-vote-btn svg { width:18px; height:18px; }
+.comment-vote-count { display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:var(--comment-label-size); font-weight:700; min-width:22px; }
+/* Кнопки под комментарием (оценка, ответ, перевод, удаление) заметно реагируют на наведение */
+.comment-actions button, .comment-actions > div > button { cursor:pointer; border-radius:9999px; transition:background-color .15s, color .15s; }
+.comment-actions button:not(:disabled):hover { background:color-mix(in srgb,var(--color-brand-accent) 12%,transparent); }
 .comments-root :is(p,strong,a,span) { overflow-wrap:anywhere; }
 .comments-root :is(button,a,textarea,select):focus-visible { outline:2px solid var(--color-brand-accent-minus); outline-offset:2px; }
 .comments-root button { cursor:pointer; }
@@ -1001,13 +1048,14 @@ const vClickOutside = {
 .comments-list :deep(.flex.items-center.gap-2.mb-1\.5),.comments-list :deep(.flex.items-center.gap-2.mb-1) { flex-wrap:wrap; gap:4px 8px; }
 .comments-list :deep(.flex.items-center.gap-3.mt-1\.5) { flex-wrap:wrap; gap:4px 10px; }
 .comment-reply-controls { flex-wrap:wrap; }
-.comment-reply-controls input { flex-basis:100%; }
+.comment-reply-controls .comment-reply-field { flex-basis:100%; }
+.comment-mention-field { position:relative; grid-column:1 / -1; min-width:0; }
 .comment-reply-controls button { min-width:40px; min-height:40px; }
 .comments-list :deep(input) { min-width:0; min-height:44px; font-size:16px; }
 .comments-list :deep(.bg-brand-bg\/50) { background:color-mix(in srgb,var(--color-brand-bg) 65%,transparent); }
 .comments-empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:20px 12px; text-align:center; color:var(--color-brand-accent-minus-minus); font-size:var(--comment-label-size); line-height:1.5; }
 .comments-empty p { max-width:40ch; }
-.comments-empty-state { flex-direction:row; justify-content:center; padding:14px 8px; gap:8px; color:color-mix(in srgb,var(--color-brand-accent-minus-minus) 70%,var(--color-brand-card)); }
+.comments-empty-state { flex-direction:row; justify-content:center; padding:0 8px; gap:8px; color:color-mix(in srgb,var(--color-brand-accent-minus-minus) 70%,var(--color-brand-card)); }
 .comments-empty-title { font-size:var(--comment-label-size); font-weight:500; line-height:1.5; }
 .comments-retry { min-height:44px; margin-top:4px; padding:8px 16px; border-radius:12px; border:1px solid var(--color-brand-accent); color:var(--color-brand-accent-minus-minus); }
 .comment-action-error { order:2; padding:12px 24px; color:var(--color-brand-pink); font-size:13px; background:var(--color-brand-bg); }

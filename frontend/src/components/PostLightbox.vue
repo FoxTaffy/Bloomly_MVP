@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, useSlots } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BIcon from './BIcon.vue'
 import VerificationBadge from './VerificationBadge.vue'
 import PostComments from './PostComments.vue'
@@ -45,6 +45,8 @@ const props = defineProps<{
   repawCount?: number
   commentsCount?: number
   viewsCount?: number
+  /** Показывать в адресной строке ссылку на публикацию, пока окно открыто (карточка поста в ленте/профиле/группе). */
+  syncAddress?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -64,6 +66,26 @@ const discussion = usePostDiscussion(() => props.postId ?? '', () => authStore.u
 const localCommentsCount = discussion.count
 watch(() => props.commentsCount, count => { if (count !== undefined) discussion.seedCount(count, true) }, { immediate: true })
 watch(() => route.fullPath, () => emit('close'))
+
+// Адрес публикации в строке браузера, пока окно открыто: её можно скопировать или обновить страницу.
+// Без новой записи в истории и без перехода роутера (иначе окно закрылось бы): при закрытии
+// возвращается адрес страницы, с которой окно открыли. Ссылка внутри окна уводит обычным переходом.
+const router = useRouter()
+let addressBeforeOpen: string | null = null
+const currentAddress = () => location.pathname + location.search + location.hash
+const postAddress = () => router.resolve(`/post/${encodeURIComponent(props.postId ?? '')}`).href
+function showPostAddress() {
+  if (!props.syncAddress || !props.postId) return
+  const href = postAddress()
+  if (location.pathname === href) return
+  addressBeforeOpen = currentAddress()
+  history.replaceState(history.state, '', href)
+}
+function restoreAddress() {
+  if (addressBeforeOpen === null) return
+  if (currentAddress() === postAddress()) history.replaceState(history.state, '', addressBeforeOpen)
+  addressBeforeOpen = null
+}
 function commentsChanged(delta: number) { if (props.postId) emit('comments-change', { postId: props.postId, delta }) }
 const { displayText, isTranslating, showTranslation, toggle: toggleTranslation, canTranslate } = useAutoTranslate(() => props.postId ?? '', () => slots['post-content'] ? '' : props.content ?? '')
 const contentSegments = computed(() => parsePostSegments(displayText.value))
@@ -255,10 +277,12 @@ onMounted(async () => {
     }
   }
   document.addEventListener('keydown', onKey)
+  showPostAddress()
   await nextTick()
   dialog.value?.focus()
 })
 onUnmounted(() => {
+  restoreAddress()
   document.removeEventListener('keydown', onKey)
   document.body.style.overflow = previousOverflow
   for (const { element, inert } of background) element.inert = inert

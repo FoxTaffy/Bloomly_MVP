@@ -74,6 +74,9 @@ async function checkStatus() {
     type.value = d.verificationType
     verifiedAt.value = d.verifiedAt
     visible.value = true
+    // Помечаем сразу при показе: окно не должно вернуться, даже если его не закрыли кнопкой
+    seenThisSession.add(`${seenKey()}:${d.verifiedAt}`)
+    try { localStorage.setItem(seenKey(), d.verifiedAt) } catch {}
     lit.value = false
     clearTimeout(animationTimer)
     animationTimer = setTimeout(() => { lit.value = true }, 700)

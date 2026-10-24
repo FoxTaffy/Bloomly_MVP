@@ -102,9 +102,25 @@ export function getDisplayText(msg: Message, encryptedLabel: string): string {
 const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 
+const URL_RE = /(https?:\/\/[^\s<]+)/g
+const TRAILING_PUNCT_RE = /[.,!?;:)\]}»"'…]+$/
+
+const mentionsHtml = (text: string) =>
+  escapeHtml(text).replace(/@([\w.-]+)/g, '<span class="mention-link text-brand-accent cursor-pointer hover:underline" data-username="$1">@$1</span>')
+
+/**
+ * Текст сообщения → безопасный HTML: всё экранируется, @ники подсвечиваются, ссылки http(s) кликабельны
+ * (как в постах и комментариях). Знаки препинания в конце не входят в ссылку; @ внутри ссылки — не упоминание.
+ */
 export function renderMentions(text: string): string {
   if (!text) return ''
-  return escapeHtml(text).replace(/@([\w.-]+)/g, '<span class="mention-link text-brand-accent cursor-pointer hover:underline" data-username="$1">@$1</span>')
+  return text.split(URL_RE).map((part, i) => {
+    if (i % 2 === 0) return mentionsHtml(part)
+    const trail = part.match(TRAILING_PUNCT_RE)?.[0] ?? ''
+    const url = trail ? part.slice(0, -trail.length) : part
+    const href = escapeHtml(url)
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer nofollow ugc" class="underline break-all hover:opacity-80">${href}</a>${mentionsHtml(trail)}`
+  }).join('')
 }
 
 /** Escapes text and wraps every occurrence of `query` in a <mark>. */

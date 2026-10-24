@@ -3257,6 +3257,18 @@ const formatDate = (d: string) => fmt.formatRelativeShort(d, {
 
 
 // ── Load profile ──────────────────────────────────────────────────────────────
+async function redirectToGroupBySlug(slug: string): Promise<boolean> {
+  try {
+    const res = await api.get(`/groups/${encodeURIComponent(slug)}`)
+    const group = res.data?.success ? res.data.data?.group : null
+    if (!group?.slug || route.params.username !== slug) return false
+    await router.replace(`/groups/${group.slug}`)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function loadProfile() {
   const slug = route.params.username as string
   isLoading.value = true
@@ -3277,6 +3289,8 @@ async function loadProfile() {
   try {
     const result = await userStore.fetchProfile(slug)
     viewedProfile.value = result
+    // Упоминание @адрес может вести на группу: если такого пользователя нет, а группа есть — открываем группу
+    if (!result && (await redirectToGroupBySlug(slug))) return
     if (result) {
       const userId = result.id
       loadMediaLabels(userId)
