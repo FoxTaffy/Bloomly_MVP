@@ -21,8 +21,8 @@ defineProps<{
     <div class="absolute top-4 right-4 w-36 h-36 rounded-full bg-brand-yellow/15 blur-2xl pointer-events-none" />
 
     <div class="relative z-10 px-6 py-7 max-md:px-4 max-md:py-5">
-      <div class="flex items-start justify-between gap-4 flex-wrap">
-        <div class="max-md:w-full min-w-0">
+      <div class="flex items-start justify-between gap-4 max-md:flex-col">
+        <div class="flex-1 min-w-0 max-md:w-full">
           <div class="flex items-center gap-3 mb-2">
             <div class="w-12 h-12 rounded-2xl bg-brand-gradient flex items-center justify-center shadow-lg shrink-0">
               <BIcon :name="icon" class="w-6 h-6 text-white" />
@@ -34,7 +34,7 @@ defineProps<{
           </div>
           <p v-if="$slots.tagline" class="text-white/70 text-sm max-w-md leading-relaxed"><slot name="tagline" /></p>
         </div>
-        <div v-if="$slots.side" class="flex flex-col gap-2 min-w-[220px] max-md:min-w-0 max-md:w-full"><slot name="side" /></div>
+        <div v-if="$slots.side" class="flex flex-col gap-2 shrink-0 w-60 max-md:w-full"><slot name="side" /></div>
       </div>
 
       <div v-if="stats?.length" class="grid grid-cols-2 md:flex gap-2 md:gap-3 mt-5">
