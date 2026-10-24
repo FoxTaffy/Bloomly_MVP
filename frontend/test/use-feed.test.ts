@@ -90,6 +90,76 @@ describe('useFeed: пагинация', () => {
   })
 })
 
+describe('useFeed: курсор', () => {
+  const withCursor = (cursor: string | null, ...ids: string[]) => ({ data: { success: true, data: { posts: ids.map(post), nextCursor: cursor } } })
+
+  it('следующая страница просится по nextCursor, без номера; null — конец ленты без лишнего запроса', async () => {
+    const { feed } = mountFeed()
+    get.mockImplementation((url: string) => {
+      if (url.startsWith('/posts/status')) return Promise.resolve(statusReply)
+      if (url.includes('cursor=c1')) return Promise.resolve(withCursor('c2', 'c'))
+      if (url.includes('cursor=c2')) return Promise.resolve(withCursor(null, 'd'))
+      return Promise.resolve(withCursor('c1', 'a', 'b'))
+    })
+    await feed.reload()
+    await feed.loadMore()
+    await feed.loadMore()
+    expect(feed.posts.value.map((p) => p.id)).toEqual(['a', 'b', 'c', 'd'])
+    expect(feed.hasMore.value).toBe(false)
+    await feed.loadMore()
+    expect(feedCalls()).toEqual([
+      '/posts/personalized?page=1&nsfw=hide',
+      '/posts/personalized?nsfw=hide&cursor=c1',
+      '/posts/personalized?nsfw=hide&cursor=c2',
+    ])
+  })
+
+  it('страница, целиком состоящая из уже показанных постов, не обрывает ленту, если сервер сказал «есть ещё»', async () => {
+    const { feed } = mountFeed()
+    get.mockImplementation((url: string) => {
+      if (url.startsWith('/posts/status')) return Promise.resolve(statusReply)
+      if (url.includes('cursor=c1')) return Promise.resolve(withCursor('c2', 'a'))
+      if (url.includes('cursor=c2')) return Promise.resolve(withCursor(null, 'b'))
+      return Promise.resolve(withCursor('c1', 'a'))
+    })
+    await feed.reload()
+    await feed.loadMore()
+    expect(feed.hasMore.value).toBe(true)
+    await feed.loadMore()
+    expect(feed.posts.value.map((p) => p.id)).toEqual(['a', 'b'])
+  })
+
+  it('сбой подгрузки повторяется с тем же курсором', async () => {
+    const { feed } = mountFeed()
+    let fail = true
+    get.mockImplementation((url: string) => {
+      if (url.startsWith('/posts/status')) return Promise.resolve(statusReply)
+      if (url.includes('cursor=c1')) {
+        if (fail) { fail = false; return Promise.reject(new Error('network')) }
+        return Promise.resolve(withCursor(null, 'b'))
+      }
+      return Promise.resolve(withCursor('c1', 'a'))
+    })
+    await feed.reload()
+    await feed.loadMore()
+    expect(feed.loadError.value).toBe('more')
+    await feed.retry()
+    expect(feed.posts.value.map((p) => p.id)).toEqual(['a', 'b'])
+    expect(feedCalls().filter((u) => u.includes('cursor=c1'))).toHaveLength(2)
+  })
+
+  it('смена вкладки сбрасывает курсор прошлой ленты', async () => {
+    const { feed } = mountFeed()
+    get.mockImplementation((url: string) => (url.startsWith('/posts/status') ? Promise.resolve(statusReply) : Promise.resolve(withCursor('c1', 'a'))))
+    await feed.reload()
+    feed.mode.value = 'news'
+    await vi.waitFor(() => expect(feedCalls().length).toBe(2))
+    await vi.waitFor(() => expect(feed.isLoading.value).toBe(false))
+    await feed.loadMore()
+    expect(feedCalls().at(-1)).toBe('/posts?nsfw=hide&cursor=c1&sort=new')
+  })
+})
+
 describe('useFeed: гонки запросов', () => {
   it('ответ прошлой вкладки не попадает в новую', async () => {
     const { feed } = mountFeed()

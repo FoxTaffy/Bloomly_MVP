@@ -19,6 +19,12 @@ describe('feedUrl', () => {
     expect(feedUrl({ ...base, mode: 'nsfw', sort: 'hot-all' })).toBe('/posts?page=2&nsfw=show&nsfwOnly=true&sort=hot&period=all')
   })
 
+  it('с курсором страница запрашивается «после последнего поста» — без номера', () => {
+    expect(feedUrl({ ...base, mode: 'for-you', cursor: 'abc_-9' })).toBe('/posts/personalized?nsfw=hide&cursor=abc_-9')
+    expect(feedUrl({ ...base, mode: 'news', cursor: 'abc' })).toBe('/posts?nsfw=hide&cursor=abc&sort=new')
+    expect(feedUrl({ ...base, mode: 'subscriptions', cursor: null })).toBe('/follows/feed?page=2&nsfw=hide')
+  })
+
   it('сортируются только общие вкладки', () => {
     expect(['for-you', 'subscriptions'].some((m) => isSortableMode(m as any))).toBe(false)
     expect(['news', 'photos', 'nsfw'].every((m) => isSortableMode(m as any))).toBe(true)
