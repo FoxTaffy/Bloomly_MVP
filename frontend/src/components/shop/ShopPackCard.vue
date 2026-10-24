@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useNsfwMode } from '@/composables/useNsfwMode'
-import { useLangStore } from '@/stores/lang'
 import BIcon from '@/components/BIcon.vue'
+import UserBadges from '@/components/UserBadges.vue'
 
 // Пак приходит из stickers-стора; поля, которые нужны карточке, перечислены здесь
 const props = defineProps<{ pack: any; own?: boolean }>()
 defineEmits<{ open: []; edit: []; remove: [] }>()
 
 const { nsfwEnabled } = useNsfwMode()
-const langStore = useLangStore()
 
 const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: string }> = {
   own:    { label: 'Свой',           icon: 'Lock',  cls: 'text-white/70 bg-black/40 border-white/15' },
@@ -43,9 +42,6 @@ const stickers = computed<string[]>(() => props.pack.stickers ?? [])
         </div>
       </div>
 
-      <span class="chip absolute top-2 left-2 text-brand-pink bg-brand-pink/15 border-brand-pink/25">
-        <BIcon name="Smile" class="w-2.5 h-2.5" /> {{ stickers.length }} шт.
-      </span>
       <span v-if="badge" class="chip absolute top-2 right-2" :class="badge.cls">
         <BIcon :name="badge.icon" class="w-2.5 h-2.5" />
         {{ pack.visibility === 'paid' ? `${parseFloat(pack.price)} ${pack.currency}` : badge.label }}
@@ -60,17 +56,21 @@ const stickers = computed<string[]>(() => props.pack.stickers ?? [])
     </div>
 
     <div class="p-3">
-      <div class="flex items-start justify-between gap-2">
-        <div class="min-w-0 flex-1">
-          <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ pack.name }}</h3>
-          <div v-if="pack.author?.username" class="flex items-center gap-1 mt-0.5">
-            <img v-if="pack.author.avatar_url" :src="pack.author.avatar_url" class="w-3.5 h-3.5 rounded-full object-cover border border-brand-pink/20 shrink-0" />
-            <span class="text-[10px] text-brand-pink/70 truncate font-medium">{{ pack.author.display_name ?? pack.author.username }}</span>
-            <BIcon v-if="pack.author.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
-          </div>
+      <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ pack.name }}</h3>
+      <div v-if="pack.author?.username" class="flex items-center gap-1.5 mt-1 min-w-0">
+        <img v-if="pack.author.avatar_url" :src="pack.author.avatar_url" class="w-4 h-4 rounded-full object-cover shrink-0" />
+        <span class="text-[10px] text-brand-pink/80 truncate font-semibold">{{ pack.author.display_name ?? pack.author.username }}</span>
+        <UserBadges :user="pack.author" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-1.5 mt-2.5">
+        <div class="flex items-center justify-center gap-1.5 rounded-xl bg-brand-pink/10 border border-brand-pink/15 py-1.5" title="Стикеров в паке">
+          <BIcon name="Smile" class="w-3 h-3 text-brand-pink" />
+          <span class="text-[11px] font-extrabold text-white tabular-nums">{{ stickers.length }}</span>
         </div>
-        <div class="shrink-0 flex items-center gap-0.5 text-[10px] text-white/35 font-bold">
-          <BIcon name="Heart" class="w-2.5 h-2.5" /> {{ pack._count?.userCollections ?? 0 }}
+        <div class="flex items-center justify-center gap-1.5 rounded-xl bg-brand-error/10 border border-brand-error/15 py-1.5" title="В коллекциях">
+          <BIcon name="Heart" class="w-3 h-3 text-brand-error" />
+          <span class="text-[11px] font-extrabold text-white tabular-nums">{{ pack._count?.userCollections ?? 0 }}</span>
         </div>
       </div>
 

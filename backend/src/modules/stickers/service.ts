@@ -40,6 +40,32 @@ async function normalizePolicy(
   };
 }
 
+// ── Эмодзи стикеров ─────────────────────────────────────────────────────────
+const MAX_EMOJIS_PER_STICKER = 5;
+// Эмодзи-последовательности: флаги, ZWJ-сочетания (👩‍💻), оттенки кожи, ❤️ с VS16. Та же логика — frontend/src/lib/emoji.ts
+const EMOJI_RE = /(?:\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?)*)/gu;
+
+/** Оставляет только эмодзи (без текста и пробелов), без повторов, не больше MAX_EMOJIS_PER_STICKER. */
+export function normalizeStickerEmojis(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw) return '';
+  const out: string[] = [];
+  for (const m of raw.slice(0, 200).matchAll(EMOJI_RE)) {
+    if (!out.includes(m[0])) out.push(m[0]);
+    if (out.length >= MAX_EMOJIS_PER_STICKER) break;
+  }
+  return out.join('');
+}
+
+/**
+ * Эмодзи — параллельный `stickers` массив. Если клиент прислал эмодзи — берём их по индексу;
+ * если поменял только состав стикеров — переносим прежние эмодзи по URL, чтобы они не съехали.
+ */
+function alignStickerEmojis(stickers: string[], input?: unknown, prev?: { stickers: string[]; sticker_emojis: string[] }): string[] {
+  if (Array.isArray(input)) return stickers.map((_, i) => normalizeStickerEmojis(input[i]));
+  const byUrl = new Map((prev?.stickers ?? []).map((url, i) => [url, prev?.sticker_emojis[i] ?? '']));
+  return stickers.map((url) => byUrl.get(url) ?? '');
+}
+
 /** Скрывает invite_code от всех, кроме автора */
 function redact<T extends { author_id?: string; invite_code?: string | null }>(pack: T, requesterId?: string): T {
   if (!pack || pack.author_id === requesterId) return pack;
@@ -130,6 +156,7 @@ const PACK_SELECT = {
   cover_sticker_idx: true,
   stickers: true,
   nsfw_stickers: true,
+  sticker_emojis: true,
   price: true,
   currency: true,
   tags: true,
@@ -150,6 +177,9 @@ const PACK_SELECT = {
       avatar_url: true,
       is_verified: true,
       verification_type: true,
+      role: true,
+      badge_type: true,
+      subscription_tier: true,
     },
   },
   _count: { select: { userCollections: true } },
@@ -255,6 +285,7 @@ export const stickersService = {
         cover_sticker_idx: policy.coverIdx,
         stickers,
         nsfw_stickers:     policy.nsfw,
+        sticker_emojis:    alignStickerEmojis(stickers, input.stickerEmojis),
         price:             policy.price,
         currency:          input.currency      ?? 'USD',
         tags:              input.tags          ?? [],
@@ -304,6 +335,9 @@ export const stickersService = {
     if (input.coverUrl         !== undefined) data.cover_url         = input.coverUrl;
     if (input.coverBgColor     !== undefined) data.cover_bg_color    = checkCoverColor(input.coverBgColor);
     if (input.stickers         !== undefined) data.stickers          = input.stickers;
+    if (input.stickers !== undefined || input.stickerEmojis !== undefined) {
+      data.sticker_emojis = alignStickerEmojis(stickers, input.stickerEmojis, existing);
+    }
     if (input.currency         !== undefined) data.currency          = input.currency;
     if (input.tags             !== undefined) data.tags              = input.tags;
     if (input.isNsfw           !== undefined) data.is_nsfw           = input.isNsfw;
@@ -660,7 +694,7 @@ export const stickersService = {
     }
     return prisma.stickerPack.update({
       where:  { id: packId },
-      data:   { stickers: merged },
+      data:   { stickers: merged, sticker_emojis: alignStickerEmojis(merged, undefined, existing) },
       select: PACK_SELECT,
     });
   },
@@ -708,13 +742,17 @@ export const stickersService = {
       throw Object.assign(new Error('Не удалось загрузить стикеры из Telegram. Попробуйте позже.'), { code: 'DOWNLOAD_FAILED' });
     }
 
+    // Эмодзи из Telegram — по тем же позициям, что и успешно загруженные стикеры
+    const validEmojis = limited.flatMap((s, i) => (urls[i] ? [normalizeStickerEmojis(s.emoji)] : []));
+
     return {
-      title:        packInfo.title   as string,
-      tg_name:      packInfo.name    as string,
-      total:        candidates.length,
-      skipped:      (packInfo.stickers as any[]).length - candidates.length,
-      imported:     validUrls.length,
-      sticker_urls: validUrls,
+      title:          packInfo.title   as string,
+      tg_name:        packInfo.name    as string,
+      total:          candidates.length,
+      skipped:        (packInfo.stickers as any[]).length - candidates.length,
+      imported:       validUrls.length,
+      sticker_urls:   validUrls,
+      sticker_emojis: validEmojis,
     };
   },
 };

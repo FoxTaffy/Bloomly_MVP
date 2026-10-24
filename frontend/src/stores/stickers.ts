@@ -10,6 +10,9 @@ export interface PackAuthor {
   avatar_url: string | null
   is_verified: boolean
   verification_type: string | null
+  role?: string | null
+  badge_type?: string | null
+  subscription_tier?: string | null
 }
 
 export type PackVisibility = 'own' | 'public' | 'invite' | 'paid'
@@ -24,6 +27,8 @@ export interface StickerPack {
   cover_sticker_idx: number | null
   stickers: string[]
   nsfw_stickers: number[]
+  /** Эмодзи стикеров по индексу в `stickers` (строка эмодзи, может быть пустой). */
+  sticker_emojis?: string[]
   price: string
   currency: string
   tags: string[]
@@ -58,6 +63,7 @@ export interface CreatePackInput {
   coverStickerIdx?: number | null
   stickers?: string[]
   nsfwStickers?: number[]
+  stickerEmojis?: string[]
   price?: number
   currency?: string
   tags?: string[]

@@ -28,13 +28,20 @@ const calibration = computed(() => ({
   scale: props.frame.default_scale,
   rotation: props.frame.default_rotation,
 }))
+// Рамка со сдвигом и масштабом выходит за аватар: сжимаем аватар так, чтобы вся рамка влезла в превью
+const avatarSize = computed(() => {
+  const f = calibration.value
+  const reach = f.scale / 2 + Math.max(Math.abs(f.offset_x), Math.abs(f.offset_y))
+  const fit = 0.9 / (2 * reach * 1.15) // 1.15 — запас на поворот
+  return `${Math.round(Math.min(0.6, Math.max(0.25, fit)) * 100)}%`
+})
 const paid = computed(() => Number(props.frame.price) > 0)
 </script>
 
 <template>
   <div class="card-surface group hover:-translate-y-0.5 hover:border-brand-yellow/50 transition-all">
-    <div class="relative aspect-square flex items-center justify-center bg-linear-to-br from-brand-yellow/15 via-brand-bg to-brand-purple/15">
-      <div class="relative w-[58%] aspect-square group-hover:scale-105 transition-transform duration-300">
+    <div class="relative aspect-square overflow-hidden flex items-center justify-center bg-linear-to-br from-brand-yellow/15 via-brand-bg to-brand-purple/15">
+      <div class="relative aspect-square" :style="{ width: avatarSize }">
         <img :src="avatar" :alt="auth.displayName" @error="onAvatarError"
           class="w-full h-full rounded-full object-cover border border-white/10" />
         <AvatarFrameOverlay :frame="calibration" />
