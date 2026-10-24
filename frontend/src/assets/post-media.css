@@ -1,0 +1,147 @@
+/* Медиа в карточке поста (PostCard): карусель, фотосетка. Общий файл — вместо <style scoped> в компоненте. */
+
+/* ── Carousel ───────────────────────────────────────────────────────────── */
+.carousel-track {
+  display: flex;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+.carousel-slide {
+  position: relative;
+  flex: 0 0 100%;
+  min-width: 0;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d0d14;
+  min-height: 220px;
+}
+/* Размытая подложка — только для изображений (data-has-blur=true) */
+.carousel-slide[data-has-blur='true']::before {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  background-image: var(--blur-url);
+  background-size: cover;
+  background-position: center;
+  filter: blur(32px);
+  opacity: 0.55;
+  z-index: 0;
+  pointer-events: none;
+}
+/* Прямой дочерний <img> — центрирование с contain */
+.carousel-slide[data-has-blur='true'] > img {
+  position: relative;
+  z-index: 1;
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 100% !important;
+  max-height: 480px !important;
+  object-fit: contain !important;
+  border-radius: 12px !important;
+  border: none !important;
+  margin: 0 auto !important;
+}
+/* GIF и видео — без подложки */
+.carousel-slide[data-has-blur='false'] > div {
+  width: 100%;
+}
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: opacity 0.2s, background 0.2s;
+  backdrop-filter: blur(4px);
+}
+.carousel-arrow:hover { background: rgba(0, 0, 0, 0.8); }
+
+/* ── Photo grid (VK-style) ─────────────────────────────────────────────── */
+.photo-grid {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  height: 340px;
+}
+.photo-grid-cell {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background: #0d0d14;
+}
+.photo-grid-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter 0.15s;
+}
+.photo-grid-cell:hover img { filter: brightness(0.92); }
+.photo-grid-more {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.5rem;
+  pointer-events: none;
+}
+.photo-grid--2 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+.photo-grid--3 {
+  grid-template-columns: 1.3fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.photo-grid--3 .photo-grid-cell:first-child {
+  grid-row: 1 / span 2;
+}
+.photo-grid--4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+@media (max-width: 640px) {
+  .photo-grid { height: 260px; }
+}
+
+/* ── Media grid cells (legacy, kept for compatibility) ─────────────────── */
+.media-cell {
+  position: relative;
+  overflow: hidden;
+}
+/* Изображения и видео полностью заполняют ячейку */
+.media-cell > div,
+.media-cell > figure {
+  width: 100%;
+  height: 100%;
+}
+.media-cell img,
+.media-cell video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  display: block;
+}
+
+.mention-pill {
+  position: relative;
+}

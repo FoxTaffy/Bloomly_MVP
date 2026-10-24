@@ -1,13 +1,13 @@
 <template>
   <!-- Hidden state after "Не интересно" -->
-  <div v-if="isHidden" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xs">
+  <div v-if="isHidden" class="panel-card overflow-hidden">
     <div class="flex items-center justify-between px-5 py-3.5">
       <span class="text-sm text-white/35">Пост скрыт</span>
       <button @click="undoNotInterested" class="text-xs text-brand-accent/70 hover:text-brand-accent transition-colors">Отменить</button>
     </div>
   </div>
 
-  <div v-else ref="cardRootRef" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group"
+  <div v-else ref="cardRootRef" class="panel-card overflow-hidden hover:border-brand-accent/30 transition-all group"
     :class="{ 'cursor-pointer': !adMode && !isEditing }" @click="onCardClick">
     <!-- Announcement banner -->
     <div v-if="post.is_announcement" class="flex items-center gap-2 px-5 py-2.5 bg-brand-yellow/10 border-b border-brand-yellow/25">
@@ -39,7 +39,7 @@
         {{ post.post_type === 'artwork' ? 'Новая работа' : post.post_type === 'article' ? 'Статья' : 'Обновление заказа' }}
       </span>
     </div>
-    <div class="p-5 md:p-6 max-md:px-4 max-md:py-4">
+    <div class="px-5 pt-5 pb-3 md:px-6 md:pt-6 max-md:px-4 max-md:pt-4">
 
       <!-- ── Header ────────────────────────────────────────────────────── -->
       <div class="flex items-start justify-between gap-3 mb-4">
@@ -483,14 +483,14 @@
           </Transition>
         </div>
 
-        <!-- Category + tags -->
-        <div v-if="post.category || (post.tags && post.tags.length)" class="flex flex-wrap items-center gap-1.5 mt-1">
+        <!-- Category + tags (при редактировании теги правятся в форме выше — второй, старый список не показываем) -->
+        <div v-if="post.category || (!isEditing && post.tags && post.tags.length)" class="flex flex-wrap items-center gap-1.5 mt-1">
           <span v-if="post.category"
             class="px-3 py-1 bg-brand-accent/20 text-brand-accent text-xs font-bold rounded-full border border-brand-accent/30">
             {{ post.category }}
           </span>
           <router-link
-            v-for="tag in post.tags" :key="tag.tag?.id ?? tag.id"
+            v-for="tag in (isEditing ? [] : post.tags)" :key="tag.tag?.id ?? tag.id"
             v-slot="{ navigate, href }"
             :to="{ path: '/search', query: { q: tag.tag?.name ?? tag.name } }"
             custom
@@ -516,7 +516,7 @@
       </div>
 
       <!-- ── Actions ───────────────────────────────────────────────────── -->
-      <div class="flex items-center justify-between pt-4 mt-4 border-t border-brand-border max-md:gap-1.5">
+      <div class="flex items-center justify-between pt-3 mt-4 border-t border-brand-border max-md:gap-1.5">
         <div class="flex items-center gap-2 max-md:gap-1.5 max-md:min-w-0">
           <!-- Vote -->
           <div class="flex items-center h-8 gap-0.5 bg-brand-bg rounded-full px-1 border border-brand-border">
@@ -604,7 +604,8 @@
     <SharePostModal v-if="showShareModal" :post-id="post.id" :post-url="postUrl" @close="showShareModal = false" />
 
     <!-- ── Comments section ──────────────────────────────────────────────── -->
-      <div v-if="!adMode && !lightboxOpen" class="border-t border-brand-border px-5 pb-5 pt-4">
+      <!-- Отступы 12 px — те же, что над и под строкой счётчиков: одинаковый ритм от счётчиков до поля ввода -->
+      <div v-if="!adMode && !lightboxOpen" class="border-t border-brand-border px-5 py-3">
         <PostComments :preview-limit="isExpanded ? undefined : 3" :post-id="post.id" :comments-disabled="!!post.comments_disabled && !isOwn" />
       </div>
 
@@ -615,6 +616,7 @@
       :original-images="lightboxOriginalUrls"
       :start-index="lightboxIndex"
       :post-id="post.id"
+      :sync-address="!adMode"
       :author="post.author"
       :group="effectiveGroupContext"
       :content="isPaywalled && !paidRevealed ? '' : post.content"
@@ -919,8 +921,6 @@ watch(() => props.initialVote, (val) => { if (val !== undefined) localVote.value
 watch(() => props.initialRepawed, (val) => { if (val !== undefined) localRepawed.value = val })
 watch(() => props.initialFavourited, (val) => { if (val !== undefined) localFavourited.value = val })
 
-const showMenu    = ref(false)
-const menuBtnRef  = ref<HTMLElement | null>(null)
 // Карточку открытого поста (по ссылке, из уведомления) никто не снабжает состоянием «я уже оценил»:
 // в самом посте его нет, поэтому один раз спрашиваем у /posts/status. Лента и профиль передают его сами.
 onMounted(async () => {
@@ -936,6 +936,8 @@ onMounted(async () => {
   } catch { /* не критично: останется нейтральное состояние */ }
 })
 
+const showMenu    = ref(false)
+const menuBtnRef  = ref<HTMLElement | null>(null)
 const menuPos     = ref({ top: '0px', right: '0px' })
 const isExpanded  = ref(props.startExpanded ?? false)
 
@@ -1511,208 +1513,3 @@ const vClickOutside = {
   },
 }
 </script>
-
-<style scoped>
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.18s ease;
-  overflow: hidden;
-}
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  max-height: 0;
-}
-.slide-enter-to,
-.slide-leave-from {
-  opacity: 1;
-  max-height: 1000px;
-}
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.2s ease;
-  overflow: hidden;
-}
-.slide-up-enter-from,
-.slide-up-leave-to {
-  opacity: 0;
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-.slide-up-enter-to,
-.slide-up-leave-from {
-  opacity: 1;
-  max-height: 60px;
-}
-
-/* ── Carousel ───────────────────────────────────────────────────────────── */
-.carousel-track {
-  display: flex;
-  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
-  will-change: transform;
-}
-.carousel-slide {
-  position: relative;
-  flex: 0 0 100%;
-  min-width: 0;
-  overflow: hidden;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #0d0d14;
-  min-height: 220px;
-}
-/* Blur layer — только для изображений (data-has-blur=true) */
-.carousel-slide[data-has-blur='true']::before {
-  content: '';
-  position: absolute;
-  inset: -40px;
-  background-image: var(--blur-url);
-  background-size: cover;
-  background-position: center;
-  filter: blur(32px);
-  opacity: 0.55;
-  z-index: 0;
-  pointer-events: none;
-}
-/* Прямой дочерний <img> (тип image) — центрирование с contain */
-.carousel-slide[data-has-blur='true'] :deep(> img) {
-  position: relative;
-  z-index: 1;
-  display: block !important;
-  width: auto !important;
-  height: auto !important;
-  max-width: 100% !important;
-  max-height: 480px !important;
-  object-fit: contain !important;
-  border-radius: 12px !important;
-  border: none !important;
-  margin: 0 auto !important;
-}
-/* GIF и Video враппер — без изменений, просто z-index поверх blur нет (нет blur у них) */
-.carousel-slide[data-has-blur='false'] :deep(> div) {
-  width: 100%;
-}
-.carousel-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.55);
-  border: 1px solid rgba(255,255,255,0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  transition: opacity 0.2s, background 0.2s;
-  backdrop-filter: blur(4px);
-}
-.carousel-arrow:hover { background: rgba(0,0,0,0.8); }
-
-/* ── Photo grid (VK-style) ─────────────────────────────────────────────── */
-.photo-grid {
-  display: grid;
-  gap: 3px;
-  width: 100%;
-  height: 340px;
-}
-.photo-grid-cell {
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  background: #0d0d14;
-}
-.photo-grid-cell img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: filter 0.15s;
-}
-.photo-grid-cell:hover img { filter: brightness(0.92); }
-.photo-grid-more {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 800;
-  font-size: 1.5rem;
-  pointer-events: none;
-}
-.photo-grid--2 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr;
-}
-.photo-grid--3 {
-  grid-template-columns: 1.3fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
-.photo-grid--3 .photo-grid-cell:first-child {
-  grid-row: 1 / span 2;
-}
-.photo-grid--4 {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
-@media (max-width: 640px) {
-  .photo-grid { height: 260px; }
-}
-
-/* ── Media grid cells (legacy, kept for compatibility) ───────────────────── */
-.media-cell {
-  position: relative;
-  overflow: hidden;
-}
-/* Заставляем изображения и видео полностью заполнять ячейку */
-.media-cell :deep(> div),
-.media-cell :deep(> figure) {
-  width: 100%;
-  height: 100%;
-}
-.media-cell :deep(img),
-.media-cell :deep(video) {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  max-height: none !important;
-  border-radius: 0 !important;
-  border: none !important;
-  display: block;
-}
-
-/* Mention pill */
-.mention-pill {
-  position: relative;
-}
-/* Mention popup teleport transition */
-.mention-popup-enter-active,
-.mention-popup-leave-active {
-  transition: opacity 0.12s ease;
-}
-.mention-popup-enter-from,
-.mention-popup-leave-to {
-  opacity: 0;
-}
-.mention-popup-enter-to,
-.mention-popup-leave-from {
-  opacity: 1;
-}
-
-/* NSFW / paid overlay fade */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>

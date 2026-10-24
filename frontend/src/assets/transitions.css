@@ -1,0 +1,77 @@
+/* Общие переходы для <Transition name="…">: один набор вместо копий в <style scoped> каждого компонента. */
+
+/* Выпадашка/раскрытие блока по высоте */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.18s ease;
+  overflow: hidden;
+}
+.slide-enter-from,
+.slide-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+.slide-enter-to,
+.slide-leave-from {
+  opacity: 1;
+  max-height: 1000px;
+}
+
+/* Узкая полоска (строка быстрого комментария и т.п.) */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.slide-up-enter-to,
+.slide-up-leave-from {
+  opacity: 1;
+  max-height: 60px;
+}
+
+.fade-enter-active,
+.fade-leave-active,
+.mention-popup-enter-active,
+.mention-popup-leave-active {
+  transition: opacity 0.2s ease;
+}
+.mention-popup-enter-active,
+.mention-popup-leave-active {
+  transition-duration: 0.12s;
+}
+.fade-enter-from,
+.fade-leave-to,
+.mention-popup-enter-from,
+.mention-popup-leave-to {
+  opacity: 0;
+}
+
+/* Плашка активного фильтра, «Новые посты»: мягкий выезд сверху */
+.drop-enter-active {
+  transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.drop-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.drop-enter-from,
+.drop-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+/* То же для floating-pill, у которой transform уже занят центровкой */
+.pill-enter-active,
+.pill-leave-active {
+  transition: opacity 0.2s ease, translate 0.2s ease;
+}
+.pill-enter-from,
+.pill-leave-to {
+  opacity: 0;
+  translate: 0 -8px;
+}
