@@ -18,6 +18,7 @@ import MediaUpload from '@/components/MediaUpload.vue'
 import StickerUpload from '@/components/StickerUpload.vue'
 import StickerReorderGrid from '@/components/StickerReorderGrid.vue'
 import TelegramImportModal from '@/components/TelegramImportModal.vue'
+import { emojiList } from '@/lib/emoji'
 
 const props = defineProps<{ pack?: StickerPack | null }>()
 const emit  = defineEmits<{
@@ -48,10 +49,10 @@ const VISIBILITY_OPTIONS: { key: PackVisibility; icon: string; title: string; hi
 
 // ── Состояние ───────────────────────────────────────────────────────────────
 type Step = 'stickers' | 'info' | 'cover' | 'done'
-type Item = { key: string; url: string; nsfw: boolean }
+type Item = { key: string; url: string; nsfw: boolean; emojis: string }
 
 let keySeq = 0
-const newItem = (url: string, nsfw = false): Item => ({ key: `s${++keySeq}`, url, nsfw })
+const newItem = (url: string, nsfw = false, emojis = ''): Item => ({ key: `s${++keySeq}`, url, nsfw, emojis })
 
 const editingId = props.pack?.id ?? null
 const step      = ref<Step>('stickers')
@@ -62,7 +63,7 @@ const savedPack = ref<StickerPack | null>(null)
 const copied    = ref(false)
 
 const items = ref<Item[]>(
-  (props.pack?.stickers ?? []).map((url, i) => newItem(url, props.pack?.nsfw_stickers?.includes(i) ?? false)),
+  (props.pack?.stickers ?? []).map((url, i) => newItem(url, props.pack?.nsfw_stickers?.includes(i) ?? false, props.pack?.sticker_emojis?.[i] ?? '')),
 )
 const coverKey = ref<string | null>(
   props.pack?.cover_sticker_idx != null ? items.value[props.pack.cover_sticker_idx]?.key ?? null : null,
@@ -127,9 +128,9 @@ const inviteLink = computed(() => {
 })
 
 // ── Стикеры ─────────────────────────────────────────────────────────────────
-function addUrls(urls: string[]) {
+function addUrls(urls: string[], emojis: string[] = []) {
   const room = MAX_STICKERS - items.value.length
-  const fresh = urls.slice(0, Math.max(0, room)).map(u => newItem(u))
+  const fresh = urls.slice(0, Math.max(0, room)).map((u, i) => newItem(u, false, emojis[i] ?? ''))
   items.value = [...items.value, ...fresh]
   if (!coverKey.value && fresh.length) coverKey.value = fresh[0].key
 }
@@ -143,9 +144,15 @@ function removeItem(key: string) {
 function toggleNsfw(item: Item) { item.nsfw = !item.nsfw }
 
 function selectTile(key: string) { selectedKey.value = selectedKey.value === key ? null : key }
+const selectedItem = computed(() => items.value.find(i => i.key === selectedKey.value) ?? null)
+const selectedIndex = computed(() => items.value.findIndex(i => i.key === selectedKey.value))
 
-function onTelegramImported(p: { title: string; tg_name: string; sticker_urls: string[] }) {
-  addUrls(p.sticker_urls)
+// Эмодзи стикера: по ним в чате и комментариях подсказываются стикеры, когда в поле введён только этот эмодзи.
+// Сервер повторно чистит значение; здесь — чтобы поле сразу показывало, что сохранится.
+const onlyEmojis = (raw: string) => emojiList(raw).join('')
+
+function onTelegramImported(p: { title: string; tg_name: string; sticker_urls: string[]; sticker_emojis?: string[] }) {
+  addUrls(p.sticker_urls, p.sticker_emojis ?? [])
   if (!form.value.name.trim()) form.value.name = p.title
   if (!form.value.description.trim()) form.value.description = `Импортировано из Telegram (@${p.tg_name})`
   if (!tagList.value.length) addTags(p.tg_name)
@@ -179,6 +186,7 @@ async function submit() {
       coverStickerIdx: idxOf(coverKey.value) >= 0 ? idxOf(coverKey.value) : null,
       stickers:        items.value.map(i => i.url),
       nsfwStickers:    items.value.flatMap((i, n) => i.nsfw ? [n] : []),
+      stickerEmojis:   items.value.map(i => onlyEmojis(i.emojis)),
     }
     const result = editingId ? await store.updatePack(editingId, payload) : await store.createPack(payload)
     savedPack.value = result
@@ -275,6 +283,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
                   @click="selectTile(item.key)">
                   <img :src="item.url" draggable="false" class="w-full h-full object-contain p-1.5 pointer-events-none" />
                   <span class="absolute bottom-0.5 right-1 text-[9px] font-bold text-white/40 tabular-nums">{{ index + 1 }}</span>
+                  <span v-if="item.emojis" class="absolute top-0.5 right-1 text-[11px] leading-none pointer-events-none" :title="`Эмодзи: ${item.emojis}`">{{ [...item.emojis][0] }}</span>
                   <div v-if="item.nsfw" class="absolute top-1 right-1 text-[8px] font-extrabold text-white bg-rose-500/90 px-1 rounded-full">18+</div>
                   <div v-if="coverKey === item.key" class="absolute top-1 left-1 w-4 h-4 bg-brand-purple rounded-full flex items-center justify-center">
                     <BIcon name="Star" class="w-2.5 h-2.5 text-white" />
@@ -299,6 +308,18 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
                 <img :src="item.url" class="w-full h-full object-contain p-1.5" />
               </template>
             </StickerReorderGrid>
+
+            <!-- Эмодзи выбранного стикера -->
+            <div v-if="selectedItem" class="flex items-center gap-2.5 p-2.5 rounded-2xl bg-white/5 border border-white/10">
+              <img :src="selectedItem.url" alt="" class="w-10 h-10 object-contain shrink-0" />
+              <label class="flex-1 min-w-0">
+                <span class="block text-[11px] font-bold text-white/55 mb-1">Эмодзи стикера №{{ selectedIndex + 1 }} — по ним стикер подскажется в чате</span>
+                <input :value="selectedItem.emojis" @input="selectedItem.emojis = ($event.target as HTMLInputElement).value"
+                  @blur="selectedItem.emojis = onlyEmojis(selectedItem.emojis)"
+                  placeholder="например 😂👍" maxlength="40" aria-label="Эмодзи стикера"
+                  class="w-full px-3 py-1.5 rounded-xl bg-black/20 border border-white/10 text-base text-white outline-hidden focus:border-brand-purple" />
+              </label>
+            </div>
 
             <p class="text-[11px] text-white/30">
               <span class="text-brand-purple">★</span> — стикер на обложке · <span class="text-rose-400">18+</span> — будет размыт без NSFW-режима

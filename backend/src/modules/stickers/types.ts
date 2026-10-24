@@ -8,6 +8,8 @@ export interface CreatePackInput {
   coverStickerIdx?: number | null;
   stickers?: string[];
   nsfwStickers?: number[];
+  /** Эмодзи каждого стикера, по индексу в `stickers` (строка из эмодзи, можно пустую). */
+  stickerEmojis?: string[];
   price?: number;
   currency?: string;
   tags?: string[];
