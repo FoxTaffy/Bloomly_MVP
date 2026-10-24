@@ -72,6 +72,50 @@ describe('media: доступ к файлам по прямой ссылке (au
     expect((await authz(k)).status).toBe(403);
   });
 
+  it('файлы альбома в переписке видят участники, включая собеседника (metadata.files)', async () => {
+    const a = await createUser();
+    const b = await createUser();
+    const stranger = await createUser();
+    const [k1, k2] = [key('messages'), key('messages')];
+    for (const k of [k1, k2]) await prisma.mediaObject.create({ data: { object_key: k, owner_id: a.user.id, folder: 'messages', size_bytes: 10n } });
+    const conv = await prisma.conversation.create({ data: { participants: { create: [{ user_id: a.user.id }, { user_id: b.user.id }] } } });
+    await prisma.message.create({ data: {
+      conversation_id: conv.id, sender_id: a.user.id, type: 'album',
+      metadata: { files: [{ url: mediaUrlForKey(k1), type: 'image' }, { url: mediaUrlForKey(k2), type: 'image' }] },
+    } });
+    for (const k of [k1, k2]) {
+      expect((await authz(k, { headers: a.auth })).status).toBe(204);
+      expect((await authz(k, { headers: b.auth })).status).toBe(204);
+      expect((await authz(k, { headers: stranger.auth })).status).toBe(403);
+      expect((await authz(k)).status).toBe(403);
+    }
+    // Подстрока URL или другой ключ в metadata не дают доступа
+    const other = key('messages');
+    await prisma.message.create({ data: { conversation_id: conv.id, sender_id: a.user.id, type: 'payment_request', metadata: { note: mediaUrlForKey(other) } } });
+    expect((await authz(other, { headers: b.auth })).status).toBe(403);
+  });
+
+  it('пересланный альбом сохраняет файлы, и их видит получатель пересылки', async () => {
+    const a = await createUser();
+    const b = await createUser();
+    const c = await createUser();
+    const ks = [key('messages'), key('messages')];
+    for (const k of ks) await prisma.mediaObject.create({ data: { object_key: k, owner_id: a.user.id, folder: 'messages', size_bytes: 10n } });
+    const ab = await prisma.conversation.create({ data: { participants: { create: [{ user_id: a.user.id }, { user_id: b.user.id }] } } });
+    const bc = await prisma.conversation.create({ data: { participants: { create: [{ user_id: b.user.id }, { user_id: c.user.id }] } } });
+    const files = ks.map((k) => ({ url: mediaUrlForKey(k), type: 'image' }));
+    const src = await prisma.message.create({ data: { conversation_id: ab.id, sender_id: a.user.id, type: 'album', metadata: { files } } });
+    expect((await authz(ks[0], { headers: c.auth })).status).toBe(403);
+
+    const res = await api('POST', `/api/messages/messages/${src.id}/forward`, { headers: b.auth, body: { targetConversationId: bc.id } });
+    expect(res.status, JSON.stringify(res.json)).toBeLessThan(300);
+    const fwd = await prisma.message.findFirst({ where: { conversation_id: bc.id, forwarded_from_id: src.id } });
+    expect(fwd?.type).toBe('album');
+    expect((fwd?.metadata as { files: unknown[] } | null)?.files).toEqual(files);
+    clearMediaDecisionCache();
+    for (const k of ks) expect((await authz(k, { headers: c.auth })).status).toBe(204);
+  });
+
   it('файл комментария в закрытой группе не виден постороннему', async () => {
     const owner = await createUser();
     const outsider = await createUser();

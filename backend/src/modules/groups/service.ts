@@ -300,6 +300,7 @@ const GROUP_SELECT = {
   bank_card_masked: true,
   support_tiers: true,
   business_enabled: true,
+  safe_deals_enabled: true,
   den_enabled: true,
   welcome_msg_enabled: true,
   welcome_msg_text: true,
@@ -326,8 +327,8 @@ const GROUP_LIST_SELECT = {
   rating_count: true,
   members_count: true,
   created_at: true,
-  safe_deals_enabled: true,
   business_enabled: true,
+  safe_deals_enabled: true,
   hide_admins: true,
   hidden_member_ids: true,
   _count: { select: { members: true, events: true } },
@@ -354,7 +355,6 @@ const EVENT_SELECT = {
   starts_at: true,
   ends_at: true,
   status: true,
-  safe_deals_enabled: true,
   is_recurring: true,
   theme: true,
   attendee_count: true,
@@ -676,6 +676,7 @@ export const groupService = {
     if (input.bankCardMasked !== undefined) data.bank_card_masked = input.bankCardMasked || null;
     if (input.supportTiers !== undefined) data.support_tiers = input.supportTiers;
     if (input.businessEnabled !== undefined) data.business_enabled = input.businessEnabled;
+    if (input.safeDealsEnabled !== undefined) data.safe_deals_enabled = input.safeDealsEnabled;
     if (input.welcomeMsgEnabled !== undefined) data.welcome_msg_enabled = input.welcomeMsgEnabled;
     if (input.welcomeMsgText !== undefined) {
       if (containsToxicLanguage(input.welcomeMsgText)) {
@@ -705,7 +706,6 @@ export const groupService = {
    * todos, custom roles, subscribers, bookmarks — irreversible, no soft-delete/undo.
    *
    * Blocked entirely if the group has any donation/transaction history, orders, or a nonzero
-    if (input.safeDealsEnabled !== undefined) data.safe_deals_enabled = input.safeDealsEnabled;
    * balance: deleting a group must never be a way to erase money records (e.g. a scammer
    * collecting donations then wiping the evidence). Those groups can only be handled by support.
    */

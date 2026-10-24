@@ -65,16 +65,33 @@ async function commentAllows(url: string, viewer: MediaViewer) {
   return readablePostExists([...new Set(comments.map((c) => c.post_id))], viewer);
 }
 
-/** Вложение переписки видят только её участники. Пересылка копирует file_url в новый чат. */
+/**
+ * Вложение переписки видят только её участники. Пересылка копирует файлы в новый чат.
+ * Одиночный файл лежит в file_url, а файлы альбома (2+ вложения в одном сообщении) —
+ * в metadata.files[].url: без второй проверки собеседник получал 403 на фото альбома,
+ * а отправитель видел их как загрузивший.
+ */
 async function messageAllows(url: string, viewer: MediaViewer) {
   if (!viewer) return false;
-  const count = await prisma.message.count({
+  const single = await prisma.message.count({
     where: {
       file_url: url, deleted_at: null,
       conversation: { deleted_at: null, participants: { some: { user_id: viewer.id } } },
     },
   });
-  return count > 0;
+  if (single > 0) return true;
+  // По индексу (conversation_id, created_at) только в чатах зрителя, а не по всей таблице сообщений
+  const chats = await prisma.conversationParticipant.findMany({
+    where: { user_id: viewer.id, conversation: { deleted_at: null } }, select: { conversation_id: true },
+  });
+  if (!chats.length) return false;
+  const album = await prisma.message.count({
+    where: {
+      conversation_id: { in: chats.map((c) => c.conversation_id) }, deleted_at: null, type: 'album',
+      metadata: { path: ['files'], array_contains: [{ url }] },
+    },
+  });
+  return album > 0;
 }
 
 async function albumAllows(url: string, viewer: MediaViewer) {

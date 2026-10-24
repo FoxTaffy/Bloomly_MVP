@@ -824,8 +824,12 @@ export const messageService = {
 
     // Messages have no restore/undelete path, so the attachment can be purged now
     // instead of leaking in S3 forever (there's no hard-delete cron for messages).
-    if (msg.file_url) {
-      deleteFileByUrl(msg.file_url, msg.sender_id).catch(logError('[deleteMessage] media cleanup failed'));
+    // Пересылка копирует ссылку на тот же файл: пока на него ссылается другое живое сообщение, файл не трогаем,
+    // иначе удаление оригинала ломает картинку у всех, кому её переслали. Файлы альбома — так же.
+    const albumFiles = msg.type === 'album' ? (((msg.metadata as { files?: { url?: unknown }[] } | null)?.files ?? [])
+      .map((f) => f?.url).filter((u): u is string => typeof u === 'string')) : [];
+    for (const url of new Set([msg.file_url, ...albumFiles].filter((u): u is string => !!u))) {
+      this._purgeMessageFileIfUnused(url, msg.sender_id).catch(logError('[deleteMessage] media cleanup failed'));
     }
 
     // Broadcast to all participants so the message disappears in real time for everyone
@@ -845,6 +849,16 @@ export const messageService = {
   /**
    * Edit message text (only sender, only text messages, within 24h).
    */
+  /** Удаляет файл переписки, только если ни одно другое живое сообщение (одиночное или альбом) на него не ссылается. */
+  async _purgeMessageFileIfUnused(url: string, ownerId: string) {
+    const [single, album] = await Promise.all([
+      prisma.message.count({ where: { file_url: url, deleted_at: null } }),
+      prisma.message.count({ where: { type: 'album', deleted_at: null, metadata: { path: ['files'], array_contains: [{ url }] } } }),
+    ]);
+    if (single + album > 0) return;
+    await deleteFileByUrl(url, ownerId);
+  },
+
   async editMessage(messageId: string, userId: string, text: string) {
     const msg = await prisma.message.findUnique({ where: { id: messageId } });
     if (!msg) throw Object.assign(new Error('Message not found'), { statusCode: 404 });
@@ -1519,6 +1533,8 @@ export const messageService = {
             encrypted_text: encryptedText ?? null,
             type: source.type === 'system' ? 'text' : source.type,
             file_url: source.file_url ?? null,
+            // Альбом хранит файлы в metadata.files — без них пересланный альбом приходил пустым
+            ...(source.type === 'album' && source.metadata ? { metadata: source.metadata as Prisma.InputJsonValue } : {}),
             forwarded_from_id: source.id,
             forwarded_from_sender_id: source.sender_id,
             forwarded_from_conv_id: source.conversation_id,
