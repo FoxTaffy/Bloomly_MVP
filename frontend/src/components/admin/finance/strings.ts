@@ -90,7 +90,7 @@ const S = {
   wNone: { ru: 'Операций за период не было', en: 'No operations in the period' },
   kind_topup: { ru: 'Пополнение', en: 'Top-up' }, kind_subscription: { ru: 'Подписка', en: 'Subscription' },
   kind_sticker_purchase: { ru: 'Покупка стикерпака', en: 'Sticker pack purchase' }, kind_sticker_sale: { ru: 'Продажа стикерпака', en: 'Sticker pack sale' },
-  kind_shop_purchase: { ru: 'Покупка в магазине', en: 'Shop purchase' }, kind_group_donation: { ru: 'Донат группе', en: 'Group donation' },
+  kind_shop_purchase: { ru: 'Покупка в магазине', en: 'Shop purchase' }, kind_shop_sale: { ru: 'Продажа в магазине', en: 'Shop sale' }, kind_group_donation: { ru: 'Донат группе', en: 'Group donation' },
   kind_dev_topup: { ru: 'Тестовое пополнение', en: 'Test top-up' }, kind_refund_clawback: { ru: 'Списание при возврате', en: 'Refund clawback' },
   kind_order_escrow: { ru: 'Оплата заказа (в удержании)', en: 'Order payment (held)' }, kind_order_payout: { ru: 'Выплата за заказ', en: 'Order payout' },
   kind_order_refund: { ru: 'Возврат за заказ', en: 'Order refund' },

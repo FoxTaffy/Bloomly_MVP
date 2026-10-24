@@ -1,26 +1,31 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
-import { listItems, getItem, purchaseItem, getMyItems } from './service.js';
+import { listItems, getItem, purchaseItem, getMyItems, SORTS, type ShopSort } from './service.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ok = (data: unknown) => ({ success: true, data, error: null });
 const err = (code: string, msg: string) => ({ success: false, data: null, error: { code, message: msg } });
 
 export async function shopRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  // Каталог открыт гостям, но залогиненному нужен флаг owned — без tryAuthenticate req.user всегда пуст
+  const optionalAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
 
-  // GET /api/shop/items?type=&page=&limit=
-  fastify.get('/items', async (req: FastifyRequest, reply: FastifyReply) => {
+  // GET /api/shop/items?type=&q=&sort=&page=&limit=
+  fastify.get('/items', optionalAuth, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as Record<string, string>;
     const userId = req.user?.id;
-    const page = Math.max(1, parseInt(q.page ?? '1'));
-    const limit = Math.min(50, Math.max(1, parseInt(q.limit ?? '24')));
-    const result = await listItems({ type: q.type, page, limit, userId });
+    const page = Math.max(1, parseInt(q.page ?? '1') || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(q.limit ?? '24') || 24));
+    const sort = SORTS.includes(q.sort as ShopSort) ? (q.sort as ShopSort) : 'newest';
+    const result = await listItems({ type: q.type, search: q.q, sort, page, limit, userId });
     reply.send(ok(result));
   });
 
   // GET /api/shop/items/:id
-  fastify.get('/items/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  fastify.get('/items/:id', optionalAuth, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    if (!UUID_RE.test(id)) return reply.status(404).send(err('NOT_FOUND', 'Item not found'));
     const userId = req.user?.id;
     const item = await getItem(id, userId);
     if (!item) return reply.status(404).send(err('NOT_FOUND', 'Item not found'));
@@ -31,6 +36,7 @@ export async function shopRoutes(fastify: FastifyInstance) {
   fastify.post('/items/:id/purchase', auth, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const userId = req.user.id;
+    if (!UUID_RE.test(id)) return reply.status(404).send(err('NOT_FOUND', 'Item not found'));
     try {
       await purchaseItem(userId, id);
       reply.send(ok({ purchased: true }));

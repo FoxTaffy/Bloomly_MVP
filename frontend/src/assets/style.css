@@ -526,3 +526,33 @@ html.has-custom-bg::before {
 html.has-custom-bg .min-h-screen.bg-brand-bg {
   background-color: transparent;
 }
+
+/* ── Общие кирпичики витрин (Магазин, Dealers' Den): один вид вместо копий в каждом экране ─────────── */
+@utility card-surface {
+  background-color: var(--color-brand-card);
+  border: 1px solid var(--color-brand-border);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.25);
+}
+@utility section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.6);
+}
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid;
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 9px;
+  font-weight: 800;
+  backdrop-filter: blur(4px);
+}

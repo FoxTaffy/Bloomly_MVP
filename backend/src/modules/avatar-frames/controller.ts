@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { avatarFramesService } from './service.js';
 import type { CreateAvatarFrameInput, CalibrationInput } from './types.js';
-import { errMessage } from '../../lib/httpErrors.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 export async function createFrameHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
@@ -43,6 +43,7 @@ export async function claimFrameHandler(req: FastifyRequest, reply: FastifyReply
     const msg: string = errMessage(err) ?? '';
     if (msg === 'FRAME_NOT_FOUND')    return reply.status(404).send({ success: false, error: 'Рамка не найдена' });
     if (msg === 'FRAME_NOT_APPROVED') return reply.status(409).send({ success: false, error: 'Рамка ещё на модерации' });
+    if (msg === 'INSUFFICIENT_FUNDS' || errStatus(err) === 402) return reply.status(402).send({ success: false, error: 'Недостаточно BLM на кошельке' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to claim avatar frame' });
   }

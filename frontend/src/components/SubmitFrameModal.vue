@@ -32,7 +32,7 @@
           <div class="relative">
             <input v-model.number="price" type="number" min="0" step="0.01" placeholder="0.00"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 pr-16 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
-            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/30 font-bold">{{ price === 0 ? 'FREE' : 'USD' }}</span>
+            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/30 font-bold">{{ price === 0 ? 'FREE' : 'BLM' }}</span>
           </div>
         </div>
 
@@ -47,8 +47,8 @@
         <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
 
         <button type="button" :disabled="!canSubmit || submitting" @click="submit"
-          class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+          class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-brand-gradient"
+          >
           <span v-if="submitting" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
           {{ langStore.t.avatarFrameSubmitAction }}
         </button>

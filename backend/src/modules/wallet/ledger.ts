@@ -4,7 +4,7 @@ type Tx = Prisma.TransactionClient;
 
 export type WalletEntryKind =
   | 'topup' | 'subscription' | 'sticker_purchase' | 'sticker_sale'
-  | 'shop_purchase' | 'group_donation' | 'dev_topup' | 'refund_clawback'
+  | 'shop_purchase' | 'shop_sale' | 'group_donation' | 'dev_topup' | 'refund_clawback'
   | 'order_escrow' | 'order_payout' | 'order_refund'
   | 'promo_grant' | 'promo_spend' | 'den_bump' | 'ad_banner' | 'ad_refund' | 'post_boost';
 

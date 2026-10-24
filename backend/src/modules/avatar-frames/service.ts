@@ -1,4 +1,6 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
+import { debitWallet, creditWallet } from '../wallet/ledger.js';
 import { isAdmin as isAdminRole } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
@@ -30,7 +32,7 @@ export const avatarFramesService = {
     if (!input.name?.trim()) throw new Error('INVALID_NAME');
     if (!input.imageUrl) throw new Error('INVALID_IMAGE');
     await assertOwnedMedia(input.imageUrl, userId);
-    if (input.price !== undefined && input.price < 0) throw new Error('INVALID_PRICE');
+    if (input.price !== undefined && (!Number.isFinite(input.price) || input.price < 0 || input.price > 100_000)) throw new Error('INVALID_PRICE');
 
     const admin = isAdminRole(role);
     if (!admin) {
@@ -82,27 +84,43 @@ export const avatarFramesService = {
     return frames.map((f) => ({ ...f, owned: ownedIds.has(f.id) }));
   },
 
-  // ── claim (free instant grant, once approved) ───────────────────────────────
+  // ── claim: бесплатная рамка выдаётся сразу, платная — за BLM с автору идёт выручка ──────
   async claim(frameId: string, userId: string) {
     const frame = await prisma.avatarFrame.findFirst({ where: { id: frameId, deleted_at: null } });
     if (!frame) throw new Error('FRAME_NOT_FOUND');
     if (frame.status !== 'approved') throw new Error('FRAME_NOT_APPROVED');
 
-    const existing = await prisma.userAvatarFrame.findUnique({
-      where: { user_id_frame_id: { user_id: userId, frame_id: frameId } },
-    });
+    const key = { user_id_frame_id: { user_id: userId, frame_id: frameId } };
+    const existing = await prisma.userAvatarFrame.findUnique({ where: key });
     if (existing) return existing;
 
-    return prisma.userAvatarFrame.create({
-      data: {
-        user_id: userId,
-        frame_id: frameId,
-        offset_x: frame.default_offset_x,
-        offset_y: frame.default_offset_y,
-        scale: frame.default_scale,
-        rotation: frame.default_rotation,
-      },
-    });
+    const price = Number(frame.price);
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // Выдачу создаём первой: при параллельном клике уникальный индекс откатит и списание
+        const owned = await tx.userAvatarFrame.create({
+          data: {
+            user_id: userId,
+            frame_id: frameId,
+            offset_x: frame.default_offset_x,
+            offset_y: frame.default_offset_y,
+            scale: frame.default_scale,
+            rotation: frame.default_rotation,
+          },
+        });
+        if (price > 0 && frame.creator_id !== userId) {
+          await debitWallet(tx, userId, price, { kind: 'shop_purchase', refId: frameId }, 'INSUFFICIENT_FUNDS');
+          await creditWallet(tx, frame.creator_id, price, { kind: 'shop_sale', refId: frameId });
+        }
+        return owned;
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const again = await prisma.userAvatarFrame.findUnique({ where: key });
+        if (again) return again;
+      }
+      throw e;
+    }
   },
 
   // ── caller's own calibration ─────────────────────────────────────────────────

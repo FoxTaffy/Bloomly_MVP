@@ -4,7 +4,10 @@ import { isAxiosError } from 'axios'
 
 /** `error.message` from an API error response, if the request reached the API. */
 export function apiErrorMessage(e: unknown): string | undefined {
-  return isAxiosError(e) ? e.response?.data?.error?.message : undefined
+  if (!isAxiosError(e)) return undefined
+  const err = e.response?.data?.error
+  // Часть модулей отвечает { error: { message } }, часть — плоской строкой { error: 'текст' }
+  return typeof err === 'string' ? err : err?.message
 }
 
 /** HTTP status of a failed API request, if there was a response. */

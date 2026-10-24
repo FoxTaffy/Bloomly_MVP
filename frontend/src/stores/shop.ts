@@ -1,6 +1,6 @@
 import { apiErrorMessage } from '@/lib/apiError'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import api from '../api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -28,22 +28,37 @@ export const useShopStore = defineStore('shop', () => {
   const myItems = ref<ShopItem[]>([])
   const total = ref(0)
   const loading = ref(false)
+  const loadingMore = ref(false)
   const purchasing = ref<string | null>(null)
 
-  async function loadItems(opts: { type?: string; page?: number; limit?: number } = {}) {
-    loading.value = true
+  const page = ref(1)
+  const PAGE_SIZE = 24
+  let loadSeq = 0
+
+  /** Каталог с серверным поиском и сортировкой; append=true дописывает следующую страницу. */
+  async function loadItems(opts: { type?: string; q?: string; sort?: string; append?: boolean } = {}) {
+    const seq = ++loadSeq // ответ устаревшего запроса (быстрая смена вкладки) отбрасываем
+    const nextPage = opts.append ? page.value + 1 : 1
+    loading.value = !opts.append
+    loadingMore.value = !!opts.append
     try {
-      const params: Record<string, string | number> = { page: opts.page ?? 1, limit: opts.limit ?? 24 }
+      const params: Record<string, string | number> = { page: nextPage, limit: PAGE_SIZE }
       if (opts.type && opts.type !== 'all') params.type = opts.type
+      if (opts.q?.trim()) params.q = opts.q.trim()
+      if (opts.sort && opts.sort !== 'newest') params.sort = opts.sort
       const { data } = await api.get('/shop/items', { params })
+      if (seq !== loadSeq) return
       if (data.success) {
-        items.value = data.data.items
+        items.value = opts.append ? [...items.value, ...data.data.items] : data.data.items
         total.value = data.data.total
+        page.value = nextPage
       }
     } finally {
-      loading.value = false
+      if (seq === loadSeq) { loading.value = false; loadingMore.value = false }
     }
   }
+
+  const hasMore = computed(() => items.value.length < total.value)
 
   async function loadMyItems(type?: string) {
     const params: Record<string, string> = {}
@@ -58,7 +73,7 @@ export const useShopStore = defineStore('shop', () => {
       await api.post(`/shop/items/${itemId}/purchase`)
       // Mark as owned in local state
       const idx = items.value.findIndex((i) => i.id === itemId)
-      if (idx !== -1) items.value[idx] = { ...items.value[idx], owned: true }
+      if (idx !== -1) items.value[idx] = { ...items.value[idx], owned: true, downloads_count: items.value[idx].downloads_count + 1 }
       return { ok: true }
     } catch (e) {
       return { ok: false, error: apiErrorMessage(e) ?? 'Ошибка покупки' }
@@ -67,5 +82,5 @@ export const useShopStore = defineStore('shop', () => {
     }
   }
 
-  return { items, myItems, total, loading, purchasing, loadItems, loadMyItems, purchaseItem }
+  return { items, myItems, total, loading, loadingMore, hasMore, purchasing, loadItems, loadMyItems, purchaseItem }
 })
