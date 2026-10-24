@@ -86,8 +86,6 @@
               <h4 class="font-bold text-white truncate hover:text-brand-accent transition-colors">
                 {{ effectiveGroupContext ? effectiveGroupContext.name : (post.author?.display_name || post.author?.username || 'Аноним') }}
               </h4>
-              <span v-if="isBoostedNow" class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-brand-accent bg-brand-accent/10 border border-brand-accent/30 px-1.5 py-0.5 rounded-md"
-                :title="langStore.t.postBoostActive">🚀 {{ langStore.t.postBoostActive }}</span>
               <!-- Verification badge — only for user posts -->
               <template v-if="!effectiveGroupContext && post.author">
                 <span v-if="post.author.deceased_at" title="Светлая память" class="shrink-0">🪦</span>
@@ -153,11 +151,6 @@
               <button v-if="isEditable" @click="startEdit"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
                 <BIcon name="Pencil" class="w-4 h-4 text-brand-accent" /> Редактировать
-              </button>
-              <button v-if="isOwn && !post.is_archived" @click="doBoost" :disabled="isBoosting"
-                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5 disabled:opacity-50 whitespace-nowrap">
-                <BIcon name="Rocket" class="w-4 h-4 text-brand-accent" /> {{ langStore.t.postBoostMenu }}
-                <span class="ml-auto text-[11px] text-white/45">{{ boostHint }}</span>
               </button>
               <button v-if="isOwn" @click="openStats"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
@@ -793,9 +786,6 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import PostFileAttachments from '@/components/PostFileAttachments.vue'
 import { isDocUrl, visualMedia, fileMedia } from '@/lib/postMedia'
-import { useWalletStore } from '@/stores/wallet'
-import { apiErrorCode } from '@/lib/apiError'
-import * as fmt from '@/lib/format'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import PostListingCard from '@/components/PostListingCard.vue'
@@ -1427,35 +1417,6 @@ function openStats() {
   } else {
     router.push('/subscriptions')
   }
-}
-
-// ── Буст поста в ленту: бесплатный лимит тарифа или BLM (с Promo-баланса в первую очередь) ──
-const isBoosting = ref(false)
-const boostInfo = ref<{ priceBlm: number; freeLeft: number } | null>(null)
-const isBoostedNow = computed(() => !!props.post.boosted_until && new Date(props.post.boosted_until as string).getTime() > Date.now())
-const boostHint = computed(() => {
-  const info = boostInfo.value
-  if (!info) return ''
-  return info.freeLeft > 0 ? `${langStore.t.postBoostFreeLeft} ${info.freeLeft}` : fmt.formatBlm(info.priceBlm)
-})
-watch(showMenu, async (open) => {
-  if (!open || !isOwn.value || boostInfo.value) return
-  try { boostInfo.value = (await api.get('/posts/boost-info')).data.data } catch {}
-})
-async function doBoost() {
-  if (isBoosting.value) return
-  isBoosting.value = true
-  showMenu.value = false
-  try {
-    const r = await api.post(`/posts/${props.post.id}/boost`)
-    Object.assign(props.post, { boosted_at: r.data.data.post.boosted_at, boosted_until: r.data.data.post.boosted_until })
-    boostInfo.value = null
-    if (r.data.data.boost.kind === 'paid') void useWalletStore().fetchBalance().catch(() => {})
-    alert(langStore.t.postBoostDone)
-  } catch (e) {
-    const code = apiErrorCode(e)
-    alert(code === 'BOOST_TOO_SOON' ? langStore.t.postBoostTooSoon : code === 'INSUFFICIENT_FUNDS' ? langStore.t.postBoostNoFunds : langStore.t.postBoostFailed)
-  } finally { isBoosting.value = false }
 }
 
 async function doToggleArchive() {

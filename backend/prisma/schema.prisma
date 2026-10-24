@@ -349,9 +349,6 @@ model Post {
   is_ai_generated     Boolean             @default(false)
   // Лот Dealers' Den, прикреплённый к посту «Обновление заказа» (карточка внизу поста)
   listing_id          String?             @db.Uuid
-  /// Платное/тарифное продвижение в ленту: пока boosted_until в будущем, пост получает охват сверху ленты
-  boosted_at          DateTime?
-  boosted_until       DateTime?
   comments            Comment[]
   favourites          Favourite[]
   author              User                @relation("PostAuthor", fields: [author_id], references: [id])
@@ -365,11 +362,9 @@ model Post {
   views               PostView[]
   notInterested       PostNotInterested[]
   listing             DealerListing?      @relation(fields: [listing_id], references: [id], onDelete: SetNull)
-  boosts              PostBoost[]
 
   @@index([author_id])
   @@index([listing_id])
-  @@index([boosted_until])
   @@index([deleted_at, created_at])
   @@index([rating])
   // Лента: ORDER BY created_at DESC LIMIT n — без этого индекса планировщик читал все посты
@@ -637,7 +632,7 @@ model WalletTransaction {
   amount        Decimal  @db.Decimal(18, 2)
   balance_after Decimal  @db.Decimal(18, 2) // остаток того баланса, что изменился (см. balance_type)
   balance_type  String   @default("main") @db.VarChar(8) // main | promo
-  kind          String   @db.VarChar(30) // topup | subscription | sticker_purchase | sticker_sale | shop_purchase | shop_sale | group_donation | dev_topup | order_escrow | order_payout | order_refund | promo_grant | promo_spend | den_bump | ad_banner | ad_refund | post_boost
+  kind          String   @db.VarChar(30) // topup | subscription | sticker_purchase | sticker_sale | shop_purchase | shop_sale | group_donation | dev_topup | order_escrow | order_payout | order_refund | promo_grant | promo_spend | den_bump | ad_banner | ad_refund
   ref_id        String?  @db.VarChar(100) // платёж / пак / товар / группа
   created_at    DateTime @default(now())
 
@@ -1587,21 +1582,6 @@ model DealerListing {
   @@index([auction_ends_at])
   @@index([created_at(sort: Desc)])
   @@index([feed_at(sort: Desc)])
-}
-
-/// Журнал бустов постов: по записи на каждый, чтобы считать месячный лимит тарифа и кулдаун
-model PostBoost {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  post_id    String   @db.Uuid
-  user_id    String   @db.Uuid
-  kind       String   @db.VarChar(10) // free (лимит тарифа) | paid (BLM)
-  cost_blm   Decimal  @default(0) @db.Decimal(18, 2)
-  created_at DateTime @default(now())
-
-  post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id, kind, created_at])
-  @@index([post_id, created_at])
 }
 
 /// Журнал поднятий карточек в общей ленте: по записи на каждое, чтобы считать лимиты подписки и интервалы автоподнятия.

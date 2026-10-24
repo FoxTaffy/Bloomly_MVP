@@ -38,7 +38,7 @@ describe('тарифы: перки', () => {
 
   it('скидки на баннеры Pro 15 %, Business 30 %; кэшбэк и бусты только у Business', () => {
     expect(perksFor('pro').adDiscountPct).toBe(15);
-    expect(perksFor('business')).toMatchObject({ adDiscountPct: 30, promoCashbackBlm: 2, postBoostsPerMonth: 10, autoBump: true });
+    expect(perksFor('business')).toMatchObject({ adDiscountPct: 30, promoCashbackBlm: 2, autoBump: true });
     expect(perksFor('pro')).toMatchObject({ freeBumpsPerMonth: 3, autoBump: false, promoCashbackBlm: 0 });
   });
 

@@ -32,8 +32,6 @@ export interface PlanPerks {
   autoBump: boolean;
   /** Бонус к оценке в поиске людей, групп и лотов Dealers Den (0 — без приоритета). */
   searchBonus: number;
-  /** Бесплатные бусты постов в ленту в месяц. */
-  postBoostsPerMonth: number;
   /** Ежемесячный кэшбэк промо-BLM при продлении. */
   promoCashbackBlm: number;
 }
@@ -41,10 +39,10 @@ export interface PlanPerks {
 export type PerkTier = 'free' | PaidTier;
 
 export const PLAN_PERKS: Record<PerkTier, PlanPerks> = {
-  free:     { maxPhotoBytes: 15 * MB, maxVideoBytes: 100 * MB, maxAttachmentBytes: 0, uncompressedPhotos: false, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 3, adDiscountPct: 0,  denCooldownHours: 3,   freeBumpsPerMonth: 0,  autoBump: false, searchBonus: 0, postBoostsPerMonth: 0,  promoCashbackBlm: 0 },
-  lite:     { maxPhotoBytes: 50 * MB, maxVideoBytes: 500 * MB, maxAttachmentBytes: 0, uncompressedPhotos: true, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 3, adDiscountPct: 0,  denCooldownHours: 3,   freeBumpsPerMonth: 0,  autoBump: false, searchBonus: 0, postBoostsPerMonth: 0,  promoCashbackBlm: 0 },
-  pro:      { maxPhotoBytes: 50 * MB, maxVideoBytes: 1 * GB, maxAttachmentBytes: 1 * GB, uncompressedPhotos: true, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 2, adDiscountPct: 15, denCooldownHours: 1,   freeBumpsPerMonth: 3,  autoBump: false, searchBonus: 4, postBoostsPerMonth: 0,  promoCashbackBlm: 0 },
-  business: { maxPhotoBytes: 50 * MB, maxVideoBytes: 2 * GB, maxAttachmentBytes: 2 * GB, uncompressedPhotos: true, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 1, adDiscountPct: 30, denCooldownHours: 0.5, freeBumpsPerMonth: 3,  autoBump: true,  searchBonus: 6, postBoostsPerMonth: 10, promoCashbackBlm: 2 },
+  free:     { maxPhotoBytes: 15 * MB, maxVideoBytes: 100 * MB, maxAttachmentBytes: 0, uncompressedPhotos: false, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 3, adDiscountPct: 0,  denCooldownHours: 3,   freeBumpsPerMonth: 0,  autoBump: false, searchBonus: 0,promoCashbackBlm: 0 },
+  lite:     { maxPhotoBytes: 50 * MB, maxVideoBytes: 500 * MB, maxAttachmentBytes: 0, uncompressedPhotos: true, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 3, adDiscountPct: 0,  denCooldownHours: 3,   freeBumpsPerMonth: 0,  autoBump: false, searchBonus: 0,promoCashbackBlm: 0 },
+  pro:      { maxPhotoBytes: 50 * MB, maxVideoBytes: 1 * GB, maxAttachmentBytes: 1 * GB, uncompressedPhotos: true, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 2, adDiscountPct: 15, denCooldownHours: 1,   freeBumpsPerMonth: 3,  autoBump: false, searchBonus: 4,promoCashbackBlm: 0 },
+  business: { maxPhotoBytes: 50 * MB, maxVideoBytes: 2 * GB, maxAttachmentBytes: 2 * GB, uncompressedPhotos: true, dailyMessageLimit: null, groupSalesFeePct: 0, withdrawFeePct: 1, adDiscountPct: 30, denCooldownHours: 0.5, freeBumpsPerMonth: 3,  autoBump: true,  searchBonus: 6,promoCashbackBlm: 2 },
 };
 
 /** Перки тарифа; неизвестный или истёкший тариф считается free. */

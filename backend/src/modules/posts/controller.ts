@@ -10,7 +10,6 @@ import { requestIsAdult } from '../../lib/age.js';
 import { resolveNsfwMode } from '../../lib/contentFilters.js';
 import { logError } from '../../lib/logger.js';
 import { errCode, errMessage, errStatus } from '../../lib/httpErrors.js';
-import { boostPost, getBoostInfo } from './boost.service.js';
 
 export const getTrendingTagsHandler = async (
   request: FastifyRequest<{ Querystring: { includeNsfw?: string } }>,
@@ -559,29 +558,5 @@ export const getMyPostsLikedByHandler = async (
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch liked posts';
     return reply.code(500).send({ success: false, data: null, error: { code: 'LIKED_BY_ERROR', message } });
-  }
-};
-
-// ── Буст поста в ленту ────────────────────────────────────────────────────────
-
-export const getBoostInfoHandler = async (request: FastifyRequest, reply: FastifyReply) => {
-  const { id: userId } = request.user as JwtUser;
-  return reply.send({ success: true, data: await getBoostInfo(userId), error: null });
-};
-
-export const boostPostHandler = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  const { id: userId } = request.user as JwtUser;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.params.id)) {
-    return reply.code(404).send({ success: false, data: null, error: { code: 'POST_NOT_FOUND', message: 'Post not found or not yours' } });
-  }
-  try {
-    return reply.send({ success: true, data: await boostPost(userId, request.params.id), error: null });
-  } catch (error: unknown) {
-    const status = errStatus(error);
-    if (status && status < 500) {
-      return reply.code(status).send({ success: false, data: null, error: { code: errCode(error) ?? 'BOOST_ERROR', message: errMessage(error), details: (error as { details?: unknown }).details } });
-    }
-    logError('[posts.boost] failed')(error);
-    return reply.code(500).send({ success: false, data: null, error: { code: 'BOOST_ERROR', message: 'Failed to boost post' } });
   }
 };

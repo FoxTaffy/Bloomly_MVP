@@ -1,6 +1,4 @@
 import prisma from '../../config/prisma.js';
-import { POST_BOOST } from './boost.config.js';
-import { pickBoostedPosts } from './boost.service.js';
 import { readablePostsWhere, assertPostReadable } from '../../lib/contentAccess.js';
 import { pagination } from '../../lib/pagination.js';
 import { decodeKeyset, encodeCursor, keysetOf, keysetWhere, type Keyset, type StreamsCursor } from '../../lib/cursor.js';
@@ -292,7 +290,7 @@ async function getUserAffinityMap(userId: string): Promise<AffinityMap> {
  *    shallow recent-activity window used for exclusion) — see UNSEEN_BOOST. This is a strong
  *    nudge, not a hard bucket: a real viral post can still beat a mediocre unseen one.
  */
-function rankByAffinity<T extends PostLike & { id: string; rating: number; created_at: Date; boosted_until?: Date | null }>(
+function rankByAffinity<T extends PostLike & { id: string; rating: number; created_at: Date }>(
   posts: T[],
   affinity: AffinityMap,
   interestTerms: Set<string>,
@@ -315,10 +313,7 @@ function rankByAffinity<T extends PostLike & { id: string; rating: number; creat
       const trending = trendingMap.get(post.id) ?? 0;
       const unseenBonus = seenIds.has(post.id) ? 0 : UNSEEN_BOOST;
       const freshness = FRESHNESS_BOOST * Math.pow(0.5, Math.max(0, ageHours) / FRESHNESS_HALF_LIFE_HOURS);
-      // Продвигаемый пост (буст, см. posts/boost.service.ts) держится наверху, пока идёт окно буста
-      const boostBonus = post.boosted_until && post.boosted_until.getTime() > now ? POST_BOOST.rankBonus : 0;
       const score = post.rating * decay
-        + boostBonus
         + behavioral * AFFINITY_RANK_WEIGHT
         + interestBoost * INTEREST_RANK_WEIGHT
         + trending * TRENDING_WEIGHT
@@ -687,17 +682,6 @@ export const postService = {
     });
     // Полная страница — значит, дальше может быть ещё; решает сервер, а не пустой ответ клиенту
     const nextCursor = posts.length === limitNum ? encodeCursor(keysetOf(posts[posts.length - 1], sort === 'hot')) : null;
-    // Общая лента без поиска и фильтров: наверх первой страницы подмешиваются продвигаемые посты
-    // («старые сверху» — просмотр архива, там продвижение неуместно)
-    if (pageNum === 1 && !keyset && sort !== 'old' && !search && !tag && !category && !hasMedia && !nsfwOnly) {
-      const boosted = await pickBoostedPosts(
-        (take) => prisma.post.findMany({ where: { AND: [visible, { boosted_until: { gt: new Date() } }] }, orderBy: { boosted_at: 'desc' }, take, include }),
-      );
-      if (boosted.length) {
-        const ids = new Set(boosted.map((p) => p.id));
-        posts = [...boosted, ...posts.filter((p) => !ids.has(p.id))].slice(0, Math.max(limitNum, boosted.length));
-      }
-    }
     return { posts: (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor), nextCursor };
   },
 
@@ -998,24 +982,9 @@ export const postService = {
     // Interleave: 3 personalised → 2 discover
     const result = interleave(personalizedPosts, 3, discoverPosts, 2);
 
-    // Продвигаемые посты (платный/тарифный буст) подмешиваются наверх первой страницы после закреплённых колокольчиком
-    let boosted: any[] = [];
-    if (pageNum === 1 && !cursor) {
-      const taken = new Set([...bellPosts, ...personalizedPosts, ...discoverPosts].map((p) => p.id));
-      boosted = await pickBoostedPosts(
-        (take) => prisma.post.findMany({
-          where: { ...feedWhere, boosted_until: { gt: new Date() } },
-          orderBy: { boosted_at: 'desc' },
-          take,
-          include: postInclude,
-        }),
-        taken,
-      );
-    }
-
     // Diversify across the whole page, bell pins included — otherwise a bell pin and the very
     // next personalized pick could still land back to back for the same author/group.
-    return { posts: diversifyByAuthor([...bellPosts, ...boosted, ...result]).map(maskGroupAuthor), nextCursor };
+    return { posts: diversifyByAuthor([...bellPosts, ...result]).map(maskGroupAuthor), nextCursor };
   },
 
   async toggleVote(userId: string, postId: string, value: 1 | -1) {

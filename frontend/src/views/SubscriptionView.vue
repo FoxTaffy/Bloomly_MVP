@@ -97,7 +97,7 @@ const plans = computed<Plan[]>(() => {
       color: 'text-amber-400',
       gradient: 'from-amber-400/12 to-amber-400/3',
       iconBg: 'bg-amber-400/10 text-amber-400 border-amber-400/25',
-      features: [t.featAllPro, t.featFilesBusiness, t.featPostBoosts, t.featPromoCashback, t.featAutoBump, t.featAdDiscount30, t.featWithdraw1, t.featAdvAnalytics, t.featPrioritySupport, t.featEarlyAccess],
+      features: [t.featAllPro, t.featFilesBusiness, t.featPromoCashback, t.featAutoBump, t.featAdDiscount30, t.featWithdraw1, t.featAdvAnalytics, t.featPrioritySupport, t.featEarlyAccess],
     },
   ]
 })

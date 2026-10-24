@@ -32,7 +32,6 @@ export interface PlanPerks {
   freeBumpsPerMonth: number
   autoBump: boolean
   searchBonus: number
-  postBoostsPerMonth: number
   promoCashbackBlm: number
 }
 
