@@ -78,9 +78,9 @@ const props = defineProps<{ draft: DetailsDraft; commission: boolean }>()
 </script>
 
 <style scoped>
-.inp { background: #0a0a1a; border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; padding: 0.55rem 0.75rem; font-size: 0.8rem; color: #fff; outline: none; }
+.inp { background: var(--color-brand-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; padding: 0.55rem 0.75rem; font-size: 0.8rem; color: #fff; outline: none; }
 .inp:focus { border-color: rgba(255,255,255,0.3); }
-.add { font-size: 0.7rem; font-weight: 700; color: #93b4ff; }
+.add { font-size: 0.7rem; font-weight: 700; color: var(--color-brand-accent-minus); }
 .add:hover { color: #fff; }
 .del { width: 2rem; flex-shrink: 0; border-radius: 0.6rem; background: rgba(255,0,0,0.08); color: rgba(255,120,120,0.8); font-size: 0.75rem; }
 </style>

@@ -17,6 +17,14 @@ import { getBumpInfo, bumpListing, setAutoBump } from './feed.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const notFound = (reply: FastifyReply, error = 'Объявление не найдено') => reply.status(404).send({ success: false, error });
+const unprocessable = (reply: FastifyReply, error: string) => reply.status(422).send({ success: false, error });
+
+/** Лот существует и виден зрителю (черновики, архив, 18+) — иначе побочные ручки раскрывали бы скрытые лоты. */
+async function listingVisible(req: FastifyRequest, listingId: string): Promise<boolean> {
+  return UUID_RE.test(listingId) && dealersDenService.canView(listingId, req.user?.id, requestIsAdult(req.user));
+}
+
 // ── Listings ──────────────────────────────────────────────────────────────────
 
 export async function listListingsHandler(req: FastifyRequest, reply: FastifyReply) {
@@ -110,6 +118,8 @@ export async function updateListingHandler(req: FastifyRequest, reply: FastifyRe
     if (!listing) return reply.status(404).send({ success: false, error: 'Listing not found or not yours' });
     return reply.send({ success: true, data: { listing } });
   } catch (err) {
+    const status = errStatus(err);
+    if (status && status < 500) return reply.status(status).send({ success: false, error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to update listing' });
   }
@@ -118,6 +128,7 @@ export async function updateListingHandler(req: FastifyRequest, reply: FastifyRe
 export async function deleteListingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { id } = req.params as { id: string };
+  if (!UUID_RE.test(id)) return reply.status(404).send({ success: false, error: 'Listing not found or not yours' });
   try {
     const result = await dealersDenService.delete(id, user.id);
     if (!result) return reply.status(404).send({ success: false, error: 'Listing not found or not yours' });
@@ -145,6 +156,7 @@ export async function placeBidHandler(req: FastifyRequest, reply: FastifyReply) 
   const user = req.user;
   const { id } = req.params as { id: string };
   const input = req.body as PlaceBidInput;
+  if (!(await listingVisible(req, id))) return notFound(reply);
   try {
     const result = await dealersDenService.placeBid(id, user.id, input);
     return reply.status(201).send({ success: true, data: result });
@@ -158,6 +170,7 @@ export async function placeBidHandler(req: FastifyRequest, reply: FastifyReply) 
     if (msg === 'INVALID_BID_AMOUNT') return reply.status(422).send({ success: false, error: 'Некорректная сумма ставки' });
     if (msg === 'BID_CONFLICT')       return reply.status(409).send({ success: false, error: 'Кто-то только что сделал ставку раньше вас, попробуйте снова' });
     if (msg === 'SELLER_FROZEN')      return reply.status(403).send({ success: false, error: 'Аккаунт продавца заморожен в Ярмарке' });
+    if (msg === 'DEN_FROZEN')         return reply.status(403).send({ success: false, error: 'Ваш аккаунт в Ярмарке заморожен' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to place bid' });
   }
@@ -165,6 +178,7 @@ export async function placeBidHandler(req: FastifyRequest, reply: FastifyReply) 
 
 export async function getBidsHandler(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as { id: string };
+  if (!(await listingVisible(req, id))) return notFound(reply);
   try {
     const bids = await dealersDenService.getBids(id);
     return reply.send({ success: true, data: { bids } });
@@ -177,6 +191,7 @@ export async function getBidsHandler(req: FastifyRequest, reply: FastifyReply) {
 export async function buyRaffleTicketHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { id } = req.params as { id: string };
+  if (!(await listingVisible(req, id))) return notFound(reply, 'Розыгрыш не найден');
   try {
     const listing = await dealersDenService.buyRaffleTicket(id, user.id);
     return reply.send({ success: true, data: { listing } });
@@ -214,6 +229,7 @@ export async function drawRaffleHandler(req: FastifyRequest, reply: FastifyReply
 
 export async function getCommentsHandler(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as { id: string };
+  if (!(await listingVisible(req, id))) return notFound(reply);
   try {
     const comments = await dealersDenService.getComments(id);
     return reply.send({ success: true, data: { comments } });
@@ -227,11 +243,15 @@ export async function addCommentHandler(req: FastifyRequest, reply: FastifyReply
   const user = req.user;
   const { id } = req.params as { id: string };
   const { body, parentId } = req.body as { body: string; parentId?: string };
-  if (!body?.trim()) return reply.status(400).send({ success: false, error: 'Body required' });
+  if (typeof body !== 'string' || !body.trim()) return reply.status(400).send({ success: false, error: 'Body required' });
+  if (body.length > 2000) return unprocessable(reply, 'Комментарий: не длиннее 2000 символов');
+  if (parentId !== undefined && (typeof parentId !== 'string' || !UUID_RE.test(parentId))) return notFound(reply, 'Комментарий не найден');
+  if (!(await listingVisible(req, id))) return notFound(reply);
   try {
     const comment = await dealersDenService.addComment(id, user.id, body.trim(), parentId);
     return reply.status(201).send({ success: true, data: { comment } });
   } catch (err) {
+    if (errMessage(err) === 'PARENT_NOT_FOUND') return notFound(reply, 'Комментарий не найден');
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to add comment' });
   }
@@ -241,9 +261,11 @@ export async function deleteCommentHandler(req: FastifyRequest, reply: FastifyRe
   const user = req.user;
   const { commentId } = req.params as { commentId: string };
   try {
+    if (!UUID_RE.test(commentId)) return notFound(reply, 'Комментарий не найден');
     await dealersDenService.deleteComment(commentId, user.id);
     return reply.send({ success: true, data: { ok: true } });
   } catch (err) {
+    if (errMessage(err) === 'NOT_FOUND') return notFound(reply, 'Комментарий не найден');
     if (errMessage(err) === 'FORBIDDEN') return reply.status(403).send({ success: false, error: 'No rights' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to delete comment' });
@@ -254,6 +276,7 @@ export async function deleteCommentHandler(req: FastifyRequest, reply: FastifyRe
 
 export async function getTrustHandler(req: FastifyRequest, reply: FastifyReply) {
   const { userId } = req.params as { userId: string };
+  if (!UUID_RE.test(userId)) return reply.send({ success: true, data: { trust: null } });
   try {
     const trust = await dealersDenService.getTrust(userId);
     return reply.send({ success: true, data: { trust } });
@@ -268,7 +291,8 @@ export async function getTrustHandler(req: FastifyRequest, reply: FastifyReply) 
 export async function createReviewHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { listingId } = req.params as { listingId: string };
-  const input = req.body as CreateReviewInput;
+  const input = (req.body ?? {}) as CreateReviewInput;
+  if (!(await listingVisible(req, listingId))) return notFound(reply);
   try {
     const review = await dealersDenService.createReview(listingId, user.id, input);
     return reply.status(201).send({ success: true, data: { review } });
@@ -278,7 +302,9 @@ export async function createReviewHandler(req: FastifyRequest, reply: FastifyRep
     if (msg === 'NOT_SOLD')            return reply.status(409).send({ success: false, error: 'Можно оставить отзыв только после продажи' });
     if (msg === 'CANNOT_REVIEW_OWN')   return reply.status(403).send({ success: false, error: 'Нельзя оставлять отзыв на свой лот' });
     if (msg === 'INVALID_RATING')      return reply.status(422).send({ success: false, error: 'Рейтинг: 1-5' });
-    if (msg === 'NOT_BUYER')           return reply.status(403).send({ success: false, error: 'Оставить отзыв может только покупатель этого лота' });
+    if (msg === 'NOT_BUYER')           return reply.status(403).send({ success: false, error: 'Оставить отзыв может только покупатель этого лота (победитель, забронировавший или тот, чью заявку приняли)' });
+    if (msg === 'ALREADY_REVIEWED')    return reply.status(409).send({ success: false, error: 'Вы уже оставили отзыв на этот лот' });
+    if (msg === 'INVALID_TEXT')        return unprocessable(reply, 'Отзыв: не длиннее 1000 символов');
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to create review' });
   }
@@ -286,6 +312,7 @@ export async function createReviewHandler(req: FastifyRequest, reply: FastifyRep
 
 export async function getListingReviewsHandler(req: FastifyRequest, reply: FastifyReply) {
   const { listingId } = req.params as { listingId: string };
+  if (!(await listingVisible(req, listingId))) return notFound(reply);
   try {
     const reviews = await dealersDenService.getListingReviews(listingId);
     return reply.send({ success: true, data: { reviews } });
@@ -297,6 +324,7 @@ export async function getListingReviewsHandler(req: FastifyRequest, reply: Fasti
 
 export async function getSellerReviewsHandler(req: FastifyRequest, reply: FastifyReply) {
   const { userId } = req.params as { userId: string };
+  if (!UUID_RE.test(userId)) return reply.send({ success: true, data: { reviews: [], avgRating: 0, totalCount: 0 } });
   try {
     const result = await dealersDenService.getSellerReviews(userId);
     return reply.send({ success: true, data: result });
@@ -310,6 +338,7 @@ export async function deleteReviewHandler(req: FastifyRequest, reply: FastifyRep
   const user = req.user;
   const { reviewId } = req.params as { reviewId: string };
   const userIsAdmin = isAdminRole(user.role);
+  if (!UUID_RE.test(reviewId)) return notFound(reply, 'Review not found');
   try {
     await dealersDenService.deleteReview(reviewId, user.id, userIsAdmin);
     return reply.send({ success: true, data: { ok: true } });
@@ -358,6 +387,7 @@ export async function recalcWeeklyTopHandler(req: FastifyRequest, reply: Fastify
 export async function addToWishlistHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { listingId } = req.params as { listingId: string };
+  if (!(await listingVisible(req, listingId))) return notFound(reply);
   try {
     const result = await dealersDenService.addToWishlist(listingId, user.id);
     return reply.send({ success: true, data: result });
@@ -395,7 +425,8 @@ export async function getMyWishlistHandler(req: FastifyRequest, reply: FastifyRe
 export async function createBookingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { listingId } = req.params as { listingId: string };
-  const input = req.body as CreateBookingInput;
+  const input = (req.body ?? {}) as CreateBookingInput;
+  if (!(await listingVisible(req, listingId))) return notFound(reply, 'Лот не найден');
   try {
     const result = await dealersDenService.createBooking(listingId, user.id, input);
     return reply.status(201).send({ success: true, data: result });
@@ -405,6 +436,10 @@ export async function createBookingHandler(req: FastifyRequest, reply: FastifyRe
     if (msg === 'DEN_FROZEN')        return reply.status(403).send({ success: false, error: 'Ваш аккаунт заморожен' });
     if (msg === 'SELLER_FROZEN')     return reply.status(403).send({ success: false, error: 'Аккаунт продавца заморожен в Ярмарке' });
     if (msg === 'SLOTS_FULL')        return reply.status(409).send({ success: false, error: 'Все слоты заняты' });
+    if (msg === 'SLOTS_BUSY')        return reply.status(409).send({ success: false, error: 'Много желающих одновременно — попробуйте ещё раз' });
+    if (msg === 'CANNOT_BOOK_OWN')   return reply.status(403).send({ success: false, error: 'Нельзя бронировать место в своей очереди' });
+    if (msg === 'ALREADY_BOOKED')    return reply.status(409).send({ success: false, error: 'У вас уже есть бронь в этой очереди' });
+    if (msg === 'FORM_INCOMPLETE')   return unprocessable(reply, 'Заполните обязательные поля анкеты');
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to create booking' });
   }
@@ -413,6 +448,7 @@ export async function createBookingHandler(req: FastifyRequest, reply: FastifyRe
 export async function getBookingsHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { listingId } = req.params as { listingId: string };
+  if (!UUID_RE.test(listingId)) return notFound(reply, 'Лот не найден');
   try {
     const bookings = await dealersDenService.getBookings(listingId, user.id);
     return reply.send({ success: true, data: { bookings } });
@@ -426,12 +462,14 @@ export async function getBookingsHandler(req: FastifyRequest, reply: FastifyRepl
 export async function updateBookingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { bookingId } = req.params as { bookingId: string };
-  const input = req.body as UpdateBookingInput;
+  const input = (req.body ?? {}) as UpdateBookingInput;
+  if (!UUID_RE.test(bookingId)) return notFound(reply, 'Бронь не найдена');
   try {
     const booking = await dealersDenService.updateBooking(bookingId, user.id, input);
     return reply.send({ success: true, data: { booking } });
   } catch (err) {
     if (errMessage(err) === 'FORBIDDEN') return reply.status(403).send({ success: false, error: 'No rights' });
+    if (errMessage(err) === 'INVALID_STATUS' || errMessage(err) === 'INVALID_NOTES') return unprocessable(reply, 'Некорректный статус или заметка');
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to update booking' });
   }
@@ -440,6 +478,7 @@ export async function updateBookingHandler(req: FastifyRequest, reply: FastifyRe
 export async function cancelBookingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { bookingId } = req.params as { bookingId: string };
+  if (!UUID_RE.test(bookingId)) return notFound(reply, 'Бронь не найдена');
   try {
     await dealersDenService.cancelBooking(bookingId, user.id);
     return reply.send({ success: true, data: { ok: true } });
@@ -457,7 +496,8 @@ export async function cancelBookingHandler(req: FastifyRequest, reply: FastifyRe
 export async function createDisputeHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { listingId } = req.params as { listingId: string };
-  const input = req.body as CreateDisputeInput;
+  const input = (req.body ?? {}) as CreateDisputeInput;
+  if (!UUID_RE.test(listingId)) return notFound(reply, 'Лот не найден или не продан');
   try {
     const dispute = await dealersDenService.createDispute(listingId, user.id, input);
     return reply.status(201).send({ success: true, data: { dispute } });
@@ -466,6 +506,7 @@ export async function createDisputeHandler(req: FastifyRequest, reply: FastifyRe
     if (msg === 'LISTING_NOT_FOUND')    return reply.status(404).send({ success: false, error: 'Лот не найден или не продан' });
     if (msg === 'CANNOT_DISPUTE_OWN')   return reply.status(403).send({ success: false, error: 'Нельзя открыть спор на свой лот' });
     if (msg === 'NOT_BUYER')            return reply.status(403).send({ success: false, error: 'Открыть спор может только покупатель этого лота' });
+    if (msg === 'INVALID_REASON')       return unprocessable(reply, 'Опишите причину спора: от 10 до 2000 символов');
     if (msg === 'ALREADY_DISPUTED')     return reply.status(409).send({ success: false, error: 'Вы уже открыли спор по этому лоту' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to create dispute' });
@@ -475,7 +516,8 @@ export async function createDisputeHandler(req: FastifyRequest, reply: FastifyRe
 export async function replyDisputeHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { disputeId } = req.params as { disputeId: string };
-  const input = req.body as ReplyDisputeInput;
+  const input = (req.body ?? {}) as ReplyDisputeInput;
+  if (!UUID_RE.test(disputeId)) return notFound(reply, 'Спор не найден');
   try {
     const dispute = await dealersDenService.replyDispute(disputeId, user.id, input);
     return reply.send({ success: true, data: { dispute } });
@@ -483,6 +525,7 @@ export async function replyDisputeHandler(req: FastifyRequest, reply: FastifyRep
     const msg: string = errMessage(err) ?? '';
     if (msg === 'NOT_FOUND')     return reply.status(404).send({ success: false, error: 'Спор не найден' });
     if (msg === 'DISPUTE_CLOSED') return reply.status(409).send({ success: false, error: 'Спор уже закрыт' });
+    if (msg === 'INVALID_REPLY')  return unprocessable(reply, 'Ответ: от 1 до 2000 символов');
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to reply to dispute' });
   }
@@ -512,12 +555,16 @@ export async function getAllDisputesHandler(req: FastifyRequest, reply: FastifyR
 export async function resolveDisputeHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { disputeId } = req.params as { disputeId: string };
-  const { winner, resolution } = req.body as ResolveDisputeInput;
+  const { winner, resolution } = (req.body ?? {}) as ResolveDisputeInput;
+  if (!UUID_RE.test(disputeId)) return notFound(reply, 'Спор не найден');
+  if (winner !== 'buyer' && winner !== 'seller') return unprocessable(reply, 'winner: buyer или seller');
+  if (typeof resolution !== 'string' || !resolution.trim() || resolution.length > 2000) return unprocessable(reply, 'Решение: от 1 до 2000 символов');
   try {
     await dealersDenService.resolveDispute(disputeId, user.id, winner, resolution);
     return reply.send({ success: true, data: { ok: true } });
   } catch (err) {
     if (errMessage(err) === 'NOT_FOUND') return reply.status(404).send({ success: false, error: 'Спор не найден' });
+    if (errMessage(err) === 'DISPUTE_CLOSED') return reply.status(409).send({ success: false, error: 'Спор уже закрыт' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to resolve dispute' });
   }
@@ -528,7 +575,7 @@ export async function resolveDisputeHandler(req: FastifyRequest, reply: FastifyR
 export async function getSellerPageHandler(req: FastifyRequest, reply: FastifyReply) {
   const { username } = req.params as { username: string };
   try {
-    const data = await dealersDenService.getSellerPage(username);
+    const data = await dealersDenService.getSellerPage(username, requestIsAdult(req.user));
     return reply.send({ success: true, data });
   } catch (err) {
     if (errMessage(err) === 'USER_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Пользователь не найден' });
@@ -541,7 +588,7 @@ export async function getSellerPageHandler(req: FastifyRequest, reply: FastifyRe
 
 export async function getCurrentFairHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
-    const result = await fairService.getCurrent();
+    const result = await fairService.getCurrent(req.user?.id);
     return reply.send({ success: true, data: result });
   } catch (err) {
     req.log.error(err);
@@ -551,8 +598,9 @@ export async function getCurrentFairHandler(req: FastifyRequest, reply: FastifyR
 
 export async function getFairHandler(req: FastifyRequest, reply: FastifyReply) {
   const { fairId } = req.params as { fairId: string };
+  if (!UUID_RE.test(fairId)) return reply.status(404).send({ success: false, error: 'Fair not found' });
   try {
-    const result = await fairService.getById(fairId);
+    const result = await fairService.getById(fairId, req.user?.id);
     if (!result) return reply.status(404).send({ success: false, error: 'Fair not found' });
     return reply.send({ success: true, data: result });
   } catch (err) {
@@ -564,11 +612,14 @@ export async function getFairHandler(req: FastifyRequest, reply: FastifyReply) {
 export async function applyToFairHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { fairId } = req.params as { fairId: string };
-  const { listingId } = req.body as { listingId?: string };
+  const { listingId } = (req.body ?? {}) as { listingId?: string };
+  if (!UUID_RE.test(fairId) || (listingId !== undefined && !UUID_RE.test(listingId))) return reply.status(404).send({ success: false, error: 'Fair not found' });
   try {
     const participant = await fairService.apply(fairId, user.id, listingId);
     return reply.status(201).send({ success: true, data: { participant } });
   } catch (err) {
+    const status = errStatus(err);
+    if (status && status < 500) return reply.status(status).send({ success: false, error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to apply to fair' });
   }
@@ -590,6 +641,8 @@ export async function createFairAdminHandler(req: FastifyRequest, reply: Fastify
     const fair = await fairService.create(input);
     return reply.status(201).send({ success: true, data: { fair } });
   } catch (err) {
+    const status = errStatus(err);
+    if (status && status < 500) return reply.status(status).send({ success: false, error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to create fair' });
   }
@@ -597,7 +650,8 @@ export async function createFairAdminHandler(req: FastifyRequest, reply: Fastify
 
 export async function updateFairParticipantAdminHandler(req: FastifyRequest, reply: FastifyReply) {
   const { fairId, userId } = req.params as { fairId: string; userId: string };
-  const { status } = req.body as { status: 'approved' | 'rejected' };
+  const { status } = (req.body ?? {}) as { status: 'approved' | 'rejected' };
+  if (!UUID_RE.test(fairId) || !UUID_RE.test(userId) || (status !== 'approved' && status !== 'rejected')) return reply.status(422).send({ success: false, error: 'Некорректный запрос' });
   try {
     const participant = await fairService.updateParticipant(fairId, userId, status);
     return reply.send({ success: true, data: { participant } });

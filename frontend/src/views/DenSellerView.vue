@@ -1,190 +1,126 @@
-<template>
-  <div class="den-seller-view">
-    <div v-if="loading" class="loading">Загрузка...</div>
-
-    <div v-else-if="error" class="error">{{ error }}</div>
-
-    <template v-else-if="data">
-      <!-- Hero -->
-      <div class="seller-hero">
-        <img v-if="data.user.avatarUrl" :src="data.user.avatarUrl" class="seller-avatar" alt="" />
-        <div v-else class="seller-avatar seller-avatar-placeholder">{{ initials }}</div>
-        <div class="seller-meta">
-          <div class="seller-name-row">
-            <h1 class="seller-name">{{ data.user.displayName || data.user.username }}</h1>
-            <span v-if="data.user.isVerified" class="verified-badge">✓ {{ langStore.t.verBadgeGenericLabel }}</span>
-          </div>
-          <p class="seller-username">@{{ data.user.username }}</p>
-          <DenTrustBadge :trust="data.user.denTrustScore" />
-          <div class="seller-stats">
-            <span>{{ data.stats.totalSales }} продаж</span>
-            <span v-if="data.stats.avgRating > 0">{{ data.stats.avgRating.toFixed(1) }}★ ({{ data.stats.reviewCount }})</span>
-            <span>Участник с {{ memberSince }}</span>
-          </div>
-          <div v-if="data.badges.length" class="badges">
-            <span v-for="badge in data.badges" :key="badge" class="badge">{{ badgeLabel(badge) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="seller-body">
-        <!-- Active listings -->
-        <section v-if="data.activeListings.length" class="section">
-          <h2 class="section-title">Активные лоты</h2>
-          <div class="listings-grid">
-            <RouterLink
-              v-for="listing in data.activeListings"
-              :key="listing.id"
-              :to="`/dealers-den/${listing.id}`"
-              class="listing-card"
-            >
-              <img v-if="listing.images[0]" :src="listing.images[0]" class="listing-img" alt="" />
-              <div class="listing-info">
-                <span class="listing-title">{{ listing.title }}</span>
-                <span class="listing-price">{{ listing.price }} {{ listing.currency }}</span>
-              </div>
-            </RouterLink>
-          </div>
-        </section>
-
-        <!-- Reviews -->
-        <section v-if="data.reviews.length" class="section">
-          <h2 class="section-title">Отзывы</h2>
-          <div class="reviews-list">
-            <DenReviewCard v-for="review in data.reviews" :key="review.id" :review="review" />
-          </div>
-        </section>
-
-        <div v-if="!data.activeListings.length && !data.reviews.length" class="empty">
-          У продавца пока нет активных лотов и отзывов
-        </div>
-      </div>
-    </template>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
-import { useDealersDenStore } from '../stores/dealersDen'
-import { useLangStore } from '../stores/lang'
-import DenTrustBadge from '../components/DenTrustBadge.vue'
-import DenReviewCard from '../components/DenReviewCard.vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useDealersDenStore, type DealerListing } from '@/stores/dealersDen'
+import { useLangStore } from '@/stores/lang'
+import { useAuthStore } from '@/stores/auth'
+import { apiErrorMessage } from '@/lib/apiError'
+import { onAvatarError } from '@/composables/useAvatarFallback'
+import * as fmt from '@/lib/format'
+import AppHeader from '@/components/AppHeader.vue'
+import AppSidebar from '@/components/AppSidebar.vue'
+import BIcon from '@/components/BIcon.vue'
+import UserBadges from '@/components/UserBadges.vue'
+import DenTrustBadge from '@/components/DenTrustBadge.vue'
+import DenReviewCard from '@/components/DenReviewCard.vue'
+import DenListingCard from '@/components/den/DenListingCard.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
-const route  = useRoute()
-const store  = useDealersDenStore()
+const route = useRoute()
+const router = useRouter()
+const store = useDealersDenStore()
+const auth = useAuthStore()
 const langStore = useLangStore()
-const data   = ref<any>(null)
-const loading = ref(false)
-const error   = ref('')
 
-const initials = computed(() => {
-  if (!data.value) return ''
-  const name = data.value.user.displayName || data.value.user.username
-  return name.slice(0, 2).toUpperCase()
+const data = ref<any>(null)
+const loading = ref(true)
+const error = ref('')
+
+const user = computed(() => data.value?.user)
+const name = computed(() => user.value?.displayName || user.value?.username || '')
+const badgeUser = computed(() => user.value && {
+  is_verified: user.value.isVerified, verification_type: user.value.verificationType,
+  badge_type: user.value.badgeType, role: user.value.role, subscription_tier: user.value.subscriptionTier,
 })
+const memberSince = computed(() => user.value ? fmt.formatDate(user.value.createdAt, 'long', 'ru-RU') : '')
 
-const memberSince = computed(() => {
-  if (!data.value) return ''
-  return new Date(data.value.user.createdAt).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' })
-})
+const stats = computed(() => !data.value ? [] : [
+  { icon: 'ShoppingBag', value: data.value.stats.totalSales, label: 'продаж' },
+  ...(data.value.stats.avgRating > 0 ? [{ icon: 'Star', value: `${data.value.stats.avgRating.toFixed(1)} (${data.value.stats.reviewCount})`, label: 'рейтинг' }] : []),
+  { icon: 'Calendar', value: memberSince.value, label: 'на Bloomly' },
+])
 
-function badgeLabel(badge: string) {
-  const labels: Record<string, string> = {
-    den_top_week: '🏆 Топ недели',
-    fair_champion: '🎪 Чемпион ярмарки',
-  }
-  return labels[badge] ?? badge
+const BADGE_LABELS: Record<string, string> = { den_top_week: '🏆 Топ недели', fair_champion: '🎪 Чемпион ярмарки' }
+
+function openListing(l: DealerListing) { router.push({ name: 'dealer-listing', params: { id: l.id } }) }
+async function toggleWishlist(l: DealerListing) {
+  if (!auth.user) { router.push({ name: 'login' }); return }
+  const was = !!l.is_wishlisted
+  l.is_wishlisted = !was
+  try { await (was ? store.removeFromWishlist(l.id) : store.addToWishlist(l.id)) } catch { l.is_wishlisted = was }
 }
 
 onMounted(async () => {
-  loading.value = true
-  error.value   = ''
   try {
     data.value = await store.getSellerPage(route.params.username as string)
-  } catch (e: any) {
-    error.value = e?.response?.data?.error || 'Не удалось загрузить страницу продавца'
+  } catch (e) {
+    error.value = apiErrorMessage(e) ?? 'Не удалось загрузить страницу продавца'
   } finally {
     loading.value = false
   }
 })
 </script>
 
-<style scoped>
-.den-seller-view { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
-.loading, .error, .empty { text-align: center; color: #9ca3af; padding: 48px; }
-.error { color: #dc2626; }
+<template>
+  <div class="min-h-screen bg-brand-bg text-white font-nunito">
+    <AppHeader />
+    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
+      <AppSidebar />
+      <main class="flex-1 min-w-0 pb-28 md:pb-20 stack-y-5">
+        <button @click="router.push({ name: 'dealers-den' })" class="flex items-center gap-2 text-white/40 hover:text-white text-sm font-semibold transition-colors">
+          <BIcon name="ArrowLeft" class="w-4 h-4" /> Dealers&apos; Den
+        </button>
 
-.seller-hero {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  padding: 24px;
-  background: #fff;
-  border-radius: 20px;
-  border: 1px solid #e5e7eb;
-  margin-bottom: 24px;
-}
-.seller-avatar {
-  width: 80px; height: 80px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.seller-avatar-placeholder {
-  background: #6366f1;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 700;
-}
-.seller-meta { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.seller-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.seller-name  { font-size: 22px; font-weight: 800; margin: 0; }
-.verified-badge {
-  padding: 2px 10px;
-  background: #eff6ff;
-  color: #2563eb;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.seller-username { color: #9ca3af; font-size: 14px; margin: 0; }
-.seller-stats { display: flex; gap: 16px; font-size: 13px; color: #6b7280; flex-wrap: wrap; }
-.badges { display: flex; gap: 8px; flex-wrap: wrap; }
-.badge {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: #fef3c7;
-  color: #92400e;
-  font-size: 12px;
-  font-weight: 600;
-}
+        <div v-if="loading" class="card-surface h-40 animate-pulse" />
+        <EmptyState v-else-if="error" icon="PackageX" :title="error" />
 
-.seller-body { display: flex; flex-direction: column; gap: 28px; }
-.section { display: flex; flex-direction: column; gap: 16px; }
-.section-title { font-size: 18px; font-weight: 700; margin: 0; }
+        <template v-else-if="data">
+          <div class="card-surface p-5 flex gap-5 items-start max-sm:flex-col">
+            <img v-if="user.avatarUrl" :src="user.avatarUrl" @error="onAvatarError" class="w-20 h-20 rounded-full object-cover border-2 border-brand-border shrink-0" alt="" />
+            <div v-else class="w-20 h-20 rounded-full bg-brand-gradient flex items-center justify-center text-2xl font-black shrink-0">{{ name.slice(0, 2).toUpperCase() }}</div>
 
-.listings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-}
-.listing-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  overflow: hidden;
-  text-decoration: none;
-  color: inherit;
-  transition: transform 0.15s;
-}
-.listing-card:hover { transform: translateY(-2px); }
-.listing-img { width: 100%; aspect-ratio: 1; object-fit: cover; }
-.listing-info { padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
-.listing-title { font-size: 13px; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.listing-price { font-size: 14px; font-weight: 700; color: #6366f1; }
+            <div class="min-w-0 flex-1 stack-y-2">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-2xl font-black truncate">{{ name }}</h1>
+                <UserBadges :user="badgeUser" size="md" />
+              </div>
+              <p class="text-sm text-white/35">@{{ user.username }}</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <DenTrustBadge :trust="user.denTrustScore" />
+                <span v-if="user.den_frozen" class="chip border-brand-error/40 bg-brand-error/15 text-brand-error">
+                  <BIcon name="Snowflake" class="w-2.5 h-2.5" /> Аккаунт заморожен
+                </span>
+                <span v-for="b in data.badges" :key="b" class="chip border-brand-yellow/30 bg-brand-yellow/10 text-brand-yellow">{{ BADGE_LABELS[b] ?? b }}</span>
+              </div>
+              <div class="grid grid-cols-2 sm:flex gap-2 pt-2">
+                <div v-for="s in stats" :key="s.label" class="flex items-center gap-2 bg-white/5 border border-white/8 rounded-2xl px-3.5 py-2 min-w-0">
+                  <BIcon :name="s.icon" class="w-3.5 h-3.5 text-brand-accent-minus shrink-0" />
+                  <span class="text-sm font-extrabold tabular-nums truncate">{{ s.value }}</span>
+                  <span class="text-xs text-white/40 truncate">{{ s.label }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-.reviews-list { display: flex; flex-direction: column; gap: 12px; }
-</style>
+          <section v-if="data.activeListings.length" class="stack-y-3">
+            <h2 class="section-title"><BIcon name="LayoutGrid" class="w-4 h-4 text-brand-accent" /> Активные лоты</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <DenListingCard v-for="l in data.activeListings" :key="l.id" :listing="l" mode="browse" :viewer-id="auth.user?.id"
+                @open="openListing(l)" @wishlist="toggleWishlist(l)" @bid="openListing(l)" @ticket="openListing(l)"
+                @tag="(tag: string) => router.push({ name: 'dealers-den', query: { search: tag } })" @nsfw="openListing(l)" />
+            </div>
+          </section>
+
+          <section v-if="data.reviews.length" class="stack-y-3">
+            <h2 class="section-title"><BIcon name="Star" class="w-4 h-4 text-brand-yellow" /> {{ langStore.t.dealerListingReviewsTitle }}</h2>
+            <div class="card-surface divide-y divide-brand-border">
+              <DenReviewCard v-for="r in data.reviews" :key="r.id" :review="r" class="p-4" />
+            </div>
+          </section>
+
+          <EmptyState v-if="!data.activeListings.length && !data.reviews.length" icon="ShoppingBag" title="У продавца пока нет активных лотов и отзывов" />
+        </template>
+      </main>
+    </div>
+  </div>
+</template>

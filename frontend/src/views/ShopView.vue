@@ -10,6 +10,7 @@ import { useLangStore } from '@/stores/lang'
 import { apiErrorMessage } from '@/lib/apiError'
 import { isAdmin } from '@/lib/roles'
 import { useConfirm } from '@/composables/useConfirm'
+import { useFlash } from '@/composables/useFlash'
 import api from '@/api'
 import AppHeader  from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -17,6 +18,9 @@ import WalletCard from '@/components/WalletCard.vue'
 import BIcon      from '@/components/BIcon.vue'
 import StickerPackEditor from '@/components/StickerPackEditor.vue'
 import SubmitFrameModal  from '@/components/SubmitFrameModal.vue'
+import MarketHero from '@/components/ui/MarketHero.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import FlashToast from '@/components/ui/FlashToast.vue'
 import ShopItemCard  from '@/components/shop/ShopItemCard.vue'
 import ShopFrameCard from '@/components/shop/ShopFrameCard.vue'
 import ShopPackCard  from '@/components/shop/ShopPackCard.vue'
@@ -58,14 +62,7 @@ type StickerTab = 'browse' | 'collection' | 'my'
 const stickerTab = ref<StickerTab>('browse')
 
 // ── Flash ───────────────────────────────────────────────────────────────────
-const flash = ref<{ type: 'ok' | 'err'; text: string } | null>(null)
-let flashTimer: ReturnType<typeof setTimeout> | undefined
-
-function showFlash(type: 'ok' | 'err', text: string) {
-  clearTimeout(flashTimer)
-  flash.value = { type, text }
-  flashTimer = setTimeout(() => (flash.value = null), 4000)
-}
+const { flash, show: showFlash, dispose: disposeFlash } = useFlash()
 
 // ── Покупка товара ────────────────────────────────────────────────────────────
 async function acquire(item: ShopItem) {
@@ -158,7 +155,7 @@ watch(searchQuery, () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => { if (wantsItems.value) loadCatalog() }, 300)
 })
-onBeforeUnmount(() => { clearTimeout(searchTimer); clearTimeout(flashTimer) })
+onBeforeUnmount(() => { clearTimeout(searchTimer); disposeFlash() })
 
 onMounted(async () => {
   await Promise.all([loadCatalog(), loadUserData()])
@@ -262,65 +259,32 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: 'n
 
       <main class="flex-1 min-w-0 pb-28 md:pb-20 stack-y-5">
 
-        <!-- HERO -->
-        <div class="relative overflow-hidden rounded-3xl shadow-2xl bg-linear-to-br from-brand-purple/20 via-brand-bg to-brand-accent/20 border border-brand-border">
-          <div class="absolute -top-10 -left-10 w-64 h-64 rounded-full bg-brand-purple/30 blur-3xl pointer-events-none" />
-          <div class="absolute -bottom-10 right-16 w-56 h-56 rounded-full bg-brand-accent/25 blur-3xl pointer-events-none" />
-          <div class="absolute top-4 right-4 w-36 h-36 rounded-full bg-brand-yellow/15 blur-2xl pointer-events-none" />
-
-          <div class="relative z-10 px-6 py-7 max-md:px-4 max-md:py-5">
-            <div class="flex items-start justify-between gap-4 flex-wrap">
-              <div class="max-md:w-full">
-                <div class="flex items-center gap-3 mb-2">
-                  <div class="w-12 h-12 rounded-2xl bg-brand-gradient flex items-center justify-center shadow-lg shrink-0">
-                    <BIcon name="ShoppingBag" class="w-6 h-6 text-white" />
-                  </div>
-                  <div class="min-w-0">
-                    <h1 class="text-3xl max-md:text-2xl font-black tracking-tight">Bloomly Shop</h1>
-                    <p class="text-white/50 text-xs mt-0.5 font-medium">официальный магазин сообщества</p>
-                  </div>
-                </div>
-                <p class="text-white/70 text-sm max-w-md leading-relaxed">
-                  <span class="text-brand-purple font-semibold">Темы</span>,
-                  <span class="text-brand-accent-minus font-semibold">фоны</span>,
-                  <span class="text-brand-yellow font-semibold">рамки</span> и
-                  <span class="text-brand-pink font-semibold">стикеры</span> —
-                  украшай свой профиль и группы в <span class="text-white font-semibold">Bloomly</span>.
-                </p>
-              </div>
-
-              <div class="flex flex-col gap-2 min-w-[220px] max-md:min-w-0 max-md:w-full">
-                <WalletCard v-if="auth.user" />
-                <label class="flex items-center gap-2 bg-white/10 backdrop-blur-xs border border-white/15 rounded-2xl px-4 py-2.5">
-                  <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
-                  <input v-model="searchQuery" placeholder="Тема, фон, рамка, стикеры…"
-                    class="bg-transparent text-sm text-white placeholder-white/35 outline-hidden w-full" />
-                  <button v-if="searchQuery" type="button" @click="searchQuery = ''" class="text-white/40 hover:text-white">
-                    <BIcon name="X" class="w-3.5 h-3.5" />
-                  </button>
-                </label>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 md:flex gap-2 md:gap-3 mt-5">
-              <div v-for="stat in shopStats" :key="stat.label"
-                class="flex items-center gap-2 bg-white/8 backdrop-blur-xs border border-white/10 rounded-2xl px-4 py-2 max-md:px-3 min-w-0">
-                <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-purple shrink-0" />
-                <span class="text-white font-extrabold text-sm tabular-nums">{{ stat.value }}</span>
-                <span class="text-white/45 text-xs truncate">{{ stat.label }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <MarketHero title="Bloomly Shop" icon="ShoppingBag" subtitle="официальный магазин сообщества" :stats="shopStats">
+          <template #tagline>
+            <span class="text-brand-purple font-semibold">Темы</span>,
+            <span class="text-brand-accent-minus font-semibold">фоны</span>,
+            <span class="text-brand-yellow font-semibold">рамки</span> и
+            <span class="text-brand-pink font-semibold">стикеры</span> —
+            украшай свой профиль и группы в <span class="text-white font-semibold">Bloomly</span>.
+          </template>
+          <template #side>
+            <WalletCard v-if="auth.user" />
+            <label class="flex items-center gap-2 bg-white/10 backdrop-blur-xs border border-white/15 rounded-2xl px-4 py-2.5">
+              <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
+              <input v-model="searchQuery" placeholder="Тема, фон, рамка, стикеры…"
+                class="bg-transparent text-sm text-white placeholder-white/35 outline-hidden w-full" />
+              <button v-if="searchQuery" type="button" @click="searchQuery = ''" class="text-white/40 hover:text-white">
+                <BIcon name="X" class="w-3.5 h-3.5" />
+              </button>
+            </label>
+          </template>
+        </MarketHero>
 
         <!-- CATEGORIES + SORT -->
         <div class="flex flex-col gap-2.5">
           <div class="flex items-center gap-2 flex-wrap m-scroll-row max-md:-mx-3 max-md:px-3">
             <button v-for="cat in CATEGORIES" :key="cat.key" @click="activeCategory = cat.key" :title="cat.sub"
-              class="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap"
-              :class="activeCategory === cat.key
-                ? 'text-white shadow-md shadow-brand-accent/25 bg-brand-gradient'
-                : 'bg-brand-card border border-brand-border text-white/65 hover:text-white hover:border-white/20'">
+              class="pill px-4 py-2 text-sm" :class="activeCategory === cat.key ? 'pill-active' : 'pill-idle'">
               <BIcon :name="cat.icon" class="w-3.5 h-3.5" />
               {{ cat.label }}
               <span v-if="cat.key === 'sticker_pack' && stickerStore.incomingCount > 0"
@@ -353,20 +317,6 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: 'n
             </button>
           </div>
         </div>
-
-        <!-- FLASH -->
-        <Teleport to="body">
-          <transition name="slide-up">
-            <div v-if="flash"
-              class="fixed bottom-6 left-1/2 -translate-x-1/2 z-9999 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-xs text-sm font-bold max-w-[92vw]"
-              :class="flash.type === 'ok'
-                ? 'bg-brand-success/20 border-brand-success/30 text-brand-success'
-                : 'bg-brand-error/20 border-brand-error/30 text-brand-error'">
-              <BIcon :name="flash.type === 'ok' ? 'CheckCircle' : 'AlertCircle'" class="w-4 h-4 shrink-0" />
-              {{ flash.text }}
-            </div>
-          </transition>
-        </Teleport>
 
         <!-- SKELETON -->
         <div v-if="initialLoading" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -443,12 +393,8 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: 'n
               <ShopPackCard v-for="pack in shownStickers" :key="pack.id" :pack="pack" :own="isOwnPack(pack)"
                 @open="openPack(pack)" @edit="openEdit(pack)" @remove="removePack(pack)" />
             </div>
-            <div v-else-if="activeCategory === 'sticker_pack'" class="card-surface text-center py-16 rounded-3xl">
-              <BIcon name="Smile" class="w-10 h-10 text-white/20 mx-auto mb-4" />
-              <h3 class="text-lg font-bold text-white">
-                {{ needle ? 'Ничего не найдено' : stickerTab === 'my' ? 'Нет паков' : stickerTab === 'collection' ? 'Коллекция пуста' : 'Паки не найдены' }}
-              </h3>
-            </div>
+            <EmptyState v-else-if="activeCategory === 'sticker_pack'" icon="Smile"
+              :title="needle ? 'Ничего не найдено' : stickerTab === 'my' ? 'Нет паков' : stickerTab === 'collection' ? 'Коллекция пуста' : 'Паки не найдены'" />
 
             <div v-if="activeCategory === 'all' && displayedStickers.length > 8" class="text-center">
               <button @click="activeCategory = 'sticker_pack'"
@@ -459,22 +405,16 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: 'n
           </section>
 
           <!-- EMPTY -->
-          <div v-if="!hasAnything && activeCategory !== 'sticker_pack'" class="card-surface text-center py-20 rounded-3xl">
-            <BIcon name="ShoppingBag" class="w-10 h-10 text-white/20 mx-auto mb-4" />
-            <h3 class="text-lg font-bold text-white mb-1">{{ needle ? 'Ничего не найдено' : 'Товаров пока нет' }}</h3>
-            <p class="text-white/35 text-sm">{{ needle ? 'Попробуйте другой запрос' : 'В этой категории скоро появятся новинки' }}</p>
-          </div>
+          <EmptyState v-if="!hasAnything && activeCategory !== 'sticker_pack'" icon="ShoppingBag"
+            :title="needle ? 'Ничего не найдено' : 'Товаров пока нет'"
+            :hint="needle ? 'Попробуйте другой запрос' : 'В этой категории скоро появятся новинки'" />
         </template>
 
       </main>
     </div>
 
+    <FlashToast :flash="flash" />
     <SubmitFrameModal v-model="showFrameModal" @created="onFrameCreated" />
     <StickerPackEditor v-if="showEditor" :pack="editingPack" @close="showEditor = false" @saved="onPackSaved" />
   </div>
 </template>
-
-<style scoped>
-.slide-up-enter-active, .slide-up-leave-active { transition: all 0.35s cubic-bezier(.4,0,.2,1); }
-.slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateX(-50%) translateY(16px); }
-</style>

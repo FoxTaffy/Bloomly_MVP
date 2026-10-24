@@ -1,6 +1,8 @@
 @import './fonts.css' layer(base);
 
 @import 'tailwindcss';
+@import './transitions.css';
+@import './post-media.css';
 
 @theme {
   --font-nunito: 'Nunito', ui-rounded, sans-serif;
@@ -556,3 +558,231 @@ html.has-custom-bg .min-h-screen.bg-brand-bg {
   font-weight: 800;
   backdrop-filter: blur(4px);
 }
+
+/* ── Кирпичики ленты и композера: один вид вместо копий bg-brand-card border … в каждом блоке ─────── */
+/* Крупная панель страницы (композер, пустые состояния, сайдбар). data-active — «в фокусе». */
+@utility panel-card {
+  background-color: var(--color-brand-card);
+  border: 1px solid var(--color-brand-border);
+  border-radius: var(--radius-3xl);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  transition: border-color 0.2s;
+  &[data-active='true'] {
+    border-color: color-mix(in srgb, var(--color-brand-accent) 30%, transparent);
+  }
+}
+/* Всплывающее меню/выпадашка под кнопкой */
+@utility popover-panel {
+  background-color: var(--color-brand-card);
+  border: 1px solid var(--color-brand-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  overflow: hidden;
+  padding-block: 0.25rem;
+}
+/* Пункт меню; data-active — выбранный */
+@utility menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-align: left;
+  color: #fff;
+  transition: background-color 0.15s, color 0.15s;
+  &:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--color-brand-bg) 60%, transparent);
+  }
+  &[data-active='true'] {
+    color: var(--color-brand-accent);
+  }
+  &:disabled {
+    color: rgb(255 255 255 / 0.3);
+    cursor: not-allowed;
+  }
+}
+/* Вкладка ленты (role="tab"); выбранная — aria-selected */
+@utility feed-tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-2xl);
+  font-size: 0.875rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: rgb(255 255 255 / 0.55);
+  transition: color 0.2s, background-color 0.2s, box-shadow 0.2s;
+  &:hover {
+    color: #fff;
+  }
+  &[aria-selected='true'] {
+    color: #fff;
+    background-color: var(--color-brand-card);
+    box-shadow: inset 0 -2px 0 var(--color-brand-accent);
+  }
+}
+/* Кнопка панели инструментов композера. data-active включает акцент, data-tone меняет его цвет */
+@utility toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgb(255 255 255 / 0.55);
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+  &:hover:not(:disabled):not([data-active='true']) {
+    color: #fff;
+    background-color: var(--color-brand-bg);
+    border-color: var(--color-brand-border);
+  }
+  &[data-tone='error'] { --tone: var(--color-brand-error); }
+  &[data-tone='purple'] { --tone: var(--color-brand-purple); }
+  &[data-active='true'] {
+    color: var(--tone, var(--color-brand-accent));
+    border-color: color-mix(in srgb, var(--tone, var(--color-brand-accent)) 55%, transparent);
+    background-color: color-mix(in srgb, var(--tone, var(--color-brand-accent)) 10%, transparent);
+  }
+}
+/* Круглая кнопка-иконка 40×40 */
+@utility icon-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--color-brand-border);
+  border-radius: 9999px;
+  color: rgb(255 255 255 / 0.6);
+  transition: color 0.15s, background-color 0.15s, opacity 0.15s;
+  &:hover:not(:disabled) {
+    color: #fff;
+    background-color: var(--color-brand-bg);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+@utility icon-btn-primary {
+  color: #fff;
+  background-color: var(--color-brand-accent);
+  border-color: transparent;
+  box-shadow: 0 10px 15px -3px color-mix(in srgb, var(--color-brand-accent) 25%, transparent);
+  &:hover:not(:disabled) {
+    background-color: var(--color-brand-accent-plus);
+  }
+}
+/* Компактное текстовое поле форм композера */
+@utility field-input {
+  background-color: var(--color-brand-bg);
+  border: 1px solid var(--color-brand-border);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+  &::placeholder {
+    color: rgb(255 255 255 / 0.3);
+  }
+  &:focus {
+    border-color: var(--color-brand-accent);
+  }
+}
+/* Всплывающая «таблетка» по центру сверху: тост и плашка «Новые посты». Цвет — через bg-* */
+@utility floating-pill {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+/* Заглушка загрузки: добавлять к блоку нужного размера */
+@utility skeleton {
+  background-color: rgb(255 255 255 / 0.06);
+  border-radius: 0.5rem;
+  animation: var(--animate-pulse);
+}
+
+/* ── Витрины: подписи полей, пилюли, поля форм в модалках ─────────────────────────────────────── */
+@utility field-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.35);
+}
+@utility pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+  border-radius: 9999px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+@utility pill-idle {
+  background-color: var(--color-brand-card);
+  border-color: var(--color-brand-border);
+  color: rgb(255 255 255 / 0.65);
+  &:hover { color: #fff; border-color: rgb(255 255 255 / 0.2); }
+}
+@utility pill-active {
+  color: #fff;
+  background-image: linear-gradient(135deg, var(--color-brand-accent), var(--color-brand-accent-plus));
+  box-shadow: 0 4px 6px -1px color-mix(in srgb, var(--color-brand-accent) 25%, transparent);
+}
+@utility pill-tint {
+  color: var(--color-brand-accent);
+  background-color: color-mix(in srgb, var(--color-brand-accent) 20%, transparent);
+  border-color: var(--color-brand-accent);
+}
+.modal-form input:not([type='checkbox']):not([type='radio']),
+.modal-form textarea,
+.modal-form select {
+  background-color: var(--color-brand-bg);
+  border: 1px solid var(--color-brand-border);
+  border-radius: var(--radius-2xl);
+  transition: border-color 0.15s;
+}
+.modal-form input:not([type='checkbox']):not([type='radio']):focus,
+.modal-form textarea:focus,
+.modal-form select:focus {
+  border-color: var(--color-brand-accent);
+}
+.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.2s ease; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
+/* Мисклик по затемнению окно не закрывает: красная подсветка рамки и «подёргивание» */
+.modal-shake { animation: modal-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both, modal-redborder 0.6s ease-out both; }
+@keyframes modal-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(5px); }
+  30%, 50%, 70% { transform: translateX(-9px); }
+  40%, 60% { transform: translateX(9px); }
+}
+@keyframes modal-redborder {
+  0%, 70% { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.55), 0 0 36px rgba(239, 68, 68, 0.45); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .modal-shake { animation: modal-redborder 0.6s ease-out both; } }
+.flash-enter-active, .flash-leave-active { transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+.flash-enter-from, .flash-leave-to { opacity: 0; transform: translateX(-50%) translateY(16px); }

@@ -50,12 +50,12 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
 
   // ── Auction / Raffle ──
   fastify.post<RouteGenericOf<typeof placeBidHandler>>('/:id/bid',    auth, placeBidHandler);
-  fastify.get<RouteGenericOf<typeof getBidsHandler>>('/:id/bids',         getBidsHandler);
+  fastify.get<RouteGenericOf<typeof getBidsHandler>>('/:id/bids',     tryAuth, getBidsHandler);
   fastify.post<RouteGenericOf<typeof buyRaffleTicketHandler>>('/:id/ticket', auth, buyRaffleTicketHandler);
   fastify.post<RouteGenericOf<typeof drawRaffleHandler>>('/:id/draw',   auth, drawRaffleHandler);
 
   // ── Comments ──
-  fastify.get<RouteGenericOf<typeof getCommentsHandler>>('/:id/comments',         getCommentsHandler);
+  fastify.get<RouteGenericOf<typeof getCommentsHandler>>('/:id/comments', tryAuth, getCommentsHandler);
   fastify.post<RouteGenericOf<typeof addCommentHandler>>('/:id/comments', auth,  addCommentHandler);
   fastify.delete<RouteGenericOf<typeof deleteCommentHandler>>('/comments/:commentId', auth, deleteCommentHandler);
 
@@ -64,7 +64,7 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
 
   // ── Reviews ──
   fastify.post<RouteGenericOf<typeof createReviewHandler>>('/:listingId/review',         auth, createReviewHandler);
-  fastify.get<RouteGenericOf<typeof getListingReviewsHandler>>('/:listingId/reviews',               getListingReviewsHandler);
+  fastify.get<RouteGenericOf<typeof getListingReviewsHandler>>('/:listingId/reviews', tryAuth, getListingReviewsHandler);
   fastify.get<RouteGenericOf<typeof getSellerReviewsHandler>>('/seller/:userId/reviews',           getSellerReviewsHandler);
   fastify.delete<RouteGenericOf<typeof deleteReviewHandler>>('/reviews/:reviewId',       auth, deleteReviewHandler);
 
@@ -90,11 +90,11 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getMyDisputesHandler>>('/disputes/my',                     auth, getMyDisputesHandler);
 
   // ── Seller page ──
-  fastify.get<RouteGenericOf<typeof getSellerPageHandler>>('/seller/:username', getSellerPageHandler);
+  fastify.get<RouteGenericOf<typeof getSellerPageHandler>>('/seller/:username', tryAuth, getSellerPageHandler);
 
   // ── Fairs ──
-  fastify.get<RouteGenericOf<typeof getCurrentFairHandler>>('/fairs/current',                         getCurrentFairHandler);
-  fastify.get<RouteGenericOf<typeof getFairHandler>>('/fairs/:fairId',                         getFairHandler);
+  fastify.get<RouteGenericOf<typeof getCurrentFairHandler>>('/fairs/current',                 tryAuth, getCurrentFairHandler);
+  fastify.get<RouteGenericOf<typeof getFairHandler>>('/fairs/:fairId',                 tryAuth, getFairHandler);
   fastify.post<RouteGenericOf<typeof applyToFairHandler>>('/fairs/:fairId/apply',          auth,   applyToFairHandler);
 }
 

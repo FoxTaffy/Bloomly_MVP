@@ -31,7 +31,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
         <div class="stack-y-2">
           <button v-if="canSaveDraft" type="button" :disabled="busy" @click="emit('draft')"
             class="w-full py-3 rounded-2xl text-white font-bold text-sm transition-all hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-2"
-            style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+            :class="'bg-brand-gradient'">
             <BIcon name="Pencil" class="w-4 h-4" />{{ t.dealersDenExitSaveDraft }}
           </button>
           <button type="button" :disabled="busy" @click="emit('discard')"

@@ -1,245 +1,149 @@
-<template>
-  <div class="den-fair-view">
-    <div v-if="loading" class="loading">Загрузка...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-
-    <template v-else-if="fair">
-      <!-- Banner -->
-      <div class="fair-banner" :style="fair.banner_url ? { backgroundImage: `url(${fair.banner_url})` } : {}">
-        <div class="fair-banner-overlay">
-          <div v-if="fair.theme" class="fair-theme">{{ fair.theme }}</div>
-          <h1 class="fair-title">{{ fair.title }}</h1>
-          <div class="fair-dates">
-            {{ formatDate(fair.starts_at) }} — {{ formatDate(fair.ends_at) }}
-          </div>
-          <span class="fair-status" :class="fair.status">{{ statusLabel }}</span>
-        </div>
-      </div>
-
-      <div class="fair-body">
-        <!-- Description -->
-        <p v-if="fair.description" class="fair-desc">{{ fair.description }}</p>
-
-        <!-- Apply button -->
-        <div v-if="fair.status === 'open' && isLoggedIn && !hasApplied" class="apply-section">
-          <select v-model="selectedListing" class="listing-select" v-if="myListings.length">
-            <option value="">— Выбрать лот (опционально) —</option>
-            <option v-for="l in myListings" :key="l.id" :value="l.id">{{ l.title }}</option>
-          </select>
-          <button class="apply-btn" :disabled="applying" @click="apply">
-            {{ applying ? 'Подаём заявку...' : 'Подать заявку' }}
-          </button>
-        </div>
-        <div v-if="applyError" class="apply-error">{{ applyError }}</div>
-        <div v-if="hasApplied" class="applied-note">Вы уже подали заявку на эту ярмарку.</div>
-
-        <!-- Top listings -->
-        <section v-if="topListings.length" class="section">
-          <h2 class="section-title">Лоты участников</h2>
-          <div class="listings-grid">
-            <RouterLink
-              v-for="listing in topListings"
-              :key="listing.id"
-              :to="`/dealers-den/${listing.id}`"
-              class="listing-card"
-            >
-              <img v-if="listing.images?.[0]" :src="listing.images[0]" class="listing-img" alt="" />
-              <div class="listing-info">
-                <span class="listing-title">{{ listing.title }}</span>
-                <span class="listing-price">{{ listing.price }} {{ listing.currency }}</span>
-                <span class="listing-seller">@{{ listing.seller.username }}</span>
-              </div>
-            </RouterLink>
-          </div>
-        </section>
-
-        <!-- Participants -->
-        <section v-if="participants.length" class="section">
-          <h2 class="section-title">Участники ({{ participants.filter((p: any) => p.status === 'approved').length }})</h2>
-          <div class="participants">
-            <RouterLink
-              v-for="p in participants.filter((p: any) => p.status === 'approved')"
-              :key="p.id"
-              :to="`/dealers-den/seller/${p.user.username}`"
-              class="participant"
-            >
-              <img v-if="p.user.avatar_url" :src="p.user.avatar_url" class="part-avatar" alt="" />
-              <div v-else class="part-avatar part-avatar-placeholder">{{ p.user.username.slice(0, 2).toUpperCase() }}</div>
-              <span class="part-name">{{ p.user.display_name || p.user.username }}</span>
-            </RouterLink>
-          </div>
-        </section>
-      </div>
-    </template>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
-import { useDealersDenStore } from '../stores/dealersDen'
-import { useAuthStore } from '../stores/auth'
+import { useRoute, useRouter } from 'vue-router'
+import { useDealersDenStore } from '@/stores/dealersDen'
+import { useAuthStore } from '@/stores/auth'
+import { apiErrorMessage } from '@/lib/apiError'
 import * as fmt from '@/lib/format'
+import AppHeader from '@/components/AppHeader.vue'
+import AppSidebar from '@/components/AppSidebar.vue'
+import BIcon from '@/components/BIcon.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 
-const route  = useRoute()
-const store  = useDealersDenStore()
-const auth   = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const store = useDealersDenStore()
+const auth = useAuthStore()
 
-const fair          = ref<any>(null)
-const topListings   = ref<any[]>([])
-const participants  = ref<any[]>([])
-const myListings    = ref<any[]>([])
-const loading       = ref(false)
-const error         = ref('')
-const applying      = ref(false)
-const applyError    = ref('')
-const hasApplied    = ref(false)
+const fair = ref<any>(null)
+const topListings = ref<any[]>([])
+const mine = ref<{ status: string; listing_id: string | null } | null>(null)
+const myListings = ref<any[]>([])
+const loading = ref(true)
+const error = ref('')
+const applying = ref(false)
+const applyError = ref('')
 const selectedListing = ref('')
 
-const isLoggedIn = computed(() => !!auth.user)
-
-const statusLabel = computed(() => {
-  const labels: Record<string, string> = { upcoming: 'Скоро', open: 'Открыта', closed: 'Завершена' }
-  return labels[fair.value?.status] ?? fair.value?.status
-})
-
+const participants = computed(() => (fair.value?.participants ?? []) as any[])
+// Публично виден только одобренный состав; собственная заявка приходит отдельно
+const MY_STATUS: Record<string, string> = {
+  pending: 'Заявка на рассмотрении — организаторы ответят после проверки.',
+  approved: 'Ваша заявка одобрена — вы участвуете в ярмарке.',
+  rejected: 'Заявка отклонена организаторами.',
+}
+const STATUS: Record<string, { label: string; cls: string }> = {
+  upcoming: { label: 'Скоро', cls: 'bg-brand-yellow/20 border-brand-yellow/40 text-brand-yellow' },
+  open: { label: 'Открыта', cls: 'bg-brand-success/20 border-brand-success/40 text-brand-success' },
+  closed: { label: 'Завершена', cls: 'bg-white/10 border-white/20 text-white/60' },
+}
+const status = computed(() => STATUS[fair.value?.status] ?? STATUS.closed)
+const canApply = computed(() => fair.value?.status === 'open' && !!auth.user && !mine.value)
 const formatDate = (d: string) => fmt.formatDate(d, 'long', 'ru-RU')
 
 async function apply() {
   applying.value = true
   applyError.value = ''
   try {
-    await store.applyToFair(fair.value.id, selectedListing.value || undefined)
-    hasApplied.value = true
-  } catch (err: any) {
-    applyError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Не удалось подать заявку'
+    const { participant } = await store.applyToFair(fair.value.id, selectedListing.value || undefined)
+    mine.value = { status: participant.status, listing_id: participant.listing_id }
+  } catch (e) {
+    applyError.value = apiErrorMessage(e) ?? 'Не удалось подать заявку'
   } finally {
     applying.value = false
   }
 }
 
 onMounted(async () => {
-  loading.value = true
-  error.value   = ''
   try {
-    const fairId = route.params.id as string
-    let result: any
-
-    if (fairId === 'current') {
-      result = await store.getCurrentFair()
-    } else {
-      result = await store.getFair(fairId)
-    }
-
-    if (!result) {
-      error.value = 'Ярмарка не найдена'
-      return
-    }
-
+    const id = route.params.id as string
+    const result = id === 'current' ? await store.getCurrentFair() : await store.getFair(id)
+    if (!result) { error.value = 'Ярмарка не найдена'; return }
     fair.value = result.fair
     topListings.value = result.topListings ?? []
-    participants.value = result.fair.participants ?? []
-
-    if (auth.user) {
-      hasApplied.value = participants.value.some((p: any) => p.user_id === auth.user!.id)
-      myListings.value = await store.loadMyListings()
-    }
-  } catch (e: any) {
-    error.value = e?.response?.data?.error || 'Не удалось загрузить ярмарку'
+    mine.value = result.mine ?? null
+    if (auth.user) myListings.value = (await store.loadMyListings()).filter((l: any) => l.status === 'active' && !l.is_nsfw)
+  } catch (e) {
+    error.value = apiErrorMessage(e) ?? 'Не удалось загрузить ярмарку'
   } finally {
     loading.value = false
   }
 })
 </script>
 
-<style scoped>
-.den-fair-view { max-width: 1024px; margin: 0 auto; padding: 0 0 40px; }
-.loading, .error { text-align: center; color: #9ca3af; padding: 48px; }
-.error { color: #dc2626; }
+<template>
+  <div class="min-h-screen bg-brand-bg text-white font-nunito">
+    <AppHeader />
+    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
+      <AppSidebar />
+      <main class="flex-1 min-w-0 pb-28 md:pb-20 stack-y-5">
+        <button @click="router.push({ name: 'dealers-den' })" class="flex items-center gap-2 text-white/40 hover:text-white text-sm font-semibold transition-colors">
+          <BIcon name="ArrowLeft" class="w-4 h-4" /> Dealers&apos; Den
+        </button>
 
-.fair-banner {
-  position: relative;
-  min-height: 240px;
-  background: #6366f1;
-  background-size: cover;
-  background-position: center;
-  border-radius: 0 0 20px 20px;
-  overflow: hidden;
-}
-.fair-banner-overlay {
-  position: absolute; inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0.2));
-  display: flex; flex-direction: column; justify-content: flex-end;
-  padding: 28px 24px;
-  color: #fff;
-  gap: 6px;
-}
-.fair-theme { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; }
-.fair-title { font-size: 28px; font-weight: 800; margin: 0; }
-.fair-dates { font-size: 14px; opacity: 0.8; }
-.fair-status {
-  display: inline-block; width: fit-content;
-  padding: 4px 12px; border-radius: 999px;
-  font-size: 12px; font-weight: 600;
-}
-.upcoming { background: #fef3c7; color: #92400e; }
-.open     { background: #d1fae5; color: #065f46; }
-.closed   { background: #f3f4f6; color: #6b7280; }
+        <div v-if="loading" class="card-surface h-48 animate-pulse" />
+        <EmptyState v-else-if="error" icon="PackageX" :title="error" />
 
-.fair-body { padding: 24px 16px; display: flex; flex-direction: column; gap: 24px; }
-.fair-desc { color: #374151; font-size: 15px; line-height: 1.6; margin: 0; }
+        <template v-else-if="fair">
+          <div class="relative overflow-hidden rounded-3xl border border-brand-border bg-linear-to-br from-brand-accent/25 via-brand-bg to-brand-purple/20 min-h-48 flex items-end bg-cover bg-center"
+            :style="fair.banner_url ? { backgroundImage: `url(${fair.banner_url})` } : undefined">
+            <div class="w-full p-6 bg-linear-to-t from-black/80 to-transparent stack-y-2">
+              <p v-if="fair.theme" class="text-xs font-bold uppercase tracking-widest text-brand-accent-minus">{{ fair.theme }}</p>
+              <h1 class="text-3xl font-black">{{ fair.title }}</h1>
+              <div class="flex items-center gap-3 flex-wrap">
+                <span class="text-sm text-white/60">{{ formatDate(fair.starts_at) }} — {{ formatDate(fair.ends_at) }}</span>
+                <span class="chip" :class="status.cls">{{ status.label }}</span>
+              </div>
+            </div>
+          </div>
 
-.apply-section { display: flex; gap: 10px; flex-wrap: wrap; }
-.listing-select {
-  flex: 1; min-width: 200px;
-  padding: 10px 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  font-size: 14px;
-}
-.apply-btn {
-  padding: 10px 24px;
-  background: #6366f1;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.apply-btn:hover:not(:disabled) { background: #4f46e5; }
-.apply-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.applied-note { color: #6b7280; font-size: 14px; }
-.apply-error { color: #ef4444; font-size: 13px; margin-top: 8px; }
+          <p v-if="fair.description" class="text-sm text-white/70 leading-relaxed whitespace-pre-line">{{ fair.description }}</p>
 
-.section { display: flex; flex-direction: column; gap: 14px; }
-.section-title { font-size: 18px; font-weight: 700; margin: 0; }
+          <div v-if="mine" class="card-surface px-4 py-3 text-sm" :class="mine.status === 'approved' ? 'text-brand-success' : mine.status === 'rejected' ? 'text-brand-error' : 'text-white/70'">
+            {{ MY_STATUS[mine.status] ?? '' }}
+          </div>
+          <div v-else-if="canApply" class="card-surface p-4 flex gap-3 flex-wrap items-center">
+            <select v-if="myListings.length" v-model="selectedListing"
+              class="flex-1 min-w-48 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 text-sm text-white outline-hidden">
+              <option value="">— Выбрать лот (опционально) —</option>
+              <option v-for="l in myListings" :key="l.id" :value="l.id">{{ l.title }}</option>
+            </select>
+            <button :disabled="applying" @click="apply"
+              class="px-5 py-2.5 rounded-2xl text-sm font-bold text-white bg-brand-gradient hover:opacity-90 transition-opacity disabled:opacity-50">
+              {{ applying ? 'Подаём заявку…' : 'Подать заявку' }}
+            </button>
+          </div>
+          <p v-if="applyError" class="text-sm text-brand-error">{{ applyError }}</p>
 
-.listings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-}
-.listing-card { text-decoration: none; color: inherit; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; transition: transform 0.15s; }
-.listing-card:hover { transform: translateY(-2px); }
-.listing-img { width: 100%; aspect-ratio: 1; object-fit: cover; }
-.listing-info { padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
-.listing-title { font-size: 13px; font-weight: 600; }
-.listing-price { font-weight: 700; color: #6366f1; font-size: 14px; }
-.listing-seller { font-size: 11px; color: #9ca3af; }
+          <section v-if="topListings.length" class="stack-y-3">
+            <h2 class="section-title"><BIcon name="LayoutGrid" class="w-4 h-4 text-brand-accent" /> Лоты участников</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+              <RouterLink v-for="l in topListings" :key="l.id" :to="`/dealers-den/${l.id}`" class="card-surface group hover:border-brand-accent/50 hover:-translate-y-0.5 transition-all">
+                <div class="aspect-square bg-brand-bg overflow-hidden">
+                  <img v-if="l.images?.[0]" :src="l.images[0]" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" />
+                </div>
+                <div class="p-3">
+                  <p class="text-xs font-extrabold line-clamp-1">{{ l.title }}</p>
+                  <p class="text-sm font-black text-brand-yellow mt-0.5">{{ fmt.formatPrice(l.price, l.currency) }}</p>
+                  <p class="text-[10px] text-white/35 truncate">@{{ l.seller.username }}</p>
+                </div>
+              </RouterLink>
+            </div>
+          </section>
 
-.participants { display: flex; flex-wrap: wrap; gap: 10px; }
-.participant {
-  display: flex; align-items: center; gap: 8px;
-  text-decoration: none; color: inherit;
-  padding: 6px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  transition: background 0.15s;
-}
-.participant:hover { background: #f3f4f6; }
-.part-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
-.part-avatar-placeholder { background: #6366f1; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border-radius: 50%; }
-.part-name { font-size: 13px; font-weight: 500; }
-</style>
+          <section v-if="participants.length" class="stack-y-3">
+            <h2 class="section-title"><BIcon name="Users" class="w-4 h-4 text-brand-purple" /> Участники · {{ participants.length }}</h2>
+            <div class="flex flex-wrap gap-2">
+              <RouterLink v-for="p in participants" :key="p.id" :to="`/dealers-den/seller/${p.user.username}`"
+                class="flex items-center gap-2 bg-brand-card border border-brand-border rounded-full pl-1.5 pr-3.5 py-1.5 hover:border-brand-accent/50 transition-colors">
+                <img v-if="p.user.avatar_url" :src="p.user.avatar_url" class="w-7 h-7 rounded-full object-cover" alt="" />
+                <span v-else class="w-7 h-7 rounded-full bg-brand-gradient flex items-center justify-center text-[10px] font-extrabold">{{ p.user.username.slice(0, 2).toUpperCase() }}</span>
+                <span class="text-sm font-bold">{{ p.user.display_name || p.user.username }}</span>
+              </RouterLink>
+            </div>
+          </section>
+        </template>
+      </main>
+    </div>
+  </div>
+</template>

@@ -130,7 +130,7 @@ const chip = (on: boolean) => on
             class="px-5 py-3 border border-white/8 text-white/50 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">{{ t.dealersDenSmartReset }}</button>
           <button type="button" @click="apply" :disabled="!!budgetError"
             class="flex-1 flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90 disabled:opacity-40"
-            style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+            :class="'bg-brand-gradient'">
             <BIcon name="Search" class="w-4 h-4" />{{ t.dealersDenSmartShow }}
           </button>
         </div>

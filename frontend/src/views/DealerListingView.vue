@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { errorMessage } from '@/lib/apiError'
+import { errorMessage, apiErrorMessage } from '@/lib/apiError'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import * as fmt from '@/lib/format'
 const langStore = useLangStore()
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDealersDenStore, type DealerListingComment, type DenReview, REVIEW_TAGS } from '@/stores/dealersDen'
@@ -22,12 +22,14 @@ import ListingApplicationModal from '@/components/ListingApplicationModal.vue'
 import { useListingApplicationsStore } from '@/stores/listingApplications'
 import ListingSpecs        from '@/components/ListingSpecs.vue'
 import DenDiscountPrice from '@/components/DenDiscountPrice.vue'
-import DenDiscountField from '@/components/DenDiscountField.vue'
-import { supportsDiscount, clampDiscount } from '@/lib/listingDiscount'
-import ListingDetailsEditor from '@/components/ListingDetailsEditor.vue'
-import { emptyDraft, draftFrom, cleanDraft } from '@/lib/listingDetails'
 import DenReviewCard      from '@/components/DenReviewCard.vue'
-import FrameEditor        from '@/components/FrameEditor.vue'
+import ModalShell         from '@/components/ui/ModalShell.vue'
+import FlashToast         from '@/components/ui/FlashToast.vue'
+import DenCountdown       from '@/components/DenCountdown.vue'
+import DenBidModal        from '@/components/den/DenBidModal.vue'
+import DenEditModal       from '@/components/den/DenEditModal.vue'
+import { useFlash }       from '@/composables/useFlash'
+import { KIND_META }      from '@/lib/denKinds'
 import api from '@/api'
 
 const router = useRouter()
@@ -36,6 +38,8 @@ const auth   = useAuthStore()
 const store  = useDealersDenStore()
 const { confirmDialog } = useConfirm()
 const { nsfwEnabled } = useNsfwMode()
+const { flash, ok: flashOk, err: flashErr, dispose: disposeFlash } = useFlash()
+onBeforeUnmount(disposeFlash)
 
 const listing    = computed(() => store.currentListing)
 const shop = computed(() => listingShop(listing.value!))
@@ -53,10 +57,6 @@ const sellerStats = computed(() => {
   ].filter((x): x is { v: string; l: string } => !!x)
 })
 
-// ── Countdown ────────────────────────────────────────────────────────────────
-const now = ref(Date.now())
-let ticker: ReturnType<typeof setInterval> | null = null
-
 onMounted(async () => {
   try {
     await store.loadListing(route.params.id as string)
@@ -65,32 +65,11 @@ onMounted(async () => {
     if (listing.value) {
       isWishlisted.value  = listing.value.is_wishlisted ?? false
       wishlistCount.value = listing.value.wishlist_count ?? 0
-      if (listing.value.category === 'avatar_frame') await loadOwnedFrames()
     }
   } catch (err) {
     console.error('[DealerListingView] load error:', errorMessage(err))
   }
-  ticker = setInterval(() => { now.value = Date.now() }, 1000)
 })
-onUnmounted(() => { if (ticker) clearInterval(ticker) })
-
-function formatCountdown(iso: string | null | undefined) {
-  if (!iso) return null
-  const diff = new Date(iso).getTime() - now.value
-  if (diff <= 0) return langStore.t.dealerListingCountdownEnded
-  const d = Math.floor(diff / 86400000)
-  const h = Math.floor((diff % 86400000) / 3600000)
-  const m = Math.floor((diff % 3600000)  / 60000)
-  const s = Math.floor((diff % 60000)    / 1000)
-  if (d > 0) return `${d}${langStore.t.dealerListingDayShort} ${h}${langStore.t.dealerListingHourShort}`
-  if (h > 0) return `${h}${langStore.t.dealerListingHourShort} ${m}${langStore.t.dealerListingMinuteShort}`
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
-function isHot(iso: string | null | undefined) {
-  if (!iso) return false
-  return new Date(iso).getTime() - now.value < 7200000
-}
 
 const formatPrice = fmt.formatPrice
 
@@ -102,43 +81,19 @@ function isSoldOut(l: any) {
   return l.status === 'sold' || (l.quantity > 0 && l.quantity_sold >= l.quantity)
 }
 
-// ── Bids ─────────────────────────────────────────────────────────────────────
-const bids        = ref<any[]>([])
-const showBidForm = ref(false)
-const bidAmount   = ref(0)
-const bidMessage  = ref('')
-const isBidding   = ref(false)
-const bidError    = ref('')
+// ── Ставки (форма — DenBidModal) ─────────────────────────────────────────────
+const bids    = ref<any[]>([])
+const showBid = ref(false)
 
 async function loadBids() {
   if (!listing.value) return
   if (listing.value.listing_kind !== 'auction' && listing.value.listing_kind !== 'ych') return
-  bids.value = await store.getBids(listing.value.id)
+  try { bids.value = await store.getBids(listing.value.id) } catch { bids.value = [] }
 }
 
 function openBidForm() {
   if (!auth.user) { router.push({ name: 'login' }); return }
-  const cur = parseFloat(String(listing.value?.current_bid ?? listing.value?.price ?? 0))
-  const inc = parseFloat(String(listing.value?.bid_increment ?? 1))
-  bidAmount.value = parseFloat((cur + inc).toFixed(2))
-  bidMessage.value = ''
-  bidError.value = ''
-  showBidForm.value = true
-}
-
-async function submitBid() {
-  if (!listing.value) return
-  isBidding.value = true
-  bidError.value = ''
-  try {
-    await store.placeBid(listing.value.id, bidAmount.value, bidMessage.value || undefined)
-    await loadBids()
-    showBidForm.value = false
-  } catch (e: any) {
-    bidError.value = e?.response?.data?.error ?? langStore.t.dealerListingGenericError
-  } finally {
-    isBidding.value = false
-  }
+  showBid.value = true
 }
 
 // ── Raffle ───────────────────────────────────────────────────────────────────
@@ -156,7 +111,7 @@ async function drawWinner() {
   try {
     await store.drawRaffle(listing.value.id)
   } catch (e: any) {
-    ticketError.value = e?.response?.data?.error ?? langStore.t.dealerListingGenericError
+    ticketError.value = apiErrorMessage(e) ?? langStore.t.dealerListingGenericError
   } finally {
     isDrawing.value = false
   }
@@ -171,7 +126,7 @@ async function buyTicket() {
     await store.buyRaffleTicket(listing.value.id)
     ticketSuccess.value = true
   } catch (e: any) {
-    ticketError.value = e?.response?.data?.error ?? langStore.t.dealerListingGenericError
+    ticketError.value = apiErrorMessage(e) ?? langStore.t.dealerListingGenericError
   } finally {
     isBuyingTicket.value = false
   }
@@ -196,23 +151,37 @@ async function postComment() {
     const c = await store.addComment(listing.value.id, commentBody.value.trim())
     comments.value.unshift(c)
     commentBody.value = ''
-  } catch {} finally {
+  } catch (e) {
+    flashErr(apiErrorMessage(e) ?? langStore.t.dealerListingGenericError)
+  } finally {
     isPostingComment.value = false
   }
 }
 
 async function postReply(parent: DealerListingComment) {
   if (!replyBody.value.trim() || !listing.value) return
-  const c = await store.addComment(listing.value.id, replyBody.value.trim(), parent.id)
-  parent.replies = [...(parent.replies ?? []), c]
-  replyTo.value  = null
-  replyBody.value = ''
+  try {
+    const c = await store.addComment(listing.value.id, replyBody.value.trim(), parent.id)
+    parent.replies = [...(parent.replies ?? []), c]
+    replyTo.value  = null
+    replyBody.value = ''
+  } catch (e) {
+    flashErr(apiErrorMessage(e) ?? langStore.t.dealerListingGenericError)
+  }
 }
 
-async function removeComment(comment: DealerListingComment) {
-  await store.deleteComment(comment.id)
-  comments.value = comments.value.filter(c => c.id !== comment.id)
+async function removeComment(comment: DealerListingComment, parent?: DealerListingComment) {
+  try {
+    await store.deleteComment(comment.id)
+  } catch (e) {
+    flashErr(apiErrorMessage(e) ?? langStore.t.dealerListingGenericError)
+    return
+  }
+  if (parent) parent.replies = parent.replies.filter(r => r.id !== comment.id)
+  else comments.value = comments.value.filter(c => c.id !== comment.id)
 }
+// Свои комментарии удаляет автор, а под своим лотом — продавец
+const canDeleteComment = (c: DealerListingComment) => !!auth.user && (auth.user.id === c.author_id || auth.user.id === listing.value?.seller_id)
 
 // ── Meta ─────────────────────────────────────────────────────────────────────
 const CAT_LABELS = computed<Record<string, string>>(() => ({
@@ -222,15 +191,22 @@ const CAT_LABELS = computed<Record<string, string>>(() => ({
 const TYPE_LABELS = computed<Record<string, string>>(() => ({
   digital: langStore.t.dealerListingTypeDigital, physical: langStore.t.dealerListingTypePhysical, both: langStore.t.dealerListingTypeBoth,
 }))
-const KIND_THEME = computed(() => ({
-  fixed:            { from: '#3148FF', to: '#4C67CF',  accent: '#93b4ff',  icon: 'Tag',         label: langStore.t.dealerListingKindFixed },
-  auction:          { from: '#9c5700', to: '#5c2e00',  accent: '#FFC01F',  icon: 'Hammer',      label: langStore.t.dealerListingKindAuction },
-  ych:              { from: '#4c1280', to: '#26094a',  accent: '#CD83F5',  icon: 'Paintbrush',  label: 'YCH'        },
-  raffle:           { from: '#054d20', to: '#022b12',  accent: '#66C770',  icon: 'Gift',        label: langStore.t.dealerListingKindRaffle },
-  commission_queue: { from: '#3b1f7a', to: '#1e0f40',  accent: '#a78bfa',  icon: 'ListOrdered', label: langStore.t.dealerListingKindCommission },
-}))
-
-const kindTheme = computed(() => KIND_THEME.value[(listing.value?.listing_kind ?? 'fixed') as keyof typeof KIND_THEME.value] ?? KIND_THEME.value.fixed)
+// Цвета вида продажи берутся из токенов темы: градиент от акцента к тёмному фону
+const THEME_TOKEN: Record<string, string> = {
+  fixed: '--color-brand-accent', auction: '--color-brand-yellow', ych: '--color-brand-purple',
+  raffle: '--color-brand-success', commission_queue: '--color-brand-pink',
+}
+const kindTheme = computed(() => {
+  const kind = (listing.value?.listing_kind ?? 'fixed') as keyof typeof KIND_META
+  const token = `var(${THEME_TOKEN[kind] ?? THEME_TOKEN.fixed})`
+  const meta = KIND_META[kind] ?? KIND_META.fixed
+  const mix = (pct: number) => `color-mix(in srgb, ${token} ${pct}%, var(--color-brand-bg))`
+  return {
+    from: kind === 'fixed' ? token : mix(55), to: kind === 'fixed' ? 'var(--color-brand-accent-plus)' : mix(22), accent: token,
+    icon: meta.icon,
+    label: meta.labelKey ? (langStore.t as Record<string, string>)[meta.labelKey] : meta.label!,
+  }
+})
 
 // ── Wishlist ──────────────────────────────────────────────────────────────────
 const isWishlisted  = ref(false)
@@ -247,9 +223,10 @@ async function toggleBookmark() {
   try {
     if (was) await store.removeFromWishlist(listing.value.id)
     else await store.addToWishlist(listing.value.id)
-  } catch {
+  } catch (e) {
     isWishlisted.value = was
     wishlistCount.value = Math.max(0, wishlistCount.value + (was ? 1 : -1))
+    flashErr(apiErrorMessage(e) ?? langStore.t.dealerListingGenericError)
   } finally {
     bookmarkBusy.value = false
   }
@@ -291,7 +268,7 @@ async function submitReview() {
     reviewTags.value = []
     reviewRating.value = 5
   } catch (e: any) {
-    reviewError.value = e?.response?.data?.error ?? langStore.t.dealerListingGenericError
+    reviewError.value = apiErrorMessage(e) ?? langStore.t.dealerListingGenericError
   } finally {
     isPostingReview.value = false
   }
@@ -313,42 +290,8 @@ function goToTag(tag: string) {
   router.push({ name: 'dealers-den', query: { search: tag } })
 }
 
-// ── Avatar frame claim (free, instant — no in-app purchase flow exists yet) ──
-const ownedFrameIds = ref<Set<string>>(new Set())
-const isClaimingFrame = ref(false)
-const claimFrameError = ref('')
-
-const isAvatarFrame = computed(() => listing.value?.category === 'avatar_frame')
-const frameOwned = computed(() => !!listing.value?.avatarFrame && ownedFrameIds.value.has(listing.value.avatarFrame.id))
-const frameCalibration = computed(() => {
-  const f = listing.value?.avatarFrame
-  return f ? { offsetX: f.default_offset_x, offsetY: f.default_offset_y, scale: f.default_scale, rotation: f.default_rotation } : { offsetX: 0, offsetY: 0, scale: 1, rotation: 0 }
-})
-
-async function loadOwnedFrames() {
-  if (!auth.user) return
-  try {
-    const mine = await store.getMyAvatarFrames()
-    ownedFrameIds.value = new Set(mine.map(f => f.id))
-  } catch { /* non-critical */ }
-}
-
-async function claimFrame() {
-  if (!listing.value?.avatarFrame || isClaimingFrame.value) return
-  isClaimingFrame.value = true
-  claimFrameError.value = ''
-  try {
-    await store.claimAvatarFrame(listing.value.avatarFrame.id)
-    ownedFrameIds.value.add(listing.value.avatarFrame.id)
-  } catch (err: any) {
-    claimFrameError.value = err?.response?.data?.error ?? langStore.t.avatarFrameSubmitFailed
-  } finally {
-    isClaimingFrame.value = false
-  }
-}
-
 // ── Edit ─────────────────────────────────────────────────────────────────────
-const showEditModal = ref(false)
+const showEdit = ref(false)
 const showApplyModal = ref(false)
 const applicationsStore = useListingApplicationsStore()
 const myApplication = ref<{ status: string; orderId?: string | null; orderStage?: string | null; deadlineAt?: string | null } | null>(null)
@@ -365,87 +308,29 @@ async function loadMyApplication() {
   }
 }
 const STAGE_LABEL: Record<string, string> = { WAITING: 'в очереди', SKETCH: 'скетч', LINEART: 'лайнарт', COLORING: 'раскраска', FINISHED: 'готово' }
-const editDetails   = ref(emptyDraft())
-const isUpdating    = ref(false)
-const editForm = ref({
-  title: '', description: '', price: 0, discountPercent: 0, currency: 'USD',
-  quantity: 1, commissionSlotsTotal: 1, status: 'active' as 'active'|'draft'|'archived'|'sold',
-  images: [] as string[], tags: '', isNsfw: false,
-})
 
-function openEdit() {
-  if (!listing.value) return
-  editForm.value = {
-    title:       listing.value.title,
-    description: listing.value.description ?? '',
-    price:       parseFloat(String(listing.value.price)),
-    discountPercent: listing.value.discount_percent ?? 0,
-    currency:    listing.value.currency,
-    quantity:    listing.value.quantity,
-    commissionSlotsTotal: listing.value.commission_slots_total ?? 1,
-    status:      listing.value.status as any,
-    images:      [...listing.value.images],
-    tags:        listing.value.tags.join(', '),
-    isNsfw:      listing.value.is_nsfw,
-  }
-  editDetails.value = draftFrom(listing.value.commission_details)
-  showEditModal.value = true
-}
-
-async function submitEdit() {
-  if (!listing.value || !editForm.value.title.trim()) return
-  isUpdating.value = true
-  try {
-    await store.updateListing(listing.value.id, {
-      title:       editForm.value.title,
-      description: editForm.value.description || undefined,
-      price:       editForm.value.price,
-      discountPercent: supportsDiscount(listing.value.listing_kind) ? clampDiscount(editForm.value.discountPercent) : 0,
-      currency:    editForm.value.currency,
-      quantity:    isCommission.value ? undefined : editForm.value.quantity,
-      commissionSlotsTotal: isCommission.value ? Number(editForm.value.commissionSlotsTotal) : undefined,
-      status:      editForm.value.status as any,
-      images:      editForm.value.images,
-      tags:        editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
-      isNsfw:      editForm.value.isNsfw,
-      commissionDetails: cleanDraft(editDetails.value, isCommission.value),
-    })
-    await store.loadListing(listing.value.id)
-    showEditModal.value = false
-  } catch {} finally {
-    isUpdating.value = false
-  }
-}
+function openEdit() { if (listing.value) showEdit.value = true }
+async function onEdited() { if (listing.value) await store.loadListing(listing.value.id) }
 
 async function deleteListing() {
   if (!listing.value) return
   if (!(await confirmDialog(langStore.t.dealerListingDeleteConfirm, { danger: true }))) return
-  await store.deleteListing(listing.value.id)
+  try {
+    await store.deleteListing(listing.value.id)
+  } catch (e) {
+    flashErr(apiErrorMessage(e) ?? langStore.t.dealersDenDeleteFailed)
+    return
+  }
   router.push({ name: 'dealers-den' })
 }
 
-function addImageUrl() {
-  editForm.value.images.push('')
-}
-function removeImage(i: number) {
-  editForm.value.images.splice(i, 1)
-}
-
-// ── Share ─────────────────────────────────────────────────────────────────────
-const shareToast = ref(false)
-let shareTimer: ReturnType<typeof setTimeout> | null = null
-
-function shareListing() {
+// ── Поделиться ───────────────────────────────────────────────────────────────
+async function shareListing() {
   const url = window.location.href
-  if (navigator.share) {
-    navigator.share({ title: listing.value?.title ?? '', url })
-  } else {
-    navigator.clipboard.writeText(url).then(() => {
-      shareToast.value = true
-      if (shareTimer) clearTimeout(shareTimer)
-      shareTimer = setTimeout(() => { shareToast.value = false }, 2500)
-    })
-  }
+  try {
+    if (navigator.share) await navigator.share({ title: listing.value?.title ?? '', url })
+    else { await navigator.clipboard.writeText(url); flashOk(langStore.t.dealerListingLinkCopied) }
+  } catch { /* пользователь закрыл системное окно «Поделиться» */ }
 }
 
 // ── Report ────────────────────────────────────────────────────────────────────
@@ -483,7 +368,9 @@ async function submitReport() {
       reportReason.value     = ''
       reportCustom.value     = ''
     }, 2000)
-  } catch {} finally {
+  } catch (e) {
+    flashErr(apiErrorMessage(e) ?? langStore.t.dealerListingGenericError)
+  } finally {
     isReporting.value = false
   }
 }
@@ -523,8 +410,8 @@ async function submitReport() {
           <h2 class="text-2xl font-bold text-white mb-2">{{ langStore.t.dealerListingNotFoundTitle }}</h2>
           <p class="text-white/35 text-sm mb-6">{{ langStore.t.dealerListingNotFoundDesc }}</p>
           <button @click="router.push({ name: 'dealers-den' })"
-            class="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-2xl"
-            style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+            class="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-2xl bg-brand-gradient"
+            >
             <BIcon name="ShoppingBag" class="w-4 h-4" /> {{ langStore.t.dealerListingBackToDen }}
           </button>
         </div>
@@ -533,19 +420,11 @@ async function submitReport() {
 
           <!-- ═══ ACTION BAR ══════════════════════════════════════════════ -->
           <div class="flex items-center gap-2 flex-wrap">
-            <!-- Share toast -->
-            <Transition name="fade-up">
-              <div v-if="shareToast"
-                class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-brand-success text-white text-sm font-bold px-5 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-none">
-                <BIcon name="Check" class="w-4 h-4" /> {{ langStore.t.dealerListingLinkCopied }}
-              </div>
-            </Transition>
-
             <!-- Owner buttons -->
             <template v-if="auth.user?.id === listing.seller_id">
               <button @click="openEdit"
                 class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-2xl transition-all hover:opacity-90 shadow-xs"
-                style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                >
                 <BIcon name="Pencil" class="w-3.5 h-3.5" /> {{ langStore.t.editPost }}
               </button>
               <button @click="deleteListing"
@@ -584,10 +463,10 @@ async function submitReport() {
             <div class="lg:col-span-3 stack-y-3">
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
                 <div class="grid gap-1.5" :class="listing.images.length > 1 ? 'grid-cols-3' : ''"
-                  :style="listing.images.length > 1 ? 'aspect-ratio: 16/10; background: #090d20' : ''">
+                  :style="listing.images.length > 1 ? 'aspect-ratio: 16/10; background: var(--color-brand-bg)' : ''">
                 <!-- Main image -->
                 <div class="relative w-full min-h-0" :class="listing.images.length > 1 ? 'col-span-2 h-full' : ''"
-                  :style="listing.images.length > 1 ? 'background: #090d20' : 'aspect-ratio: 4/3; background: #090d20'">
+                  :style="listing.images.length > 1 ? 'background: var(--color-brand-bg)' : 'aspect-ratio: 4/3; background: var(--color-brand-bg)'">
                   <img v-if="listing.images[activeImage]" :src="listing.images[activeImage]" :alt="listing.title"
                     class="w-full h-full object-contain" />
                   <div v-else class="w-full h-full flex items-center justify-center">
@@ -675,7 +554,7 @@ async function submitReport() {
                     <button v-if="auth.user && auth.user.id !== listing.seller_id"
                       @click="contactSeller"
                       class="flex items-center gap-2 px-4 py-2 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:opacity-90"
-                      style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                      >
                       <BIcon name="MessageCircle" class="w-4 h-4" /> {{ langStore.t.msgBtnTitle }}
                     </button>
                   </div>
@@ -709,7 +588,7 @@ async function submitReport() {
                         :class="reviewTags.includes(tag) ? 'border-brand-accent bg-brand-accent/20 text-brand-accent' : 'border-white/10 text-white/40 hover:border-white/20'">{{ tag }}</button>
                     </div>
                     <textarea v-model="reviewText" rows="3" :placeholder="langStore.t.dealerListingReviewPlaceholder"
-                      class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none" />
+                      class="w-full bg-brand-bg border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none" />
                     <div v-if="reviewError" class="text-xs text-brand-error">{{ reviewError }}</div>
                     <button @click="submitReview" :disabled="isPostingReview"
                       class="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-xl disabled:opacity-30"
@@ -742,10 +621,9 @@ async function submitReport() {
                       </div>
                       <div class="text-right rounded-2xl border border-brand-error/30 bg-brand-error/10 px-4 py-2.5">
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingTimeLeft }}</p>
-                        <p class="text-2xl font-black tabular-nums leading-none"
-                          :class="isHot(listing.auction_ends_at) ? 'text-brand-error' : 'text-white'">
-                          {{ formatCountdown(listing.auction_ends_at) ?? '—' }}
-                        </p>
+                        <DenCountdown v-slot="{ text, hot }" :ends-at="listing.auction_ends_at">
+                          <p class="text-2xl font-black tabular-nums leading-none" :class="hot ? 'text-brand-error' : 'text-white'">{{ text || '—' }}</p>
+                        </DenCountdown>
                         <p v-if="listing.auction_ends_at" class="text-[9px] text-white/25 mt-1">
                           {{ langStore.t.dealerListingUntilPrefix }} {{ formatDate(listing.auction_ends_at) }}
                         </p>
@@ -764,47 +642,12 @@ async function submitReport() {
                       <span class="font-bold text-white/50">+{{ formatPrice(listing.bid_increment, listing.currency) }}</span>
                     </div>
                     <!-- Bid CTA -->
-                    <div v-if="!isSoldOut(listing) && !showBidForm">
+                    <div v-if="!isSoldOut(listing)">
                       <button @click="openBidForm"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
-                        style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
+                        :class="KIND_META.auction.btn">
                         <BIcon name="Hammer" class="w-4 h-4" /> {{ langStore.t.dealerListingPlaceBidBtn }}
                       </button>
-                    </div>
-                    <!-- Bid form -->
-                    <div v-if="showBidForm && !isSoldOut(listing)" class="stack-y-3">
-                      <div class="stack-y-1.5">
-                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingYourBidLabel }}</label>
-                        <div class="relative">
-                          <input v-model.number="bidAmount" type="number" min="0" step="0.01"
-                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-hidden focus:border-brand-yellow/40 transition-all" />
-                          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/25 font-bold">{{ listing.currency }}</span>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-3 gap-2">
-                        <button v-for="k in [1, 2, 5]" :key="k" type="button" @click="bidAmount = parseFloat((bidAmount + k * parseFloat(String(listing.bid_increment ?? 1))).toFixed(2))"
-                          class="py-2 rounded-xl bg-white/4 border border-brand-border text-xs font-bold text-white/70 hover:border-white/25 transition-colors">
-                          +{{ formatPrice(k * parseFloat(String(listing.bid_increment ?? 1)), listing.currency) }}
-                        </button>
-                      </div>
-                      <p class="text-[11px] text-white/35">Минимальная ставка {{ formatPrice(parseFloat(String(listing.current_bid ?? listing.price)) + parseFloat(String(listing.bid_increment ?? 1)), listing.currency) }} · шаг {{ formatPrice(listing.bid_increment, listing.currency) }}</p>
-                      <div class="stack-y-1.5">
-                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingMessageOptionalLabel }}</label>
-                        <textarea v-model="bidMessage" rows="2" :placeholder="langStore.t.dealerListingBidMessagePlaceholder"
-                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-hidden focus:border-brand-yellow/40 transition-all" />
-                      </div>
-                      <div v-if="bidError" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ bidError }}</div>
-                      <div class="flex gap-2">
-                        <button @click="showBidForm = false"
-                          class="px-4 py-2.5 border border-white/10 text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">{{ langStore.t.cancel }}</button>
-                        <button @click="submitBid" :disabled="isBidding || bidAmount <= 0"
-                          class="flex-1 flex items-center justify-center gap-2 py-2.5 disabled:opacity-30 text-white text-sm font-extrabold rounded-2xl transition-all hover:opacity-90"
-                          style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
-                          <span v-if="isBidding" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <BIcon v-else name="Hammer" class="w-4 h-4" />
-                          {{ isBidding ? langStore.t.helpSubmitting : langStore.t.dealerListingConfirmBidBtn }}
-                        </button>
-                      </div>
                     </div>
                     <div v-if="isSoldOut(listing)"
                       class="flex items-center gap-2 bg-brand-success/10 border border-brand-success/20 rounded-2xl px-4 py-3">
@@ -892,10 +735,9 @@ async function submitReport() {
                       </div>
                       <div class="text-right rounded-2xl border border-brand-error/30 bg-brand-error/10 px-4 py-2.5">
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingUntilEndLabel }}</p>
-                        <p class="text-xl font-black tabular-nums leading-none"
-                          :class="isHot(listing.auction_ends_at) ? 'text-brand-error' : 'text-white/80'">
-                          {{ formatCountdown(listing.auction_ends_at) ?? '—' }}
-                        </p>
+                        <DenCountdown v-slot="{ text, hot }" :ends-at="listing.auction_ends_at">
+                          <p class="text-xl font-black tabular-nums leading-none" :class="hot ? 'text-brand-error' : 'text-white/80'">{{ text || '—' }}</p>
+                        </DenCountdown>
                       </div>
                     </div>
                     <div v-if="listing.auto_buy_price"
@@ -907,47 +749,12 @@ async function submitReport() {
                       <span class="text-sm font-extrabold text-brand-yellow">{{ formatPrice(listing.auto_buy_price, listing.currency) }}</span>
                     </div>
                     <!-- Bid CTA -->
-                    <div v-if="!isSoldOut(listing) && !showBidForm">
+                    <div v-if="!isSoldOut(listing)">
                       <button @click="openBidForm"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
-                        style="background: linear-gradient(135deg, #CD83F5, #7C3AED)">
+                        :class="KIND_META.ych.btn">
                         <BIcon name="Paintbrush" class="w-4 h-4" /> {{ langStore.t.dealerListingTakeSlotBtn }}
                       </button>
-                    </div>
-                    <!-- YCH bid form -->
-                    <div v-if="showBidForm && !isSoldOut(listing)" class="stack-y-3">
-                      <div class="stack-y-1.5">
-                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingYourSlotBidLabel }}</label>
-                        <div class="relative">
-                          <input v-model.number="bidAmount" type="number" min="0" step="0.01"
-                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-hidden focus:border-brand-purple/40 transition-all" />
-                          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/25 font-bold">{{ listing.currency }}</span>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-3 gap-2">
-                        <button v-for="k in [1, 2, 5]" :key="k" type="button" @click="bidAmount = parseFloat((bidAmount + k * parseFloat(String(listing.bid_increment ?? 1))).toFixed(2))"
-                          class="py-2 rounded-xl bg-white/4 border border-brand-border text-xs font-bold text-white/70 hover:border-white/25 transition-colors">
-                          +{{ formatPrice(k * parseFloat(String(listing.bid_increment ?? 1)), listing.currency) }}
-                        </button>
-                      </div>
-                      <p class="text-[11px] text-white/35">Минимальная ставка {{ formatPrice(parseFloat(String(listing.current_bid ?? listing.price)) + parseFloat(String(listing.bid_increment ?? 1)), listing.currency) }} · шаг {{ formatPrice(listing.bid_increment, listing.currency) }}</p>
-                      <div class="stack-y-1.5">
-                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingCharDescLabel }}</label>
-                        <textarea v-model="bidMessage" rows="3" :placeholder="langStore.t.dealerListingCharDescPlaceholder"
-                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-hidden focus:border-brand-purple/40 transition-all" />
-                      </div>
-                      <div v-if="bidError" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ bidError }}</div>
-                      <div class="flex gap-2">
-                        <button @click="showBidForm = false"
-                          class="px-4 py-2.5 border border-white/10 text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">{{ langStore.t.cancel }}</button>
-                        <button @click="submitBid" :disabled="isBidding || bidAmount <= 0"
-                          class="flex-1 flex items-center justify-center gap-2 py-2.5 disabled:opacity-30 text-white text-sm font-extrabold rounded-2xl hover:opacity-90"
-                          style="background: linear-gradient(135deg, #CD83F5, #7C3AED)">
-                          <span v-if="isBidding" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <BIcon v-else name="Paintbrush" class="w-4 h-4" />
-                          {{ isBidding ? langStore.t.helpSubmitting : langStore.t.confirmBtn }}
-                        </button>
-                      </div>
                     </div>
                     <div v-if="isSoldOut(listing)"
                       class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
@@ -1008,7 +815,7 @@ async function submitReport() {
                       </div>
                       <div class="w-full h-3 bg-black/30 rounded-full overflow-hidden mb-3">
                         <div class="h-full rounded-full transition-all duration-700"
-                          style="background: linear-gradient(90deg, #66C770, #059669)"
+                          :class="'bg-linear-to-r from-brand-success to-emerald-600'"
                           :style="`width: ${listing.raffle_max_tickets
                             ? Math.min(100, (listing.raffle_tickets_sold / listing.raffle_max_tickets) * 100)
                             : Math.min(100, listing.raffle_tickets_sold * 5)}%`" />
@@ -1066,7 +873,7 @@ async function submitReport() {
                     <template v-if="!isSoldOut(listing) && !ticketSuccess && auth.user?.id !== listing.seller_id && !listing.my_raffle_tickets">
                       <button v-if="auth.user" @click="buyTicket" :disabled="isBuyingTicket"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm disabled:opacity-40"
-                        style="background: linear-gradient(135deg, #66C770, #059669)">
+                        :class="KIND_META.raffle.btn">
                         <span v-if="isBuyingTicket" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         <BIcon v-else name="Ticket" class="w-4 h-4" />
                         {{ isBuyingTicket ? langStore.t.dealerListingBuyingEllipsis : langStore.t.dealerListingBuyTicketBtn }}
@@ -1103,17 +910,6 @@ async function submitReport() {
                 <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
                   <div class="p-5 stack-y-4">
                     <ListingPanelHead :listing="listing" :theme="kindTheme" :wishlist-count="wishlistCount" />
-                    <!-- Avatar frame preview: rendered on the viewer's own avatar, using the
-                         seller's chosen default calibration from the submission editor. -->
-                    <div v-if="isAvatarFrame" class="flex justify-center py-2">
-                      <FrameEditor
-                        :avatar-url="auth.avatarUrl || '/icons/badges/NN.jpg'"
-                        :frame-image-url="listing.images[0]"
-                        :model-value="frameCalibration"
-                        :draggable="false"
-                        :size="160"
-                      />
-                    </div>
                     <div class="flex items-end justify-between">
                       <div>
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingPriceLabel }}</p>
@@ -1139,33 +935,6 @@ async function submitReport() {
                       <BIcon name="PackageX" class="w-5 h-5 text-brand-error" />
                       <p class="text-xs font-bold text-brand-error">{{ langStore.t.dealerListingOutOfStock }}</p>
                     </div>
-                    <template v-else-if="isAvatarFrame">
-                      <div v-if="listing.avatarFrame?.status === 'pending'"
-                        class="flex items-center gap-2 bg-brand-yellow/10 border border-brand-yellow/20 rounded-2xl px-4 py-3">
-                        <BIcon name="Clock" class="w-4 h-4 text-brand-yellow" />
-                        <p class="text-xs font-bold text-brand-yellow">{{ langStore.t.avatarFramePendingBadge }}</p>
-                      </div>
-                      <div v-else-if="listing.avatarFrame?.status === 'rejected'"
-                        class="flex items-center gap-2 bg-brand-error/10 border border-brand-error/20 rounded-2xl px-4 py-3">
-                        <BIcon name="X" class="w-4 h-4 text-brand-error" />
-                        <p class="text-xs font-bold text-brand-error">{{ listing.avatarFrame?.rejection_reason || langStore.t.avatarFrameSubmitFailed }}</p>
-                      </div>
-                      <button v-else-if="!auth.user" @click="router.push({ name: 'login' })"
-                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white/60 font-bold rounded-2xl border border-brand-border hover:border-brand-accent/40 hover:text-white transition-all text-sm">
-                        <BIcon name="LogIn" class="w-4 h-4" /> {{ langStore.t.dealerListingLoginToBuy }}
-                      </button>
-                      <button v-else-if="frameOwned" disabled
-                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white/40 font-bold rounded-2xl border border-brand-border text-sm cursor-default">
-                        <BIcon name="Check" class="w-4 h-4" /> {{ langStore.t.avatarFrameClaimedBtn }}
-                      </button>
-                      <button v-else @click="claimFrame" :disabled="isClaimingFrame"
-                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm disabled:opacity-50"
-                        style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-                        <span v-if="isClaimingFrame" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <BIcon v-else name="Sparkles" class="w-4 h-4" /> {{ langStore.t.avatarFrameClaimBtn }}
-                      </button>
-                      <p v-if="claimFrameError" class="text-xs text-brand-error mt-2">{{ claimFrameError }}</p>
-                    </template>
                     <template v-else>
                       <div v-if="auth.user && auth.user.id !== listing.seller_id && myApplication"
                         class="flex items-start gap-2.5 rounded-2xl bg-brand-success/8 border border-brand-success/20 px-4 py-3">
@@ -1193,13 +962,13 @@ async function submitReport() {
                       <button v-if="myApplication?.status === 'accepted' && myApplication.orderId && listing.group"
                         @click="router.push(`/groups/${listing.group.slug}/orders/${myApplication.orderId}`)"
                         class="w-full mt-2 flex items-center justify-center gap-2 py-3 rounded-2xl text-white font-extrabold text-sm hover:opacity-90 active:scale-[0.98] transition-all"
-                        style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+                        :class="'bg-brand-gradient'">
                         <BIcon name="Package" class="w-4 h-4" /> Открыть заказ
                       </button>
                       <button v-else-if="auth.user && auth.user.id !== listing.seller_id && listing.group"
                         @click="showApplyModal = true"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
-                        style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+                        :class="'bg-brand-gradient'">
                         <BIcon name="Send" class="w-4 h-4" /> Отправить заявку
                       </button>
                       <button v-else-if="!auth.user" @click="router.push({ name: 'login' })"
@@ -1209,7 +978,7 @@ async function submitReport() {
                     </template>
                     <div v-if="listing.type !== 'digital'" class="flex items-start gap-2.5 rounded-2xl bg-black/20 border border-brand-border px-3.5 py-3">
                       <BIcon name="ShieldCheck" class="w-4 h-4 text-brand-success shrink-0 mt-0.5" />
-                      <p class="text-[11px] text-white/45 leading-relaxed">Деньги уходят продавцу после того, как ты подтвердишь получение.</p>
+                      <p class="text-[11px] text-white/45 leading-relaxed">Если оплата идёт счётом внутри заказа группы, деньги удерживаются, пока ты не подтвердишь выполнение.</p>
                     </div>
                   </div>
                 </div>
@@ -1256,7 +1025,7 @@ async function submitReport() {
               </div>
               <!-- Text -->
               <textarea v-model="reviewText" rows="3" :placeholder="langStore.t.dealerListingReviewPlaceholder"
-                class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none" />
+                class="w-full bg-brand-bg border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none" />
               <div v-if="reviewError" class="text-xs text-brand-error">{{ reviewError }}</div>
               <button @click="submitReview" :disabled="isPostingReview || reviewRating === 0"
                 class="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-xl disabled:opacity-30 transition-all hover:opacity-90"
@@ -1298,7 +1067,7 @@ async function submitReport() {
                 </div>
                 <div class="flex-1 stack-y-2">
                   <textarea v-model="commentBody" rows="2" :placeholder="langStore.t.dealerListingCommentPlaceholder"
-                    class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none transition-all" />
+                    class="w-full bg-brand-bg border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none transition-all" />
                   <button @click="postComment" :disabled="isPostingComment || !commentBody.trim()"
                     class="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-30 hover:opacity-90"
                     :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to})`">
@@ -1344,7 +1113,7 @@ async function submitReport() {
                         class="flex items-center gap-1 text-[10px] text-white/35 hover:text-white transition-colors font-medium">
                         <BIcon name="CornerDownRight" class="w-3 h-3" /> {{ langStore.t.reply }}
                       </button>
-                      <button v-if="auth.user?.id === comment.author_id" @click="removeComment(comment)"
+                      <button v-if="canDeleteComment(comment)" @click="removeComment(comment)"
                         class="flex items-center gap-1 text-[10px] text-brand-error/40 hover:text-brand-error transition-colors font-medium">
                         <BIcon name="Trash2" class="w-3 h-3" /> {{ langStore.t.deleteBtn }}
                       </button>
@@ -1353,7 +1122,7 @@ async function submitReport() {
                     <!-- Reply form -->
                     <div v-if="replyTo?.id === comment.id" class="mt-3 flex gap-2">
                       <textarea v-model="replyBody" rows="2" :placeholder="`${langStore.t.reply} ${comment.author.display_name ?? comment.author.username}…`"
-                        class="flex-1 bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-hidden focus:border-white/15 resize-none transition-all" />
+                        class="flex-1 bg-brand-bg border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-hidden focus:border-white/15 resize-none transition-all" />
                       <div class="flex flex-col gap-1.5 shrink-0">
                         <button @click="postReply(comment)" :disabled="!replyBody.trim()"
                           class="px-3 py-2 text-white text-xs font-bold rounded-xl disabled:opacity-30 transition-all"
@@ -1389,6 +1158,10 @@ async function submitReport() {
                         <span class="text-[9px] text-white/20">{{ formatTime(reply.created_at) }}</span>
                       </div>
                       <p class="text-xs text-white/65 leading-relaxed">{{ reply.body }}</p>
+                      <button v-if="canDeleteComment(reply)" @click="removeComment(reply, comment)"
+                        class="mt-1 flex items-center gap-1 text-[10px] text-brand-error/40 hover:text-brand-error transition-colors font-medium">
+                        <BIcon name="Trash2" class="w-3 h-3" /> {{ langStore.t.deleteBtn }}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1403,236 +1176,45 @@ async function submitReport() {
     <ListingApplicationModal v-if="showApplyModal && listing && !myApplication" :listing="listing" @sent="myApplication = { status: 'pending' }"
       @close="showApplyModal = false; loadMyApplication()" />
 
-    <!-- ═══════════════════════════════════════════════════════════
-         EDIT MODAL
-    ═══════════════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showEditModal" class="fixed inset-0 z-999 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" @click="showEditModal = false" />
-          <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto scrollbar-none">
-            <!-- Header -->
-            <div class="relative px-6 pt-6 pb-2">
-              <button @click="showEditModal = false" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
-                <BIcon name="X" class="w-4 h-4 text-white/50" />
-              </button>
-              <h2 class="text-xl font-extrabold text-white">{{ langStore.t.editPost }}</h2>
-            </div>
+    <DenEditModal v-if="showEdit && listing" :listing="listing" @close="showEdit = false" @saved="onEdited" />
+    <DenBidModal v-if="showBid && listing" :listing="listing" @close="showBid = false" @placed="loadBids(); flashOk(langStore.t.dealerListingConfirmBidBtn)" />
 
-            <div class="p-5 stack-y-4">
-              <!-- Title -->
-              <div class="stack-y-1.5">
-                <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingTitleRequiredLabel }}</label>
-                <input v-model="editForm.title" type="text" :placeholder="langStore.t.dealerListingTitlePlaceholder"
-                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
-              </div>
-
-              <!-- Description -->
-              <div class="stack-y-1.5">
-                <div class="flex items-center justify-between">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.fursuitDescLabel }}</label>
-                  <span class="text-[11px] tabular-nums" :class="(editForm.description?.length ?? 0) > 440 ? 'text-brand-error/80' : 'text-white/35'">{{ editForm.description?.length ?? 0 }}<span class="opacity-50">/500</span></span>
-                </div>
-                <textarea v-model="editForm.description" rows="3" maxlength="500" :placeholder="langStore.t.dealerListingDescPlaceholder"
-                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all resize-none" />
-              </div>
-
-              <!-- Price + Currency -->
-              <div class="grid grid-cols-2 gap-3">
-                <div class="stack-y-1.5">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingPriceLabel }}</label>
-                  <input v-model.number="editForm.price" type="number" min="0" step="0.01"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all" />
-                </div>
-                <div class="stack-y-1.5">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingCurrencyLabel }}</label>
-                  <select v-model="editForm.currency"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all appearance-none cursor-pointer">
-                    <option>USD</option><option>RUB</option><option>EUR</option>
-                  </select>
-                </div>
-              </div>
-
-              <DenDiscountField v-if="listing && supportsDiscount(listing.listing_kind)" v-model="editForm.discountPercent" :price="Number(editForm.price)" :currency="editForm.currency" />
-
-              <!-- Quantity + Status -->
-              <div class="grid grid-cols-2 gap-3">
-                <div v-if="isCommission" class="stack-y-1.5">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealersDenCommissionSlotsLabel }}</label>
-                  <input v-model.number="editForm.commissionSlotsTotal" type="number" min="1" max="1000"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all" />
-                </div>
-                <div v-else class="stack-y-1.5">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingQuantityLabel }}</label>
-                  <input v-model.number="editForm.quantity" type="number" min="1"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all" />
-                </div>
-                <div class="stack-y-1.5">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.statusFieldLabel }}</label>
-                  <select v-model="editForm.status"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm outline-hidden focus:border-brand-accent/50 transition-all appearance-none cursor-pointer"
-                    :class="editForm.status === 'active' ? 'text-brand-success'
-                           : editForm.status === 'draft' ? 'text-white/40'
-                           : editForm.status === 'archived' ? 'text-white/30'
-                           : 'text-brand-error'">
-                    <option value="active">{{ langStore.t.dealerListingStatusActive }}</option>
-                    <option value="draft">{{ langStore.t.dealerListingStatusDraft }}</option>
-                    <option value="archived">{{ langStore.t.archiveBtn }}</option>
-                    <option value="sold">{{ langStore.t.dealerListingStatusSold }}</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- Tags -->
-              <div class="stack-y-1.5">
-                <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingTagsLabel }}</label>
-                <input v-model="editForm.tags" type="text" :placeholder="langStore.t.dealerListingTagsPlaceholder"
-                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
-              </div>
-
-              <!-- Images -->
-              <div class="stack-y-2">
-                <div class="flex items-center justify-between">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingImagesLabel }}</label>
-                  <button @click="addImageUrl" type="button"
-                    class="flex items-center gap-1 text-[10px] font-bold text-brand-accent hover:text-white transition-colors">
-                    <BIcon name="Plus" class="w-3 h-3" /> {{ langStore.t.addButton }}
-                  </button>
-                </div>
-                <div v-for="(img, i) in editForm.images" :key="i" class="flex gap-2 items-center">
-                  <input v-model="editForm.images[i]" type="url" placeholder="https://…"
-                    class="flex-1 bg-[#0a0a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-hidden focus:border-brand-accent/40 transition-all" />
-                  <button @click="removeImage(i)" type="button"
-                    class="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-error/10 text-brand-error/60 hover:bg-brand-error/20 hover:text-brand-error transition-all shrink-0">
-                    <BIcon name="Trash2" class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div v-if="!editForm.images.length" class="text-xs text-white/20 italic">{{ langStore.t.dealerListingNoImages }}</div>
-              </div>
-
-              <ListingDetailsEditor :draft="editDetails" :commission="isCommission" />
-
-              <!-- NSFW toggle -->
-              <div class="flex items-center justify-between bg-brand-bg/50 border border-brand-border rounded-2xl px-4 py-3">
-                <div class="flex items-center gap-2">
-                  <BIcon name="EyeOff" class="w-4 h-4 text-brand-error/60" />
-                  <span class="text-sm font-medium text-white/70">{{ langStore.t.dealerListingNsfwContent }}</span>
-                </div>
-                <button type="button" @click="editForm.isNsfw = !editForm.isNsfw"
-                  class="w-10 h-5.5 rounded-full transition-all relative shrink-0"
-                  :class="editForm.isNsfw ? 'bg-brand-error' : 'bg-white/10'">
-                  <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all"
-                    :class="editForm.isNsfw ? 'left-5.5' : 'left-0.5'" />
-                </button>
-              </div>
-
-              <!-- Preview of first image -->
-              <div v-if="editForm.images[0]" class="rounded-2xl overflow-hidden aspect-video bg-black/40">
-                <img :src="editForm.images[0]" class="w-full h-full object-contain" />
-              </div>
-
-              <!-- Actions -->
-              <div class="flex gap-3 pt-1">
-                <button @click="showEditModal = false" type="button"
-                  class="flex-1 py-3 border border-brand-border text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">
-                  {{ langStore.t.cancel }}
-                </button>
-                <button @click="submitEdit" :disabled="isUpdating || !editForm.title.trim()" type="button"
-                  class="flex-1 flex items-center justify-center gap-2 py-3 text-white text-sm font-extrabold rounded-2xl disabled:opacity-30 transition-all hover:opacity-90"
-                  style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-                  <span v-if="isUpdating" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <BIcon v-else name="Check" class="w-4 h-4" />
-                  {{ isUpdating ? langStore.t.savingLabel : langStore.t.dealerListingSaveBtn }}
-                </button>
-              </div>
-            </div>
-          </div>
+    <ModalShell v-if="showReportModal" :title="langStore.t.report" width="max-w-sm" @close="showReportModal = false">
+      <div v-if="reportSuccess" class="py-4 text-center stack-y-3">
+        <div class="w-14 h-14 rounded-full bg-brand-success/15 flex items-center justify-center mx-auto">
+          <BIcon name="CheckCircle2" class="w-8 h-8 text-brand-success" />
         </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ═══════════════════════════════════════════════════════════
-         REPORT MODAL
-    ═══════════════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div v-if="showReportModal" class="fixed inset-0 z-999 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" @click="showReportModal = false" />
-          <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <!-- Header -->
-            <div class="relative px-6 pt-6 pb-2">
-              <button @click="showReportModal = false" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
-                <BIcon name="X" class="w-4 h-4 text-white/50" />
-              </button>
-              <h2 class="text-xl font-extrabold text-white">{{ langStore.t.report }}</h2>
-            </div>
-
-            <!-- Success state -->
-            <div v-if="reportSuccess" class="p-8 text-center stack-y-3">
-              <div class="w-14 h-14 rounded-full bg-brand-success/15 flex items-center justify-center mx-auto">
-                <BIcon name="CheckCircle2" class="w-8 h-8 text-brand-success" />
-              </div>
-              <p class="font-bold text-white">{{ langStore.t.reportSent }}</p>
-              <p class="text-sm text-white/40">{{ langStore.t.dealerListingReportReviewNote }}</p>
-            </div>
-
-            <!-- Form -->
-            <div v-else class="p-5 stack-y-4">
-              <p class="text-xs text-white/50">{{ langStore.t.dealerListingReportPrompt }}</p>
-              <!-- Reason buttons -->
-              <div class="stack-y-2">
-                <button v-for="r in REPORT_REASONS" :key="r" type="button"
-                  @click="reportReason = r"
-                  class="w-full text-left px-4 py-3 rounded-2xl text-sm transition-all border"
-                  :class="reportReason === r
-                    ? 'bg-brand-error/15 border-brand-error/40 text-white font-bold'
-                    : 'bg-brand-bg/50 border-brand-border text-white/50 hover:border-white/20 hover:text-white'">
-                  {{ r }}
-                </button>
-              </div>
-
-              <!-- Custom reason -->
-              <Transition name="fade">
-                <div v-if="reportReason === langStore.t.other" class="stack-y-1.5">
-                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingDescribeProblemLabel }}</label>
-                  <textarea v-model="reportCustom" rows="3" :placeholder="langStore.t.dealerListingReportDetailPlaceholder"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-error/30 resize-none transition-all" />
-                </div>
-              </Transition>
-
-              <!-- Actions -->
-              <div class="flex gap-3">
-                <button @click="showReportModal = false" type="button"
-                  class="flex-1 py-3 border border-brand-border text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">
-                  {{ langStore.t.cancel }}
-                </button>
-                <button @click="submitReport" :disabled="isReporting || !reportReason" type="button"
-                  class="flex-1 flex items-center justify-center gap-2 py-3 text-white text-sm font-extrabold rounded-2xl disabled:opacity-30 transition-all hover:opacity-90"
-                  style="background: linear-gradient(135deg, #c0392b, #922b21)">
-                  <span v-if="isReporting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <BIcon v-else name="Flag" class="w-4 h-4" />
-                  {{ isReporting ? langStore.t.helpSubmitting : langStore.t.send }}
-                </button>
-              </div>
-            </div>
-          </div>
+        <p class="font-bold text-white">{{ langStore.t.reportSent }}</p>
+        <p class="text-sm text-white/40">{{ langStore.t.dealerListingReportReviewNote }}</p>
+      </div>
+      <template v-else>
+        <p class="text-xs text-white/50">{{ langStore.t.dealerListingReportPrompt }}</p>
+        <div class="stack-y-2">
+          <button v-for="r in REPORT_REASONS" :key="r" type="button" @click="reportReason = r"
+            class="w-full text-left px-4 py-3 rounded-2xl text-sm transition-all border"
+            :class="reportReason === r
+              ? 'bg-brand-error/15 border-brand-error/40 text-white font-bold'
+              : 'bg-brand-bg/50 border-brand-border text-white/50 hover:border-white/20 hover:text-white'">{{ r }}</button>
         </div>
-      </Transition>
-    </Teleport>
+        <div v-if="reportReason === langStore.t.other">
+          <label class="field-label">{{ langStore.t.dealerListingDescribeProblemLabel }}</label>
+          <textarea v-model="reportCustom" rows="3" :placeholder="langStore.t.dealerListingReportDetailPlaceholder"
+            class="w-full px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden resize-none" />
+        </div>
+        <div class="flex gap-3">
+          <button @click="showReportModal = false" type="button"
+            class="flex-1 py-3 border border-brand-border text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">{{ langStore.t.cancel }}</button>
+          <button @click="submitReport" :disabled="isReporting || !reportReason" type="button"
+            class="flex-1 flex items-center justify-center gap-2 py-3 text-white text-sm font-extrabold rounded-2xl disabled:opacity-30 transition-all hover:opacity-90 bg-brand-error">
+            <span v-if="isReporting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <BIcon v-else name="Flag" class="w-4 h-4" />
+            {{ isReporting ? langStore.t.helpSubmitting : langStore.t.send }}
+          </button>
+        </div>
+      </template>
+    </ModalShell>
+
+    <FlashToast :flash="flash" />
 
   </div>
 </template>
-
-<style scoped>
-.scrollbar-none { scrollbar-width: none; }
-.scrollbar-none::-webkit-scrollbar { display: none; }
-
-.modal-enter-active, .modal-leave-active { transition: all 0.2s ease; }
-.modal-enter-from, .modal-leave-to { opacity: 0; transform: scale(0.96); }
-
-.fade-enter-active, .fade-leave-active { transition: all 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-4px); }
-
-.fade-up-enter-active, .fade-up-leave-active { transition: all 0.3s ease; }
-.fade-up-enter-from, .fade-up-leave-to { opacity: 0; transform: translateX(-50%) translateY(12px); }
-</style>

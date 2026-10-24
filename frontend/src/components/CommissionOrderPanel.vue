@@ -82,10 +82,10 @@
             {{ field.label }}<span v-if="field.required" class="text-brand-error ml-1">*</span>
           </label>
           <textarea v-if="field.type === 'textarea'" v-model="formData[field.label]" rows="2"
-            class="w-full bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden focus:border-violet-500/50 resize-none transition-all"
+            class="w-full bg-brand-bg border border-white/8 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden focus:border-violet-500/50 resize-none transition-all"
             :placeholder="field.label" />
           <input v-else v-model="formData[field.label]" type="text"
-            class="w-full bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 outline-hidden focus:border-violet-500/50 transition-all"
+            class="w-full bg-brand-bg border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 outline-hidden focus:border-violet-500/50 transition-all"
             :placeholder="field.label" />
         </div>
       </div>
@@ -117,7 +117,7 @@
       <template v-if="!isFull && listing.status === 'active'">
         <button v-if="canBook" @click="book" :disabled="booking || !requiredFilled"
           class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all hover:opacity-90 active:scale-[0.98] text-sm disabled:opacity-40"
-          style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+          :class="'bg-brand-gradient'">
           <span v-if="booking" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           <BIcon v-else name="PenLine" class="w-4 h-4" />
           {{ booking ? 'Оформляем…' : 'Оформить заказ' }}

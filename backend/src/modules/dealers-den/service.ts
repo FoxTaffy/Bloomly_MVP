@@ -100,11 +100,58 @@ function parsePriceRanges(raw?: string): { currency: string; min: number | null;
   } catch { return []; }
 }
 
+const BOOKING_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'];
+
+/** Анкета брони: только строки, обязательные поля заполнены, лишних ключей нет — иначе в JSON уходит произвольный мусор любого размера. */
+function validateFormData(raw: unknown, fields: unknown): Record<string, string> {
+  const defs = Array.isArray(fields) ? (fields as { label: string; required: boolean }[]) : [];
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const out: Record<string, string> = {};
+  for (const f of defs) {
+    const v = src[f.label];
+    const text = typeof v === 'string' ? v.trim().slice(0, 2000) : '';
+    if (f.required && !text) throw new Error('FORM_INCOMPLETE');
+    if (text) out[f.label] = text;
+  }
+  return out;
+}
+
+const MAX_MONEY = 9_999_999_999;
+const MAX_BID_MESSAGE = 500;
+const SNIPE_WINDOW_MS = 5 * 60 * 1000; // ставка в последние 5 минут продлевает торги ещё на 5
+
+const badRequest = (message: string, statusCode = 400) => Object.assign(new Error(message), { statusCode });
+
+/** Покупатель лота, которого можно опознать на площадке: победитель торгов/розыгрыша, забронировавший место или принятая заявка. */
+async function isIdentifiedBuyer(listing: { id: string; listing_kind: string; winner_id: string | null }, userId: string): Promise<boolean> {
+  switch (listing.listing_kind) {
+    case 'auction':
+    case 'ych':
+    case 'raffle':
+      return listing.winner_id === userId;
+    case 'commission_queue':
+      return !!(await prisma.commissionBooking.findFirst({ where: { listing_id: listing.id, buyer_id: userId, deleted_at: null }, select: { id: true } }));
+    default:
+      return !!(await prisma.listingApplication.findFirst({ where: { listing_id: listing.id, applicant_id: userId, status: 'accepted' }, select: { id: true } }));
+  }
+}
+
 export const dealersDenService = {
+  /**
+   * Лот виден зрителю так же, как в каталоге: черновики и архив — только владельцу, 18+ — только взрослым.
+   * Нужна всем побочным ручкам (ставки, комментарии, избранное), иначе они раскрывают скрытые лоты.
+   */
+  async canView(listingId: string, viewerId: string | undefined, viewerIsAdult: boolean): Promise<boolean> {
+    const l = await prisma.dealerListing.findFirst({ where: { id: listingId, deleted_at: null }, select: { seller_id: true, status: true, is_nsfw: true } });
+    if (!l) return false;
+    if (viewerId && l.seller_id === viewerId) return true;
+    return ['active', 'sold'].includes(l.status) && (!l.is_nsfw || viewerIsAdult);
+  },
+
   // ── list listings ─────────────────────────────────────────────────────────
   async list(query: GetListingsQuery, viewerId?: string) {
-    const page  = Math.max(1, parseInt(query.page  ?? '1',  10));
-    const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
+    const page  = Math.max(1, parseInt(query.page  ?? '1',  10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10) || 20));
     const skip  = (page - 1) * limit;
 
     const where: any = { deleted_at: null };
@@ -350,6 +397,14 @@ export const dealersDenService = {
     const existing = await prisma.dealerListing.findFirst({ where: { id, seller_id: sellerId, deleted_at: null } });
     if (!existing) return null;
 
+    // Исход торгов и розыгрыша определяют ставки/билеты, а не продавец: иначе можно «продать» лот самому себе ради рейтинга
+    const resultDriven = ['auction', 'ych', 'raffle'].includes(existing.listing_kind);
+    if (resultDriven && input.status !== undefined && (input.status === 'sold' || existing.status === 'sold')) {
+      throw badRequest('Итог аукциона и розыгрыша определяется автоматически — статус «продано» вручную не меняется', 409);
+    }
+    if (['auction', 'ych'].includes(existing.listing_kind) && existing.bid_count > 0 && (input.price !== undefined || input.currency !== undefined)) {
+      throw badRequest('Цену и валюту нельзя менять после первой ставки', 409);
+    }
     const prevPrice = existing.price;
     const data: any = {};
     if (input.title       !== undefined) data.title       = input.title;
@@ -401,7 +456,8 @@ export const dealersDenService = {
     }
 
     // Notify wishlist users on new commission slots, same dedup rationale as above.
-    if (input.commissionSlotsTotal !== undefined && existing.listing_kind === 'commission_queue') {
+    const slotsOpened = input.commissionSlotsTotal != null && input.commissionSlotsTotal > (existing.commission_slots_total ?? 0);
+    if (slotsOpened && existing.listing_kind === 'commission_queue') {
       const wishers = await prisma.denWishlist.findMany({ where: { listing_id: id }, select: { user_id: true } });
       await Promise.all(wishers.map(async (w) => {
         const alreadyNotified = await prisma.notification.findFirst({
@@ -457,7 +513,10 @@ export const dealersDenService = {
   // bids reading the same current_bid could otherwise both pass the min-amount check and
   // both "win", corrupting current_bid/bid_count and possibly double-triggering auto-buy.
   async placeBid(listingId: string, bidderId: string, input: PlaceBidInput) {
-    if (input.amount <= 0) throw new Error('INVALID_BID_AMOUNT');
+    if (!Number.isFinite(input.amount) || input.amount <= 0 || input.amount > MAX_MONEY) throw new Error('INVALID_BID_AMOUNT');
+    input = { amount: Math.round(input.amount * 100) / 100, message: typeof input.message === 'string' ? input.message.trim().slice(0, MAX_BID_MESSAGE) || undefined : undefined };
+    const bidder = await prisma.user.findUnique({ where: { id: bidderId }, select: { den_frozen: true } });
+    if (bidder?.den_frozen) throw new Error('DEN_FROZEN');
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const listing = await prisma.dealerListing.findFirst({
@@ -487,6 +546,10 @@ export const dealersDenService = {
           data: {
             current_bid: input.amount,
             bid_count: { increment: 1 },
+            // анти-снайпинг: последняя минута не должна решать исход
+            ...(listing.auction_ends_at && listing.auction_ends_at.getTime() - Date.now() < SNIPE_WINDOW_MS
+              ? { auction_ends_at: new Date(Date.now() + SNIPE_WINDOW_MS) }
+              : {}),
             ...(listing.auto_buy_price && input.amount >= parseFloat(listing.auto_buy_price.toString())
               ? { status: 'sold', winner_id: bidderId }
               : {}),
@@ -621,6 +684,11 @@ export const dealersDenService = {
   },
 
   async addComment(listingId: string, authorId: string, body: string, parentId?: string) {
+    if (parentId) {
+      // Ответ возможен только на корневой комментарий этого же лота
+      const parent = await prisma.dealerListingComment.findFirst({ where: { id: parentId, listing_id: listingId, parent_id: null, deleted_at: null }, select: { id: true } });
+      if (!parent) throw new Error('PARENT_NOT_FOUND');
+    }
     return prisma.dealerListingComment.create({
       data: { listing_id: listingId, author_id: authorId, body, parent_id: parentId ?? null },
       include: {
@@ -631,8 +699,10 @@ export const dealersDenService = {
   },
 
   async deleteComment(commentId: string, userId: string) {
-    const c = await prisma.dealerListingComment.findUnique({ where: { id: commentId } });
-    if (!c || c.author_id !== userId) throw new Error('FORBIDDEN');
+    const c = await prisma.dealerListingComment.findUnique({ where: { id: commentId }, include: { listing: { select: { seller_id: true } } } });
+    if (!c || c.deleted_at) throw new Error('NOT_FOUND');
+    // Свои комментарии удаляет автор; под своим лотом продавец чистит чужие (спам, оскорбления)
+    if (c.author_id !== userId && c.listing.seller_id !== userId) throw new Error('FORBIDDEN');
     return prisma.dealerListingComment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
   },
 
@@ -647,17 +717,13 @@ export const dealersDenService = {
     if (!listing) throw new Error('LISTING_NOT_FOUND');
     if (listing.status !== 'sold') throw new Error('NOT_SOLD');
     if (listing.seller_id === reviewerId) throw new Error('CANNOT_REVIEW_OWN');
-    if (input.rating < 1 || input.rating > 5) throw new Error('INVALID_RATING');
+    if (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5) throw new Error('INVALID_RATING');
+    if (input.text != null && (typeof input.text !== 'string' || input.text.length > 1000)) throw new Error('INVALID_TEXT');
 
-    // Where a buyer is actually identifiable on-platform (auction/YCH winner, commission
-    // booking), require it — otherwise any logged-in user could leave a review on someone
-    // else's sold listing they never bought, polluting the seller's public rating.
-    if (listing.listing_kind === 'auction' || listing.listing_kind === 'ych') {
-      if (listing.winner_id !== reviewerId) throw new Error('NOT_BUYER');
-    } else if (listing.listing_kind === 'commission_queue') {
-      const booking = await prisma.commissionBooking.findFirst({ where: { listing_id: listingId, buyer_id: reviewerId, deleted_at: null } });
-      if (!booking) throw new Error('NOT_BUYER');
-    }
+    // Отзыв — только от опознаваемого покупателя (победитель, бронь, принятая заявка), иначе любой
+    // залогиненный мог бы портить рейтинг продавца отзывами на лоты, которые не покупал.
+    if (!(await isIdentifiedBuyer(listing, reviewerId))) throw new Error('NOT_BUYER');
+    if (input.photoUrl) await assertOwnedMedia(input.photoUrl, reviewerId);
 
     const validTags = (input.tags ?? []).filter(t => (REVIEW_TAGS as readonly string[]).includes(t));
 
@@ -668,12 +734,15 @@ export const dealersDenService = {
         seller_id:   listing.seller_id,
         rating:      input.rating,
         tags:        validTags,
-        text:        input.text,
+        text:        input.text?.trim() || undefined,
         photo_url:   input.photoUrl,
       },
       include: {
         reviewer: { select: { id: true, username: true, display_name: true, avatar_url: true } },
       },
+    }).catch((err) => {
+      if (errCode(err) === 'P2002') throw new Error('ALREADY_REVIEWED'); // unique(listing_id, reviewer_id)
+      throw err;
     });
 
     await recalcDenTrust(listing.seller_id);
@@ -713,7 +782,7 @@ export const dealersDenService = {
   async getWeeklyTop() {
     const now = new Date();
     const weekStart = new Date(now);
-    weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay() + 1);
+    weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7)); // понедельник этой недели (в воскресенье getUTCDay() = 0)
     weekStart.setUTCHours(0, 0, 0, 0);
 
     const top = await prisma.denWeeklyTop.findMany({
@@ -728,7 +797,7 @@ export const dealersDenService = {
   async recalcWeeklyTop() {
     const now = new Date();
     const weekStart = new Date(now);
-    weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay() + 1);
+    weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7)); // понедельник этой недели (в воскресенье getUTCDay() = 0)
     weekStart.setUTCHours(0, 0, 0, 0);
     const weekAgo = new Date(weekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -798,13 +867,9 @@ export const dealersDenService = {
 
   // ── wishlist ──────────────────────────────────────────────────────────────
   async addToWishlist(listingId: string, userId: string) {
-    const existing = await prisma.denWishlist.findUnique({
-      where: { user_id_listing_id: { user_id: userId, listing_id: listingId } },
-    });
-    if (existing) return { added: false };
-
-    await prisma.denWishlist.create({ data: { user_id: userId, listing_id: listingId } });
-    return { added: true };
+    // skipDuplicates: два быстрых клика не дают P2002 → 500
+    const r = await prisma.denWishlist.createMany({ data: [{ user_id: userId, listing_id: listingId }], skipDuplicates: true });
+    return { added: r.count > 0 };
   },
 
   async removeFromWishlist(listingId: string, userId: string) {
@@ -826,9 +891,17 @@ export const dealersDenService = {
       where: { id: listingId, listing_kind: 'commission_queue', status: 'active', deleted_at: null },
     });
     if (!listing) throw new Error('LISTING_NOT_FOUND');
+    if (listing.seller_id === buyerId) throw new Error('CANNOT_BOOK_OWN');
 
     const denUser = await prisma.user.findUnique({ where: { id: buyerId }, select: { den_frozen: true } });
     if (denUser?.den_frozen) throw new Error('DEN_FROZEN');
+
+    // Одна активная бронь на человека: иначе один покупатель выбирает все слоты очереди
+    const already = await prisma.commissionBooking.findFirst({
+      where: { listing_id: listingId, buyer_id: buyerId, deleted_at: null, status: { in: ['pending', 'in_progress'] } }, select: { id: true },
+    });
+    if (already) throw new Error('ALREADY_BOOKED');
+    const formData = validateFormData(input.formData, listing.commission_form_fields);
 
     const seller = await prisma.user.findUnique({ where: { id: listing.seller_id }, select: { den_frozen: true } });
     if (seller?.den_frozen) throw new Error('SELLER_FROZEN');
@@ -860,11 +933,14 @@ export const dealersDenService = {
       });
       const pos = (lastBooking?.queue_position ?? 0) + 1;
       const created = await tx.commissionBooking.create({
-        data: { listing_id: listingId, buyer_id: buyerId, queue_position: pos, form_data: input.formData as any },
+        data: { listing_id: listingId, buyer_id: buyerId, queue_position: pos, form_data: formData as any },
         include: { buyer: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
       });
       return { booking: created, queuePosition: pos };
-    }, { isolationLevel: 'Serializable' });
+    }, { isolationLevel: 'Serializable' }).catch((err) => {
+      if (errCode(err) === 'P2034') throw new Error('SLOTS_BUSY'); // конфликт сериализации при одновременных бронях — пусть повторит
+      throw err;
+    });
 
     await notificationService.create({ receiverId: listing.seller_id, senderId: buyerId, type: 'den_commission_booked', refId: listingId });
 
@@ -888,7 +964,17 @@ export const dealersDenService = {
       include: { listing: { select: { seller_id: true } } },
     });
     if (!booking || booking.listing.seller_id !== sellerId) throw new Error('FORBIDDEN');
+    if (!BOOKING_STATUSES.includes(input.status)) throw new Error('INVALID_STATUS');
+    if (input.notes != null && (typeof input.notes !== 'string' || input.notes.length > 1000)) throw new Error('INVALID_NOTES');
 
+    // Отмена продавцом освобождает слот так же, как отмена покупателем
+    if (input.status === 'cancelled' && booking.status !== 'cancelled') {
+      await prisma.$transaction([
+        prisma.commissionBooking.update({ where: { id: bookingId }, data: { status: 'cancelled', notes: input.notes, deleted_at: new Date() } }),
+        prisma.dealerListing.update({ where: { id: booking.listing_id }, data: { commission_slots_taken: { decrement: 1 } } }),
+      ]);
+      return { ...booking, status: 'cancelled' };
+    }
     return prisma.commissionBooking.update({
       where: { id: bookingId },
       data: { status: input.status, notes: input.notes },
@@ -923,35 +1009,33 @@ export const dealersDenService = {
     const listing = await prisma.dealerListing.findFirst({ where: { id: listingId, status: 'sold', deleted_at: null } });
     if (!listing) throw new Error('LISTING_NOT_FOUND');
     if (listing.seller_id === buyerId) throw new Error('CANNOT_DISPUTE_OWN');
+    const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+    if (reason.length < 10 || reason.length > 2000) throw new Error('INVALID_REASON');
 
-    // Same buyer-identity check as reviews, but higher stakes: an unresolved dispute
-    // auto-resolves in the "buyer"'s favor after 48h of seller silence, and 3 lost
-    // disputes freezes the seller's Den account — without this, any user could file
-    // fake disputes against listings they never bought to get a seller frozen.
-    if (listing.listing_kind === 'auction' || listing.listing_kind === 'ych') {
-      if (listing.winner_id !== buyerId) throw new Error('NOT_BUYER');
-    } else if (listing.listing_kind === 'commission_queue') {
-      const booking = await prisma.commissionBooking.findFirst({ where: { listing_id: listingId, buyer_id: buyerId, deleted_at: null } });
-      if (!booking) throw new Error('NOT_BUYER');
-    }
+    // Ставки выше: спор без ответа продавца за 48 ч засчитывается покупателю, а три проигранных
+    // замораживают аккаунт. Поэтому спорить может только опознанный покупатель (в т.ч. по принятой заявке).
+    if (!(await isIdentifiedBuyer(listing, buyerId))) throw new Error('NOT_BUYER');
 
     const alreadyOpen = await prisma.denDispute.findFirst({ where: { listing_id: listingId, buyer_id: buyerId, deleted_at: null } });
     if (alreadyOpen) throw new Error('ALREADY_DISPUTED');
 
     return prisma.denDispute.create({
-      data: { listing_id: listingId, buyer_id: buyerId, seller_id: listing.seller_id, reason: input.reason },
+      data: { listing_id: listingId, buyer_id: buyerId, seller_id: listing.seller_id, reason },
     });
   },
 
   async replyDispute(disputeId: string, sellerId: string, input: ReplyDisputeInput) {
     const dispute = await prisma.denDispute.findFirst({ where: { id: disputeId, seller_id: sellerId, deleted_at: null } });
     if (!dispute) throw new Error('NOT_FOUND');
-    if (dispute.status !== 'open') throw new Error('DISPUTE_CLOSED');
-
-    return prisma.denDispute.update({
-      where: { id: disputeId },
-      data: { seller_reply: input.reply, replied_at: new Date(), status: 'seller_replied' },
+    const text = typeof input.reply === 'string' ? input.reply.trim() : '';
+    if (text.length < 1 || text.length > 2000) throw new Error('INVALID_REPLY');
+    // Условный переход: ответ не перезапишет спор, который админ или таймер закрыли между чтением и записью
+    const r = await prisma.denDispute.updateMany({
+      where: { id: disputeId, status: 'open' },
+      data: { seller_reply: text, replied_at: new Date(), status: 'seller_replied' },
     });
+    if (r.count !== 1) throw new Error('DISPUTE_CLOSED');
+    return prisma.denDispute.findUniqueOrThrow({ where: { id: disputeId } });
   },
 
   async getMyDisputes(userId: string) {
@@ -1064,12 +1148,12 @@ export const dealersDenService = {
   },
 
   // ── seller page ───────────────────────────────────────────────────────────
-  async getSellerPage(username: string) {
+  async getSellerPage(username: string, viewerIsAdult = false) {
     const user = await prisma.user.findUnique({
       where: { username },
       select: {
         id: true, username: true, display_name: true, avatar_url: true,
-        is_verified: true, badge_type: true, created_at: true,
+        is_verified: true, verification_type: true, badge_type: true, role: true, subscription_tier: true, created_at: true,
         denTrustScore: true,
         den_frozen: true,
       },
@@ -1078,7 +1162,7 @@ export const dealersDenService = {
 
     const [activeListings, reviewData, totalSales] = await Promise.all([
       prisma.dealerListing.findMany({
-        where: { seller_id: user.id, status: 'active', deleted_at: null },
+        where: { seller_id: user.id, status: 'active', deleted_at: null, category: { not: 'avatar_frame' }, ...(viewerIsAdult ? {} : { is_nsfw: false }) },
         select: LISTING_SELECT,
         orderBy: { created_at: 'desc' },
         take: 20,
@@ -1097,6 +1181,10 @@ export const dealersDenService = {
         displayName: user.display_name,
         avatarUrl: user.avatar_url,
         isVerified: user.is_verified,
+        verificationType: user.verification_type,
+        badgeType: user.badge_type,
+        role: user.role,
+        subscriptionTier: user.subscription_tier,
         denTrustScore: user.denTrustScore,
         createdAt: user.created_at,
         den_frozen: user.den_frozen,
