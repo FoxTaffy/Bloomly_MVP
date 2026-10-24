@@ -1,5 +1,6 @@
 import { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import { pushService } from './service.js';
+import { isAllowedPushEndpoint } from '../../lib/pushEndpoint.js';
 
 interface JwtUser { id: string }
 
@@ -12,7 +13,7 @@ export async function pushRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Body: { endpoint?: string; keys?: { p256dh?: string; auth?: string } } }>('/subscribe', auth, async (req, reply) => {
     const { endpoint, keys } = req.body ?? {};
-    if (!endpoint || !/^https:\/\//.test(endpoint) || endpoint.length > 2000 || !keys?.p256dh || !keys?.auth) {
+    if (!endpoint || endpoint.length > 2000 || !isAllowedPushEndpoint(endpoint) || !keys?.p256dh || !keys?.auth) {
       return reply.status(400).send({ success: false, data: null, error: { code: 'BAD_INPUT', message: 'Некорректная подписка' } });
     }
     const { id } = req.user as JwtUser;

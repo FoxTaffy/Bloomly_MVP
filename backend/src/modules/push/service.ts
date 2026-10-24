@@ -2,6 +2,7 @@ import webpush from 'web-push';
 import prisma from '../../config/prisma.js';
 import { logger } from '../../lib/logger.js';
 import type { PushKind } from './texts.js';
+import { isAllowedPushEndpoint } from '../../lib/pushEndpoint.js';
 
 const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? '';
 const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? '';
@@ -62,7 +63,8 @@ export const pushService = {
       const prefs = await this.getPrefs(userId);
       if (kind === 'message' ? !prefs.messages : !prefs.events) return;
     }
-    const subs = await prisma.pushSubscription.findMany({ where: { user_id: userId } });
+    // Подписки, сохранённые до проверки адреса, тоже не отправляем на посторонние хосты
+    const subs = (await prisma.pushSubscription.findMany({ where: { user_id: userId } })).filter((s) => isAllowedPushEndpoint(s.endpoint));
     if (subs.length === 0) return;
     const body = JSON.stringify(payload);
     await Promise.all(subs.map(async (s) => {

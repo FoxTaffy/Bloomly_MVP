@@ -1,7 +1,8 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { getBlockerIds, isBlockedBy } from '../../lib/blocks.js';
-import { redactBirthDate } from '../users/service.js';
+import { redactBirthDate, liveProfileStatus } from '../users/service.js';
+import { storiesService } from '../stories/service.js';
 import { errCode } from '../../lib/httpErrors.js';
 import { logAction } from '../../lib/actionLog.js';
 
@@ -29,6 +30,14 @@ const FRIEND_USER_SELECT = {
   location:     true,
   deceased_at:  true,
 } as const;
+
+/**
+ * Онлайн друга показываем только если он сам не скрыл его настройкой «Кто видит, что я в сети».
+ * Список — только взаимные друзья, поэтому «everyone» и «friends» разрешают, «nobody»/«only_me» — нет.
+ */
+function onlineVisibleToFriends(visibility: string | null | undefined) {
+  return visibility !== 'nobody' && visibility !== 'only_me';
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -297,7 +306,7 @@ export const friendsService = {
     const [users, notifyRows] = await Promise.all([
       prisma.user.findMany({
         where:   { id: { in: mutualIds }, deleted_at: null },
-        select:  FRIEND_USER_SELECT,
+        select:  { ...FRIEND_USER_SELECT, online_status_visibility: true },
       }),
       // Bell state for the whole list in one query (the card must not fetch it itself).
       prisma.follow.findMany({
@@ -307,15 +316,48 @@ export const friendsService = {
     ]);
     const notifySet = new Set(notifyRows.map((r) => r.following_id));
     return users
-      .map((u) => ({
-        ...u,
-        notify_posts: notifySet.has(u.id),
-        online: onlineIds ? onlineIds.has(u.id) : false,
-        device: onlineIds?.has(u.id) ? (deviceById?.get(u.id) ?? null) : null,
-      }))
+      .map(({ online_status_visibility, ...u }) => {
+        const online = !!onlineIds?.has(u.id) && onlineVisibleToFriends(online_status_visibility);
+        return { ...u, notify_posts: notifySet.has(u.id), online, device: online ? (deviceById?.get(u.id) ?? null) : null };
+      })
       .sort((a, b) => {
         if (a.online !== b.online) return a.online ? -1 : 1;
         return (a.display_name || a.username).localeCompare(b.display_name || b.username);
+      });
+  },
+
+  /**
+   * Друзья, у которых сейчас есть что показать: активные истории и/или живой статус-заметка.
+   * Для полоски «как в Instagram» в разделе «Интересное».
+   */
+  async getStatuses(userId: string, onlineIds?: Set<string>) {
+    const mutualIds = [...(await this._getMutualIds(userId))];
+    if (!mutualIds.length) return [];
+    const [users, stories] = await Promise.all([
+      prisma.user.findMany({
+        where:  { id: { in: mutualIds }, deleted_at: null },
+        select: { id: true, username: true, display_name: true, avatar_url: true, profile_status: true, online_status_visibility: true },
+      }),
+      storiesService.getActiveStoriesOfUsers(mutualIds, userId),
+    ]);
+    const storiesByUser = new Map<string, typeof stories>();
+    for (const s of stories) {
+      const list = storiesByUser.get(s.user_id) ?? [];
+      list.push(s);
+      storiesByUser.set(s.user_id, list);
+    }
+    return users
+      .map(({ profile_status, online_status_visibility, ...u }) => ({
+        ...u,
+        profile_status: liveProfileStatus(profile_status),
+        online: !!onlineIds?.has(u.id) && onlineVisibleToFriends(online_status_visibility),
+        stories: (storiesByUser.get(u.id) ?? []).sort((a, b) => a.created_at.getTime() - b.created_at.getTime()),
+      }))
+      .filter((u) => u.stories.length > 0 || u.profile_status)
+      .sort((a, b) => {
+        const lastA = a.stories.length ? a.stories[a.stories.length - 1].created_at.getTime() : 0;
+        const lastB = b.stories.length ? b.stories[b.stories.length - 1].created_at.getTime() : 0;
+        return lastB - lastA || Number(b.online) - Number(a.online);
       });
   },
 

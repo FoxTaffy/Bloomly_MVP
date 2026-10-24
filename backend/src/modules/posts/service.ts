@@ -3,6 +3,7 @@ import { POST_BOOST } from './boost.config.js';
 import { pickBoostedPosts } from './boost.service.js';
 import { readablePostsWhere, assertPostReadable } from '../../lib/contentAccess.js';
 import { pagination } from '../../lib/pagination.js';
+import { decodeKeyset, encodeCursor, keysetOf, keysetWhere, type Keyset, type StreamsCursor } from '../../lib/cursor.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
@@ -661,8 +662,10 @@ export const postService = {
     const { search, category, tag, hasMedia = false, nsfwOnly, page, limit } = query;
     const { page: pageNum, limit: limitNum } = pagination(page, limit);
     const built = await buildPostsWhere(query, viewerId);
-    if (!built) return [];
+    if (!built) return { posts: [], nextCursor: null };
     const { visible, sort } = built;
+    // Курсор (nextCursor прошлого ответа) важнее номера страницы: см. lib/cursor.ts
+    const keyset = query.cursor ? decodeKeyset(query.cursor) : null;
 
     const include = {
       author: { select: AUTHOR_SELECT },
@@ -673,18 +676,20 @@ export const postService = {
       listing: POST_LISTING_INCLUDE,
     };
     let posts: any[] = await prisma.post.findMany({
-      where: visible,
+      where: keyset ? { AND: [visible, keysetWhere(keyset, sort)] } : visible,
       // Второй ключ (дата, затем id) — устойчивый порядок при равном рейтинге, иначе страницы дублируют/теряют посты
       orderBy: sort === 'hot' ? [{ rating: 'desc' }, { created_at: 'desc' }, { id: 'desc' }]
         : sort === 'old' ? [{ created_at: 'asc' }, { id: 'asc' }]
         : [{ created_at: 'desc' }, { id: 'desc' }],
-      skip: (pageNum - 1) * limitNum,
+      skip: keyset ? 0 : (pageNum - 1) * limitNum,
       take: limitNum,
       include,
     });
+    // Полная страница — значит, дальше может быть ещё; решает сервер, а не пустой ответ клиенту
+    const nextCursor = posts.length === limitNum ? encodeCursor(keysetOf(posts[posts.length - 1], sort === 'hot')) : null;
     // Общая лента без поиска и фильтров: наверх первой страницы подмешиваются продвигаемые посты
     // («старые сверху» — просмотр архива, там продвижение неуместно)
-    if (pageNum === 1 && sort !== 'old' && !search && !tag && !category && !hasMedia && !nsfwOnly) {
+    if (pageNum === 1 && !keyset && sort !== 'old' && !search && !tag && !category && !hasMedia && !nsfwOnly) {
       const boosted = await pickBoostedPosts(
         (take) => prisma.post.findMany({ where: { AND: [visible, { boosted_until: { gt: new Date() } }] }, orderBy: { boosted_at: 'desc' }, take, include }),
       );
@@ -693,7 +698,7 @@ export const postService = {
         posts = [...boosted, ...posts.filter((p) => !ids.has(p.id))].slice(0, Math.max(limitNum, boosted.length));
       }
     }
-    return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
+    return { posts: (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor), nextCursor };
   },
 
   /**
@@ -886,7 +891,14 @@ export const postService = {
     });
   },
 
-  async getPersonalizedPosts(userId: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 30) {
+  async getPersonalizedPosts(
+    userId: string,
+    nsfwMode: NsfwMode = 'hide',
+    pageNum: number = 1,
+    limitNum: number = 30,
+    /** Позиции двух потоков из nextCursor прошлого ответа; без него — страница по номеру (мобильное приложение). */
+    cursor: StreamsCursor | null = null,
+  ) {
     const postInclude = FEED_POST_INCLUDE;
     const { viewedPostIds, topCategories } = await recentTaste(userId);
     const nsfwFilter = nsfwWhere(nsfwMode);
@@ -921,7 +933,7 @@ export const postService = {
     const bellExcludeFilter = bellOr.length > 0 ? { NOT: { OR: bellOr } } : {};
 
     let bellPosts: any[] = [];
-    if (pageNum === 1 && bellOr.length > 0) {
+    if (pageNum === 1 && !cursor && bellOr.length > 0) {
       bellPosts = await prisma.post.findMany({
         where: { ...feedWhere, OR: bellOr },
         orderBy: { created_at: 'desc' },
@@ -937,35 +949,39 @@ export const postService = {
     const dLimit = limitNum - pLimit;
     const pSkip = (pageNum - 1) * pLimit;
     const dSkip = (pageNum - 1) * dLimit;
+    // На продолжении потоки делятся теми же категориями, что и на первой странице (см. StreamsCursor.c)
+    const categories = cursor ? cursor.c : topCategories;
 
-    if (topCategories.length > 0) {
+    // Поток тянется от своей позиции в курсоре (null — исчерпан), без курсора — со смещением по номеру страницы
+    const pullStream = (where: object, position: Keyset | null | undefined, skip: number, take: number) => {
+      if (position === null || take <= 0) return Promise.resolve([] as any[]);
+      return prisma.post.findMany({
+        where: position ? { AND: [where, keysetWhere(position, 'new')] } : where,
+        orderBy: [{ created_at: 'desc' }, { rating: 'desc' }, { id: 'desc' }],
+        skip: position ? 0 : skip,
+        take,
+        include: postInclude,
+      });
+    };
+
+    if (categories.length > 0) {
       // 60% from favourite categories
-      personalizedPosts = await prisma.post.findMany({
-        where: { ...feedWhere, ...bellExcludeFilter, category: { in: topCategories } },
-        orderBy: [{ created_at: 'desc' }, { rating: 'desc' }],
-        skip: pSkip,
-        take: pLimit,
-        include: postInclude,
-      });
-
+      personalizedPosts = await pullStream({ ...feedWhere, ...bellExcludeFilter, category: { in: categories } }, cursor?.p, pSkip, pLimit);
       // 40% from other categories (discovery)
-      discoverPosts = await prisma.post.findMany({
-        where: { ...feedWhere, ...bellExcludeFilter, OR: [{ category: { notIn: topCategories } }, { category: null }] },
-        orderBy: [{ created_at: 'desc' }, { rating: 'desc' }],
-        skip: dSkip,
-        take: dLimit,
-        include: postInclude,
-      });
+      discoverPosts = await pullStream({ ...feedWhere, ...bellExcludeFilter, OR: [{ category: { notIn: categories } }, { category: null }] }, cursor?.d, dSkip, dLimit);
     } else {
       // No activity yet — show popular new content
-      discoverPosts = await prisma.post.findMany({
-        where: { ...feedWhere, ...bellExcludeFilter },
-        orderBy: [{ created_at: 'desc' }, { rating: 'desc' }],
-        skip: (pageNum - 1) * limitNum,
-        take: limitNum,
-        include: postInclude,
-      });
+      discoverPosts = await pullStream({ ...feedWhere, ...bellExcludeFilter }, cursor?.d, (pageNum - 1) * limitNum, limitNum);
     }
+
+    // Позиции потоков считаем до ранжирования: оно переставляет посты внутри страницы, а курсор — это «самый старый из взятых».
+    // Поток, отдавший меньше запрошенного, исчерпан.
+    const streamEnd = (rows: any[], take: number): Keyset | null =>
+      take > 0 && rows.length === take ? keysetOf(rows[rows.length - 1]) : null;
+    const hasPersonalStream = categories.length > 0;
+    const pEnd = hasPersonalStream ? streamEnd(personalizedPosts, pLimit) : null;
+    const dEnd = streamEnd(discoverPosts, hasPersonalStream ? dLimit : limitNum);
+    const nextCursor = pEnd || dEnd ? encodeCursor({ p: pEnd, d: dEnd, c: categories }) : null;
 
     // Candidates are pulled newest-first (a rating-ordered pull never let fresh, not-yet-voted posts
     // into the pool); rankByAffinity below only reorders within the fetched page.
@@ -984,7 +1000,7 @@ export const postService = {
 
     // Продвигаемые посты (платный/тарифный буст) подмешиваются наверх первой страницы после закреплённых колокольчиком
     let boosted: any[] = [];
-    if (pageNum === 1) {
+    if (pageNum === 1 && !cursor) {
       const taken = new Set([...bellPosts, ...personalizedPosts, ...discoverPosts].map((p) => p.id));
       boosted = await pickBoostedPosts(
         (take) => prisma.post.findMany({
@@ -999,7 +1015,7 @@ export const postService = {
 
     // Diversify across the whole page, bell pins included — otherwise a bell pin and the very
     // next personalized pick could still land back to back for the same author/group.
-    return diversifyByAuthor([...bellPosts, ...boosted, ...result]).map(maskGroupAuthor);
+    return { posts: diversifyByAuthor([...bellPosts, ...boosted, ...result]).map(maskGroupAuthor), nextCursor };
   },
 
   async toggleVote(userId: string, postId: string, value: 1 | -1) {

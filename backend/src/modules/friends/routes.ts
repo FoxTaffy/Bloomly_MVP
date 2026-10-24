@@ -9,6 +9,7 @@ import {
   getIncomingRequestsHandler,
   getOutgoingRequestsHandler,
   getFriendsHandler,
+  getFriendStatusesHandler,
   getFollowersHandler,
   getFollowingHandler,
   getBirthdaysHandler,
@@ -22,6 +23,9 @@ export async function friendsRoutes(fastify: FastifyInstance) {
 
   // GET /api/friends — взаимные подписки (?filter=online)
   fastify.get<RouteGenericOf<typeof getFriendsHandler>>('/', auth, getFriendsHandler);
+
+  // GET /api/friends/statuses — друзья с историями и статусами (полоска в «Интересном»)
+  fastify.get<RouteGenericOf<typeof getFriendStatusesHandler>>('/statuses', auth, getFriendStatusesHandler);
 
   // GET /api/friends/followers — подписчики
   fastify.get<RouteGenericOf<typeof getFollowersHandler>>('/followers', auth, getFollowersHandler);

@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { idList } from '../../lib/pagination.js';
+import { idList, pagination } from '../../lib/pagination.js';
+import { decodeKeyset } from '../../lib/cursor.js';
 import { followsService } from './service.js';
 import { requestIsAdult } from '../../lib/age.js';
 import { resolveNsfwMode } from '../../lib/contentFilters.js';
@@ -88,15 +89,17 @@ export const getFollowCountsHandler = async (
 };
 
 export const getSubscriptionFeedHandler = async (
-  req: FastifyRequest<{ Querystring: { safeMode?: string; nsfw?: string; page?: string } }>,
+  req: FastifyRequest<{ Querystring: { safeMode?: string; nsfw?: string; page?: string; cursor?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = req.user as JwtUser;
     const nsfwMode = resolveNsfwMode({ nsfw: req.query.nsfw, safeMode: req.query.safeMode, isAdult: requestIsAdult(req.user) });
-    const page    = Math.max(1, parseInt(req.query.page ?? '1', 10) || 1);
-    const posts = await followsService.getSubscriptionFeed(userId, nsfwMode, page);
-    return reply.send({ success: true, data: { posts }, error: null });
+    const { page } = pagination(req.query.page, undefined);
+    const cursor = req.query.cursor ? decodeKeyset(req.query.cursor) : null;
+    if (req.query.cursor && !cursor) return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_CURSOR', message: 'Invalid cursor' } });
+    const { posts, nextCursor } = await followsService.getSubscriptionFeed(userId, nsfwMode, page, 30, cursor);
+    return reply.send({ success: true, data: { posts, nextCursor }, error: null });
   } catch (e) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'FEED_ERROR', message: errMessage(e) } });
   }

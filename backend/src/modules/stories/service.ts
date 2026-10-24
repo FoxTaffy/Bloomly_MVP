@@ -74,6 +74,27 @@ export const storiesService = {
     return attachMeta(stories, viewerId);
   },
 
+  /** Активные истории только указанных пользователей (лента друзей в «Интересном») */
+  async getActiveStoriesOfUsers(userIds: string[], viewerId?: string) {
+    if (userIds.length === 0) return [];
+    const since = new Date(Date.now() - STORY_TTL_MS);
+    const blockerIds = new Set(await getBlockerIds(viewerId));
+    const ids = userIds.filter((id) => !blockerIds.has(id));
+    if (ids.length === 0) return [];
+    const stories = await prisma.story.findMany({
+      where: {
+        user_id: { in: ids },
+        created_at: { gte: since },
+        deleted_at: null,
+        expires_at: { gt: new Date() },
+        user: readableProfilesWhere(viewerId),
+      },
+      include: { user: { select: userSelect } },
+      orderBy: { created_at: 'desc' },
+    });
+    return attachMeta(stories, viewerId);
+  },
+
   async createStory(userId: string, imageUrl?: string, videoUrl?: string) {
     if (!imageUrl && !videoUrl) {
       throw new Error('MISSING_MEDIA');

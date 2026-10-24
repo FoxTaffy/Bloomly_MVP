@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { pagination, idList } from '../../lib/pagination.js';
+import { decodeKeyset, decodeStreams } from '../../lib/cursor.js';
 import { postService } from './service.js';
 import { followsService } from '../follows/service.js';
 import type { CreatePostInput, EditPostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } from './types.js';
@@ -149,8 +150,9 @@ export const getPostsHandler = async (
       query.hasMedia = query.hasMedia === 'true';
     }
     const viewerId = (request.user as JwtUser | undefined)?.id;
-    const posts = await postService.getPosts(query, viewerId);
-    return reply.send({ success: true, data: { posts }, error: null });
+    if (query.cursor && !decodeKeyset(query.cursor)) return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_CURSOR', message: 'Invalid cursor' } });
+    const { posts, nextCursor } = await postService.getPosts(query, viewerId);
+    return reply.send({ success: true, data: { posts, nextCursor }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch posts';
     return reply.code(500).send({
@@ -170,8 +172,10 @@ export const getPersonalizedPostsHandler = async (
     const nsfwMode = resolveNsfwMode({ nsfw: request.query.nsfw, safeMode: request.query.safeMode, isAdult: requestIsAdult(request.user) });
     const { page: pageNum, limit: limitNum } = pagination(request.query.page, request.query.limit, 30, 50);
 
-    const posts = await postService.getPersonalizedPosts(userId, nsfwMode, pageNum, limitNum);
-    return reply.send({ success: true, data: { posts }, error: null });
+    const cursor = request.query.cursor ? decodeStreams(request.query.cursor) : null;
+    if (request.query.cursor && !cursor) return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_CURSOR', message: 'Invalid cursor' } });
+    const { posts, nextCursor } = await postService.getPersonalizedPosts(userId, nsfwMode, pageNum, limitNum, cursor);
+    return reply.send({ success: true, data: { posts, nextCursor }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch personalized posts';
     return reply.code(500).send({

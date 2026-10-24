@@ -4,6 +4,7 @@ import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { getBlockerIds, isBlockedBy } from '../../lib/blocks.js';
 import { nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
+import { encodeCursor, keysetOf, keysetWhere, type Keyset } from '../../lib/cursor.js';
 
 /** Throws a 403 unless the viewer is allowed to see userId's friends/followers list. */
 async function assertFriendsListVisible(userId: string, viewerId?: string) {
@@ -194,19 +195,19 @@ export const followsService = {
     });
   },
 
-  async getSubscriptionFeed(userId: string, nsfwMode: NsfwMode = 'hide', page = 1, limit = 30) {
+  async getSubscriptionFeed(userId: string, nsfwMode: NsfwMode = 'hide', page = 1, limit = 30, cursor: Keyset | null = null) {
     const authorIds = await this.subscriptionAuthorIds(userId);
-    if (!authorIds.length) return [];
+    if (!authorIds.length) return { posts: [], nextCursor: null };
 
-    const skip = (page - 1) * limit;
-    return prisma.post.findMany({
-      where: {
-        deleted_at:  null,
-        author_id:   { in: authorIds },
-        ...nsfwWhere(nsfwMode),
-      },
-      orderBy: { created_at: 'desc' },
-      skip,
+    const base = {
+      deleted_at:  null,
+      author_id:   { in: authorIds },
+      ...nsfwWhere(nsfwMode),
+    };
+    const posts = await prisma.post.findMany({
+      where: cursor ? { AND: [base, keysetWhere(cursor, 'new')] } : base,
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      skip: cursor ? 0 : (page - 1) * limit,
       take:    limit,
       include: {
         author: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true, is_verified: true, verification_type: true } },
@@ -215,5 +216,7 @@ export const followsService = {
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
       },
     });
+    const nextCursor = posts.length === limit ? encodeCursor(keysetOf(posts[posts.length - 1])) : null;
+    return { posts, nextCursor };
   },
 };

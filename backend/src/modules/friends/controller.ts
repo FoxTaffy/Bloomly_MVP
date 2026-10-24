@@ -84,6 +84,11 @@ export async function getFriendsHandler(req: AuthRequest, reply: FastifyReply) {
   return reply.send({ success: true, data: result })
 }
 
+export async function getFriendStatusesHandler(req: AuthRequest, reply: FastifyReply) {
+  const result = await friendsService.getStatuses(req.user.id, presence.onlineIds())
+  return reply.send({ success: true, data: result })
+}
+
 export async function getFollowersHandler(req: AuthRequest, reply: FastifyReply) {
   const result = await friendsService.getFollowers(req.user.id)
   return reply.send({ success: true, data: result })
