@@ -6,6 +6,9 @@ import { useGroupsStore } from '@/stores/groups'
 import { useMobileHubStore } from '@/stores/mobileHub'
 import api from '@/api'
 import { useFeed } from '@/composables/useFeed'
+import type { FeedMode } from '@/lib/feed'
+import { useFeedHotkeys } from '@/composables/useFeedHotkeys'
+import { useFeedTabRoute } from '@/composables/useFeedTabRoute'
 import { useFollowState } from '@/composables/useFollowState'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -38,10 +41,15 @@ const { nsfwMode, nsfwEnabled } = useNsfwMode()
 const activeNav = ref('home')
 
 // ── Лента ────────────────────────────────────────────────────────────────────
+// Вкладка берётся из адреса (?tab=news) — до создания ленты, чтобы не грузить сперва «Для вас»
+const mode = ref<FeedMode>('for-you')
+const tabRoute = useFeedTabRoute(mode, nsfwEnabled)
+mode.value = tabRoute.initialMode()
+const hotkeys = useFeedHotkeys()
 const {
-  mode, sort, sortable, posts, isLoading, isLoadingMore, hasMore, loadError, newPostsCount,
+  sort, sortable, posts, isLoading, isLoadingMore, hasMore, loadError, newPostsCount,
   followStatus, reload, loadMore, retry, startWatching, stopWatching, prepend, remove, replace, stateOf,
-} = useFeed(nsfwMode)
+} = useFeed(nsfwMode, mode)
 
 // Вкладка NSFW существует только в режиме 'show' — выключили режим, не оставляем пользователя на ней
 watch(nsfwEnabled, (on) => { if (!on && mode.value === 'nsfw') mode.value = 'for-you' })
@@ -151,6 +159,8 @@ let loadedForUserId: string | null = auth.user?.id ?? null
 const userKey = computed(() => auth.user?.id ?? 'guest')
 
 onActivated(() => {
+  tabRoute.activate()
+  hotkeys.activate()
   if ((auth.user?.id ?? null) !== loadedForUserId) {
     loadedForUserId = auth.user?.id ?? null
     savedScrollY = null
@@ -167,6 +177,8 @@ onActivated(() => {
   }
 })
 onDeactivated(() => {
+  tabRoute.deactivate()
+  hotkeys.deactivate()
   savedScrollY = window.scrollY
   stopWatching()
 })
@@ -248,6 +260,8 @@ onDeactivated(() => {
               v-for="post in posts"
               :key="post.id"
               v-track-view="post.id"
+              data-feed-card
+              class="scroll-mt-20 md:scroll-mt-24"
               :post="post"
               show-follow-button
               :initial-following="followStatus[post.author?.id ?? ''] ?? null"

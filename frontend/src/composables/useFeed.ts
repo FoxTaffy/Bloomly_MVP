@@ -2,7 +2,7 @@ import { computed, onScopeDispose, reactive, ref, watch, type Ref } from 'vue'
 import api from '@/api'
 import { useFollowState } from '@/composables/useFollowState'
 import {
-  FEED_SORT_OPTIONS, appendUnique, chunk, feedUrl, isAbortError, isFeedSort, isRenderablePost,
+  FEED_SORT_OPTIONS, appendUnique, checkNewParams, chunk, feedUrl, isAbortError, isFeedSort, isRenderablePost,
   isSortableMode, newestTimestamp, type FeedMode, type FeedSort,
 } from '@/lib/feed'
 
@@ -28,10 +28,9 @@ export interface PostViewerState { repawed: boolean; favourited: boolean; userVo
  * сортировки или NSFW-режима, отбрасывается, а его запрос отменяется через AbortController.
  * Раньше устаревший ответ молча подмешивался в новую вкладку.
  */
-export function useFeed(nsfwMode: Ref<string>) {
+export function useFeed(nsfwMode: Ref<string>, mode: Ref<FeedMode> = ref<FeedMode>('for-you')) {
   const follows = useFollowState()
 
-  const mode = ref<FeedMode>('for-you')
   const sort = ref<FeedSort>(readStoredSort())
   const posts = ref<any[]>([])
   const viewerState = reactive<Record<string, PostViewerState>>({})
@@ -151,9 +150,10 @@ export function useFeed(nsfwMode: Ref<string>) {
     lastCheck = Date.now()
     const gen = generation
     try {
-      const raw = await fetchPage(1)
-      if (gen !== generation) return
-      newPostsCount.value = raw.filter((post) => isRenderablePost(post) && new Date(post.created_at).getTime() > newest).length
+      // Сервер отдаёт только число: раньше для проверки каждую минуту тянулась целая страница ленты
+      const res = await api.get('/posts/check-new', { params: checkNewParams({ mode: mode.value, nsfw: nsfwMode.value, since: newest }) })
+      if (gen !== generation || !res.data.success) return
+      newPostsCount.value = res.data.data.count
     } catch { /* следующая проверка через минуту */ }
   }
 

@@ -78,3 +78,44 @@ describe('прочее', () => {
     expect(isAbortError(new Error('boom'))).toBe(false)
   })
 })
+
+describe('вкладка в адресе, check-new и клавиатура', () => {
+  it('parseFeedTab пропускает только известные вкладки; NSFW — только при включённом режиме', async () => {
+    const { parseFeedTab } = await import('@/lib/feed')
+    expect(parseFeedTab('news', false)).toBe('news')
+    expect(parseFeedTab('photos', false)).toBe('photos')
+    expect(parseFeedTab('nsfw', false)).toBeNull()
+    expect(parseFeedTab('nsfw', true)).toBe('nsfw')
+    expect(parseFeedTab('<script>', true)).toBeNull()
+    expect(parseFeedTab(['news'], true)).toBeNull()
+    expect(parseFeedTab(undefined, true)).toBeNull()
+  })
+
+  it('checkNewParams: since в ISO, вкладка NSFW всегда в режиме show', async () => {
+    const { checkNewParams } = await import('@/lib/feed')
+    const since = Date.parse('2026-03-01T12:00:00.123Z')
+    expect(checkNewParams({ mode: 'news', nsfw: 'blur', since })).toEqual({ mode: 'news', since: '2026-03-01T12:00:00.123Z', nsfw: 'blur' })
+    expect(checkNewParams({ mode: 'nsfw', nsfw: 'hide', since }).nsfw).toBe('show')
+  })
+
+  it('pickCardIndex: j — первая карточка ниже линии, k — последняя выше неё', async () => {
+    const { pickCardIndex } = await import('@/lib/feed')
+    // карточка 1 выровнена по линии (top = 0), 2 и 3 ниже, 0 уже прокручена
+    const tops = [-500, 0, 480, 960]
+    expect(pickCardIndex(tops, 1)).toBe(2)
+    expect(pickCardIndex(tops, -1)).toBe(0)
+    expect(pickCardIndex([0, 400], -1)).toBeNull()
+    expect(pickCardIndex([-900, -400], 1)).toBeNull()
+    // посередине длинной карточки «назад» ведёт к её началу
+    expect(pickCardIndex([-300, 700], -1)).toBe(0)
+  })
+
+  it('isTypingTarget не трогает поля ввода', async () => {
+    const { isTypingTarget } = await import('@/lib/feed')
+    expect(isTypingTarget({ tagName: 'TEXTAREA' } as any)).toBe(true)
+    expect(isTypingTarget({ tagName: 'INPUT' } as any)).toBe(true)
+    expect(isTypingTarget({ tagName: 'DIV', isContentEditable: true } as any)).toBe(true)
+    expect(isTypingTarget({ tagName: 'BUTTON' } as any)).toBe(false)
+    expect(isTypingTarget(null)).toBe(false)
+  })
+})

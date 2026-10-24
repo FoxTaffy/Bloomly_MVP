@@ -99,3 +99,41 @@ export const groupContextOf = (post: any) => post?.groupPosts?.[0]?.group ?? nul
 
 export const isAbortError = (error: unknown): boolean =>
   (error as { code?: string })?.code === 'ERR_CANCELED' || (error as { name?: string })?.name === 'CanceledError'
+
+/** Параметры GET /posts/check-new: сколько постов вкладки новее `since` (мс). Вкладка NSFW всегда в режиме show, как и сама выдача. */
+export const checkNewParams = ({ mode, nsfw, since }: { mode: FeedMode; nsfw: string; since: number }) => ({
+  mode,
+  since: new Date(since).toISOString(),
+  nsfw: mode === 'nsfw' ? 'show' : nsfw,
+})
+
+/** Вкладка из `?tab=`; неизвестное значение и NSFW без включённого режима игнорируются. */
+export function parseFeedTab(value: unknown, nsfwEnabled: boolean): FeedMode | null {
+  const tab = FEED_TABS.find((t) => t.mode === value)
+  if (!tab || (tab.nsfwOnly && !nsfwEnabled)) return null
+  return tab.mode
+}
+
+/** Вкладка по умолчанию не пишется в адрес — «/» остаётся чистым. */
+export const DEFAULT_FEED_MODE: FeedMode = 'for-you'
+
+/**
+ * Клавиатурная навигация: к какой карточке прыгнуть. `tops` — верхние края карточек относительно
+ * линии под шапкой (0 = карточка у верха). j — первая ниже линии, k — последняя выше неё;
+ * допуск в несколько px, чтобы только что выровненная карточка не считалась «текущей снова».
+ */
+export function pickCardIndex(tops: number[], direction: 1 | -1, tolerance = 4): number | null {
+  if (direction === 1) {
+    const index = tops.findIndex((top) => top > tolerance)
+    return index === -1 ? null : index
+  }
+  for (let i = tops.length - 1; i >= 0; i--) if (tops[i] < -tolerance) return i
+  return null
+}
+
+/** Нажатие в поле ввода или на редактируемом элементе — горячие клавиши не трогаем. */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || typeof el.tagName !== 'string') return false
+  return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
+}

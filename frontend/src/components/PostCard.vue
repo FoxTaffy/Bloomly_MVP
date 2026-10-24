@@ -520,7 +520,7 @@
         <div class="flex items-center gap-2 max-md:gap-1.5 max-md:min-w-0">
           <!-- Vote -->
           <div class="flex items-center h-8 gap-0.5 bg-brand-bg rounded-full px-1 border border-brand-border">
-            <button @click="vote(1)"
+            <button @click="vote(1)" data-vote="up"
               class="p-1 rounded-full transition-all duration-150"
               :class="localVote === 1
                 ? 'text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.7)]'
