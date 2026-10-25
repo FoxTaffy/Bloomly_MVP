@@ -1,0 +1,75 @@
+name: Сообщить об ошибке
+description: Что-то работает не так? Помоги нам разобраться.
+title: "[Ошибка]: "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо, что помогаешь сделать Bloomly удобнее.
+        Перед отправкой посмотри, не описал ли кто-то эту ошибку раньше.
+        Не прикладывай пароли, коды входа и чужие личные сообщения.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Где возникла ошибка?
+      options:
+        - Лента и публикации
+        - Профиль
+        - Сообщения и стикеры
+        - Группы и события
+        - Dealers’ Den
+        - Вход и регистрация
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что произошло?
+      description: Расскажи, что не получилось или выглядит неправильно.
+      placeholder: После выбора изображения публикация не сохранилась, а кнопка продолжила показывать загрузку.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить ошибку?
+      description: Опиши действия по порядку. Если ошибка случайная, так и напиши.
+      placeholder: |
+        1. Открыть…
+        2. Нажать…
+        3. Происходит…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что должно было произойти?
+      placeholder: Публикация должна была появиться в ленте.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Устройство и браузер
+      description: Укажи телефон или компьютер, систему и браузер. Версии добавь, если знаешь.
+      placeholder: Например, Android и Chrome или Windows и Firefox.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Версия Bloomly, если известна
+      description: Если номер версии нигде не виден, поле можно пропустить.
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Скриншоты или запись экрана
+      description: Прикрепи файл сюда, если он помогает показать проблему. Сначала скрой личные данные.
+    validations:
+      required: false

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="548" height="132" viewBox="0 0 548 132" role="img" aria-labelledby="title">
+<title id="title">Презентация Bloomly</title>
+<defs><linearGradient id="fill" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#252944" /><stop offset="1" stop-color="#1A1D34" /></linearGradient><linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9CAEF0" stop-opacity=".7" /><stop offset="1" stop-color="#CD83F5" stop-opacity=".35" /></linearGradient></defs>
+<g transform="translate(10 10)"><rect x="2" y="5" width="524" height="106" rx="25" fill="#090D20" fill-opacity=".35" /><rect x="1" y="1" width="526" height="105" rx="24" fill="url(#fill)" stroke="url(#edge)" stroke-width="2" />
+<circle cx="48" cy="53" r="25" fill="#A1B4FF" fill-opacity=".12" />
+<g transform="translate(28 33) scale(1.65)" fill="none" stroke="#D5DDFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z" /></g>
+<text x="264" y="53.5" font-family="Nunito,Segoe UI,Arial,sans-serif" font-size="32" font-weight="700" fill="#F9FAFD" text-anchor="middle" dominant-baseline="central">Презентация Bloomly</text>
+<path d="M489 53h17m-7-7 7 7-7 7" stroke="#A1B4FF" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+</g></svg>

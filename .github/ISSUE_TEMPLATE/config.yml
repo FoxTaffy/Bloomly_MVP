@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Новости Bloomly в Telegram
+    url: https://t.me/Bloomly_news
+    about: Анонсы проекта и жизнь сообщества.
+  - name: Обсуждения Bloomly
+    url: https://github.com/FoxTaffy/Bloomly_MVP/discussions
+    about: Обсудить новости и обновления с сообществом.
