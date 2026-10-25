@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(max-width: 640px)" srcset="assets/hub-header-mobile.svg" />
-    <img src="assets/hub-header.svg" alt="Bloomly — твоё творчество, твои люди" width="100%" />
+    <img src="assets/hub-banner.webp" alt="Bloomly — живи, общайся, расцветай" width="100%" />
   </picture>
 </p>
 
