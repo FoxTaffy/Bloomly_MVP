@@ -112,6 +112,95 @@ Dealers’ Den — творческая ярмарка внутри Bloomly. З�
 
 <br />
 
+## Интересное
+
+### Мероприятия
+
+Фурри-фестивали, конвенции, маркеты и сходки — где их искать и как попасть. Ссылки ведут на каналы и сообщества организаторов, где публикуются анонсы.
+
+<details>
+<summary><strong>Фестивали</strong></summary>
+
+- [AnyFurry fest](https://t.me/anyfurry_fest)
+- DraCon — [VK](https://vk.ru/dracon) · [Telegram](https://t.me/DraCon_Official)
+- [Fox Family fest](https://vk.ru/ff_fest)
+- [Forest fest](https://vk.ru/forest_fest_moscow)
+- [FurrBurg](https://t.me/furrburgfest)
+
+</details>
+
+<details>
+<summary><strong>Мультифандомные и большие фестивали</strong></summary>
+
+- [Акамару Фест](https://vk.ru/akamarufest)
+- [Epiccon](https://t.me/epicconrussia)
+- [Comic Con Игромир](https://t.me/comicconigromir)
+- [МанГАЛА понифест](https://t.me/nightmare_pony_night)
+- [Зоофест ЭКО](https://t.me/animarket_msk)
+
+</details>
+
+<details>
+<summary><strong>Маркеты</strong></summary>
+
+- [ФурМаркет](https://t.me/furr_market)
+- [Артмаркет Зверей](https://t.me/zvereymarket)
+- [Дикий маркет](https://t.me/dikiy_market)
+- [AniMarket](https://t.me/animarket_msk)
+- [I luv it](https://t.me/i_luv_it_market)
+- [Кико арт-маркет](https://t.me/kiko_market)
+
+</details>
+
+<details>
+<summary><strong>Конвенции</strong></summary>
+
+- [2pCon](https://t.me/SillyConNews)
+- [FoxWood](https://t.me/foxwoodnews)
+- [UFC](https://t.me/united_furry_con)
+- [SkyFurr](https://t.me/SkyFurr_News_Today)
+- [Furmeetage](https://t.me/furmeetage)
+- [HellTedge](https://t.me/hellcottage)
+- [WildFurry](https://t.me/wfinfo)
+- [Волкистан](https://t.me/wolkistan)
+- ГП, BBFC, TourFurr, Puffycon, WinterTails — официальных ссылок пока нет
+
+</details>
+
+<details>
+<summary><strong>Лофт-тусовки, сходки и встречи</strong></summary>
+
+- Лофт-тусовки: [TailsSquad](https://t.me/TailsSquadNews)
+- Сходки: [Фурри-встречи в Москве](https://t.me/furryevent)
+- Сходки с ивентами, квестами и активностями: [Тотемный столб](https://t.me/totempolemoscow)
+
+</details>
+
+<details>
+<summary><strong>Знакомства и карты</strong></summary>
+
+- [Знакомства Фурри](https://t.me/furry_4)
+- [Фурри-сайт с картой фуррей](https://m-fur.ru/)
+- [Blink](https://blinkmap.com/ru) — геолокация онлайн: фурри добавляются, чтобы находить друг друга и договариваться о кооперациях
+- [Фурри-календарь ивентов](https://horseyspirit-cmyk.github.io/cosmopolite.github.io/) — добавлены не все события, но главные есть
+
+</details>
+
+<details>
+<summary><strong>Ещё не проверено: маркеты и фестивали вне фурри-тусовки</strong></summary>
+
+Не все из этих площадок ориентированы на фурри — загляни и оцени сам.
+
+**Маркеты:** [hokkumarket](https://vk.ru/hokkumarket) · [gnezdo_original](https://vk.ru/gnezdo_original) · [artfestzarya](https://vk.ru/artfestzarya) · [fichamarket](https://vk.ru/fichamarket) · [lookartmarket](https://vk.ru/lookartmarket) · [creepymarket](https://vk.ru/creepymarket) · [gnezd0market](https://vk.ru/gnezd0market) · [time_artmarket](https://vk.ru/time_artmarket) · [consol_artmarket](https://vk.ru/consol_artmarket) · [razryad_msk](https://vk.ru/razryad_msk) · [connectartmarket](https://vk.ru/connectartmarket) · [hell_market](https://vk.ru/hell_market) · [zhil_byl_market](https://vk.ru/zhil_byl_market) · [starmarkett](https://vk.ru/starmarkett) · [supermarket_market](https://vk.ru/supermarket_market) · [kusmarketart](https://vk.ru/kusmarketart)
+
+**Фестивали:** [big_post_fest](https://vk.ru/big_post_fest) · [animaticon_official](https://vk.ru/animaticon_official) · [vkfandomfest](https://vk.ru/vkfandomfest) · [toguchi](https://vk.ru/toguchi)
+
+**Фестивали с живностью:** [petshopdays](https://vk.ru/petshopdays) · [reptilium](https://vk.ru/reptilium)
+
+</details>
+
+<br />
+
 ## Новости и обновления
 
 <table>
